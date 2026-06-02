@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": true,
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx",
+    "outDir": "./dist"
+  },
+  "exclude": ["node_modules"]
+}
