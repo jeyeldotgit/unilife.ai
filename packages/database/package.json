@@ -1,0 +1,27 @@
+{
+  "name": "@unilife-ai/database",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "require": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:pull": "drizzle-kit pull"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.43.0",
+    "postgres": "^3.4.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.0"
+  }
+}
