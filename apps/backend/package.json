@@ -1,6 +1,7 @@
 {
   "name": "@unilife-ai/backend",
   "type": "module",
+  "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
@@ -8,6 +9,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
+    "@unilife-ai/types": "workspace:*",
     "hono": "^4.12.23"
   },
   "devDependencies": {

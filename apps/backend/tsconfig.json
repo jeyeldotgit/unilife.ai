@@ -4,6 +4,7 @@
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "strict": true,
     "verbatimModuleSyntax": true,
     "types": ["node"],
     "jsx": "react-jsx",
