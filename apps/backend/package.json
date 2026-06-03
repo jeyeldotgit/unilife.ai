@@ -3,13 +3,16 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --tsconfig tsconfig.json src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
+    "@unilife-ai/database": "workspace:*",
     "@unilife-ai/types": "workspace:*",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.43.1",
     "hono": "^4.12.23"
   },
   "devDependencies": {

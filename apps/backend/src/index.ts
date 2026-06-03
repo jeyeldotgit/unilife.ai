@@ -1,22 +1,27 @@
+import "dotenv/config";
+
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { db } from "@unilife-ai/database";
 
-import type { User } from "@unilife-ai/types";
-
-const user1: User = {
-  id: "123e4567-e89b-12d3-a456-426614174000",
-  name: "John Doe",
-  display_name: "John Doe",
-  avatar_url: "https://example.com/avatar.jpg",
-  created_at: "april 20",
-  updated_at: "2023-01-01T00:00:00Z",
+// 1. Ensure this function returns the result
+const testDbConnection = async () => {
+  try {
+    const result = await db.query.exams.findFirst();
+    console.log("Database connection successful:", result);
+    return result; // <-- Added return statement
+  } catch (error) {
+    console.error("Database connection failed:", error);
+    return { error: "Failed to connect to database" };
+  }
 };
 
 const app = new Hono();
 
-app.get("/", (c) => {
-  const jsonifiedUser = JSON.stringify(user1);
-  return c.text(jsonifiedUser, 200, { "Content-Type": "application/json" });
+// 2. Make this callback async and use "await"
+app.get("/", async (c) => {
+  const testResult = await testDbConnection(); // <-- Added await
+  return c.json({ message: "Hello, UniLife.AI Backend!", dbTest: testResult });
 });
 
 serve(
