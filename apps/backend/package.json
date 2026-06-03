@@ -9,11 +9,15 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.107.0",
+    "@trpc/server": "^11.17.0",
     "@unilife-ai/database": "workspace:*",
     "@unilife-ai/types": "workspace:*",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.43.1",
-    "hono": "^4.12.23"
+    "hono": "^4.12.23",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.11.17",

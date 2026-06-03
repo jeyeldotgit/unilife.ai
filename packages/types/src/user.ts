@@ -1,4 +1,4 @@
-export type User = {
+export type AppUser = {
   id: string; // UUID
   name: string;
   display_name: string;
