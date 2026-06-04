@@ -1016,25 +1016,19 @@ export const db = new UniLifeDB();
 
 ---
 
-## 6.6 Custom Hooks
+## 6.6 Client Data Hooks
 
-### hooks/use-auth.ts — Interface
+Authentication is **not** exposed through a dedicated `useAuth` hook.
 
-```typescript
-type UseAuthReturn = {
-  user: User | null;
-  loading: boolean;
-  signOut: () => Promise<void>;
-};
+Auth is handled server-first:
 
-export function useAuth(): UseAuthReturn;
-```
+- Route protection happens in middleware and protected layouts using the server Supabase client
+- Login and logout are implemented as Next.js server actions
+- Client components receive authenticated state from their server-rendered parent or via explicit props
 
-Behavior:
+A client auth subscription such as `supabase.auth.onAuthStateChange()` is not required for the MVP because the current flow already redirects and refreshes correctly on the server.
 
-- Subscribes to `supabase.auth.onAuthStateChange`
-- Exposes current user and loading state
-- `signOut` calls `supabase.auth.signOut()` and redirects to `/login`
+The hooks in this section are reserved for the offline-first data layer. They are useful only for entities whose source of truth in the browser is Dexie plus the sync queue.
 
 ---
 
@@ -1089,6 +1083,12 @@ type CreateAssignmentInput = {
 };
 ```
 
+Behavior:
+
+- Reads from Dexie `assignments` table, filtered by current `user_id` and `deleted_at IS NULL`
+- All writes go to Dexie first, then enqueue a sync operation
+- `markComplete` updates `status = "completed"` and enqueues an update operation
+
 ---
 
 ### hooks/use-expenses.ts — Interface
@@ -1114,6 +1114,12 @@ type LogExpenseInput = {
 Behavior:
 
 - `remaining` is computed as `budget.amount - sum(expenses.amount)` for the active budget period
+- Expense and budget reads come from Dexie and stay usable while offline
+- Writes enqueue sync work after the local transaction succeeds
+
+Implementation note:
+
+- If the product later drops offline-first behavior for a feature, replace these hooks with server actions or server component data loading instead of adding client-side cache layers by default
 
 ---
 
