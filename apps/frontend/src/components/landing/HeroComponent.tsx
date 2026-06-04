@@ -11,7 +11,7 @@ export const HeroComponent = () => {
             school
           </span>
           <span className="text-xs font-medium tracking-widest uppercase">
-            New Academic Year Update
+            Survive & Thrive in University with AI
           </span>
         </div>
 
