@@ -1,10 +1,10 @@
-# Low-Level Design (LLD)
+﻿# Low-Level Design (LLD)
 
 # UniLife.AI
 
 **Version:** 1.0 MVP
 **Document Type:** Low-Level Design
-**Product:** UniLife.AI – AI-Powered Student Life Companion
+**Product:** UniLife.AI â€“ AI-Powered Student Life Companion
 **Companion Documents:** HLD v1.0, PRD v1.0 MVP
 
 ---
@@ -25,7 +25,7 @@ This LLD covers the full MVP scope:
 
 - Monorepo scaffold and configuration
 - Frontend application (Next.js PWA)
-- Backend application (Hono + tRPC)
+- Backend application (Hono REST API)
 - Local AI processing layer (Compromise + Chrono + Zod)
 - Offline storage layer (Dexie + IndexedDB)
 - Synchronization engine
@@ -53,18 +53,18 @@ This LLD covers the full MVP scope:
 
 ```text
 unilife/
-├── apps/
-│   ├── frontend/
-│   └── backend/
-├── packages/
-│   ├── database-types/
-│   ├── parser/
-│   ├── ai-core/
-│   └── shared/
-├── turbo.json
-├── pnpm-workspace.yaml
-├── tsconfig.base.json
-└── package.json
+â”œâ”€â”€ apps/
+â”‚   â”œâ”€â”€ frontend/
+â”‚   â””â”€â”€ backend/
+â”œâ”€â”€ packages/
+â”‚   â”œâ”€â”€ database-types/
+â”‚   â”œâ”€â”€ parser/
+â”‚   â”œâ”€â”€ ai-core/
+â”‚   â””â”€â”€ shared/
+â”œâ”€â”€ turbo.json
+â”œâ”€â”€ pnpm-workspace.yaml
+â”œâ”€â”€ tsconfig.base.json
+â””â”€â”€ package.json
 ```
 
 ---
@@ -127,7 +127,7 @@ packages:
 
 ## 3.1 Purpose
 
-Shared TypeScript types for all database entities. Used by both frontend (Dexie schema) and backend (tRPC handlers, Supabase queries).
+Shared TypeScript types for all database entities. Used by both frontend (Dexie schema) and backend (REST handlers, Supabase queries).
 
 ---
 
@@ -135,19 +135,19 @@ Shared TypeScript types for all database entities. Used by both frontend (Dexie 
 
 ```text
 packages/database-types/
-├── src/
-│   ├── index.ts
-│   ├── user.ts
-│   ├── class.ts
-│   ├── assignment.ts
-│   ├── exam.ts
-│   ├── expense.ts
-│   ├── budget.ts
-│   ├── notification.ts
-│   ├── sync-queue.ts
-│   └── ai-log.ts
-├── package.json
-└── tsconfig.json
+â”œâ”€â”€ src/
+â”‚   â”œâ”€â”€ index.ts
+â”‚   â”œâ”€â”€ user.ts
+â”‚   â”œâ”€â”€ class.ts
+â”‚   â”œâ”€â”€ assignment.ts
+â”‚   â”œâ”€â”€ exam.ts
+â”‚   â”œâ”€â”€ expense.ts
+â”‚   â”œâ”€â”€ budget.ts
+â”‚   â”œâ”€â”€ notification.ts
+â”‚   â”œâ”€â”€ sync-queue.ts
+â”‚   â””â”€â”€ ai-log.ts
+â”œâ”€â”€ package.json
+â””â”€â”€ tsconfig.json
 ```
 
 ---
@@ -684,13 +684,13 @@ Shared utility functions used across frontend, backend, and other packages.
 
 ```text
 packages/shared/
-├── src/
-│   ├── index.ts
-│   ├── uuid.ts
-│   ├── date.ts
-│   └── constants.ts
-├── package.json
-└── tsconfig.json
+â”œâ”€â”€ src/
+â”‚   â”œâ”€â”€ index.ts
+â”‚   â”œâ”€â”€ uuid.ts
+â”‚   â”œâ”€â”€ date.ts
+â”‚   â””â”€â”€ constants.ts
+â”œâ”€â”€ package.json
+â””â”€â”€ tsconfig.json
 ```
 
 ---
@@ -756,66 +756,66 @@ export const EXPENSE_CATEGORIES = [
 
 ```text
 apps/frontend/
-├── app/
-│   ├── (auth)/
-│   │   ├── login/
-│   │   │   └── page.tsx
-│   │   └── register/
-│   │       └── page.tsx
-│   ├── (app)/
-│   │   ├── layout.tsx
-│   │   ├── dashboard/
-│   │   │   └── page.tsx
-│   │   ├── schedule/
-│   │   │   └── page.tsx
-│   │   ├── assignments/
-│   │   │   └── page.tsx
-│   │   ├── exams/
-│   │   │   └── page.tsx
-│   │   ├── expenses/
-│   │   │   └── page.tsx
-│   │   └── chat/
-│   │       └── page.tsx
-│   ├── layout.tsx
-│   └── page.tsx
-├── components/
-│   ├── ui/                      # shadcn components
-│   ├── layout/
-│   │   ├── sidebar.tsx
-│   │   ├── bottom-nav.tsx
-│   │   └── header.tsx
-│   ├── schedule/
-│   │   ├── weekly-view.tsx
-│   │   └── class-card.tsx
-│   ├── assignments/
-│   │   ├── assignment-list.tsx
-│   │   └── assignment-card.tsx
-│   ├── expenses/
-│   │   ├── expense-list.tsx
-│   │   └── budget-summary.tsx
-│   └── chat/
-│       ├── chat-input.tsx
-│       └── chat-bubble.tsx
-├── lib/
-│   ├── supabase/
-│   │   ├── client.ts
-│   │   └── server.ts
-│   ├── db/
-│   │   └── dexie.ts
-│   ├── sync/
-│   │   └── sync-engine.ts
-│   └── utils.ts
-├── hooks/
-│   ├── use-auth.ts
-│   ├── use-sync.ts
-│   ├── use-classes.ts
-│   ├── use-assignments.ts
-│   ├── use-exams.ts
-│   └── use-expenses.ts
-├── middleware.ts
-├── next.config.ts
-├── tailwind.config.ts
-└── tsconfig.json
+â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ (auth)/
+â”‚   â”‚   â”œâ”€â”€ login/
+â”‚   â”‚   â”‚   â””â”€â”€ page.tsx
+â”‚   â”‚   â””â”€â”€ register/
+â”‚   â”‚       â””â”€â”€ page.tsx
+â”‚   â”œâ”€â”€ (app)/
+â”‚   â”‚   â”œâ”€â”€ layout.tsx
+â”‚   â”‚   â”œâ”€â”€ dashboard/
+â”‚   â”‚   â”‚   â””â”€â”€ page.tsx
+â”‚   â”‚   â”œâ”€â”€ schedule/
+â”‚   â”‚   â”‚   â””â”€â”€ page.tsx
+â”‚   â”‚   â”œâ”€â”€ assignments/
+â”‚   â”‚   â”‚   â””â”€â”€ page.tsx
+â”‚   â”‚   â”œâ”€â”€ exams/
+â”‚   â”‚   â”‚   â””â”€â”€ page.tsx
+â”‚   â”‚   â”œâ”€â”€ expenses/
+â”‚   â”‚   â”‚   â””â”€â”€ page.tsx
+â”‚   â”‚   â””â”€â”€ chat/
+â”‚   â”‚       â””â”€â”€ page.tsx
+â”‚   â”œâ”€â”€ layout.tsx
+â”‚   â””â”€â”€ page.tsx
+â”œâ”€â”€ components/
+â”‚   â”œâ”€â”€ ui/                      # shadcn components
+â”‚   â”œâ”€â”€ layout/
+â”‚   â”‚   â”œâ”€â”€ sidebar.tsx
+â”‚   â”‚   â”œâ”€â”€ bottom-nav.tsx
+â”‚   â”‚   â””â”€â”€ header.tsx
+â”‚   â”œâ”€â”€ schedule/
+â”‚   â”‚   â”œâ”€â”€ weekly-view.tsx
+â”‚   â”‚   â””â”€â”€ class-card.tsx
+â”‚   â”œâ”€â”€ assignments/
+â”‚   â”‚   â”œâ”€â”€ assignment-list.tsx
+â”‚   â”‚   â””â”€â”€ assignment-card.tsx
+â”‚   â”œâ”€â”€ expenses/
+â”‚   â”‚   â”œâ”€â”€ expense-list.tsx
+â”‚   â”‚   â””â”€â”€ budget-summary.tsx
+â”‚   â””â”€â”€ chat/
+â”‚       â”œâ”€â”€ chat-input.tsx
+â”‚       â””â”€â”€ chat-bubble.tsx
+â”œâ”€â”€ lib/
+â”‚   â”œâ”€â”€ supabase/
+â”‚   â”‚   â”œâ”€â”€ client.ts
+â”‚   â”‚   â””â”€â”€ server.ts
+â”‚   â”œâ”€â”€ db/
+â”‚   â”‚   â””â”€â”€ dexie.ts
+â”‚   â”œâ”€â”€ sync/
+â”‚   â”‚   â””â”€â”€ sync-engine.ts
+â”‚   â””â”€â”€ utils.ts
+â”œâ”€â”€ hooks/
+â”‚   â”œâ”€â”€ use-auth.ts
+â”‚   â”œâ”€â”€ use-sync.ts
+â”‚   â”œâ”€â”€ use-classes.ts
+â”‚   â”œâ”€â”€ use-assignments.ts
+â”‚   â”œâ”€â”€ use-exams.ts
+â”‚   â””â”€â”€ use-expenses.ts
+â”œâ”€â”€ middleware.ts
+â”œâ”€â”€ next.config.ts
+â”œâ”€â”€ tailwind.config.ts
+â””â”€â”€ tsconfig.json
 ```
 
 ---
@@ -927,7 +927,7 @@ export const config = {
 
 ## 6.4 Authentication Pages
 
-### app/(auth)/login/page.tsx — Logic Contract
+### app/(auth)/login/page.tsx â€” Logic Contract
 
 Inputs:
 
@@ -947,7 +947,7 @@ Validations:
 
 ---
 
-### app/(auth)/register/page.tsx — Logic Contract
+### app/(auth)/register/page.tsx â€” Logic Contract
 
 Inputs:
 
@@ -1016,29 +1016,23 @@ export const db = new UniLifeDB();
 
 ---
 
-## 6.6 Custom Hooks
+## 6.6 Client Data Hooks
 
-### hooks/use-auth.ts — Interface
+Authentication is **not** exposed through a dedicated `useAuth` hook.
 
-```typescript
-type UseAuthReturn = {
-  user: User | null;
-  loading: boolean;
-  signOut: () => Promise<void>;
-};
+Auth is handled server-first:
 
-export function useAuth(): UseAuthReturn;
-```
+- Route protection happens in middleware and protected layouts using the server Supabase client
+- Login and logout are implemented as Next.js server actions
+- Client components receive authenticated state from their server-rendered parent or via explicit props
 
-Behavior:
+A client auth subscription such as `supabase.auth.onAuthStateChange()` is not required for the MVP because the current flow already redirects and refreshes correctly on the server.
 
-- Subscribes to `supabase.auth.onAuthStateChange`
-- Exposes current user and loading state
-- `signOut` calls `supabase.auth.signOut()` and redirects to `/login`
+The hooks in this section are reserved for the offline-first data layer. They are useful only for entities whose source of truth in the browser is Dexie plus the sync queue.
 
 ---
 
-### hooks/use-classes.ts — Interface
+### hooks/use-classes.ts â€” Interface
 
 ```typescript
 type UseClassesReturn = {
@@ -1068,7 +1062,7 @@ Behavior:
 
 ---
 
-### hooks/use-assignments.ts — Interface
+### hooks/use-assignments.ts â€” Interface
 
 ```typescript
 type UseAssignmentsReturn = {
@@ -1089,9 +1083,15 @@ type CreateAssignmentInput = {
 };
 ```
 
+Behavior:
+
+- Reads from Dexie `assignments` table, filtered by current `user_id` and `deleted_at IS NULL`
+- All writes go to Dexie first, then enqueue a sync operation
+- `markComplete` updates `status = "completed"` and enqueues an update operation
+
 ---
 
-### hooks/use-expenses.ts — Interface
+### hooks/use-expenses.ts â€” Interface
 
 ```typescript
 type UseExpensesReturn = {
@@ -1114,6 +1114,12 @@ type LogExpenseInput = {
 Behavior:
 
 - `remaining` is computed as `budget.amount - sum(expenses.amount)` for the active budget period
+- Expense and budget reads come from Dexie and stay usable while offline
+- Writes enqueue sync work after the local transaction succeeds
+
+Implementation note:
+
+- If the product later drops offline-first behavior for a feature, replace these hooks with server actions or server component data loading instead of adding client-side cache layers by default
 
 ---
 
@@ -1133,19 +1139,19 @@ Internal behavior:
 
 ```text
 start()
-  → listen to window.addEventListener("online")
-  → on online event: call flush()
+  â†’ listen to window.addEventListener("online")
+  â†’ on online event: call flush()
 
 flush()
-  → query db.sync_queue where status = "pending"
-  → for each item (ordered by created_at ASC):
-      → set status = "syncing"
-      → POST to /api/trpc/sync.push with item payload
-      → on success: set status = "synced"
-      → on failure:
-          → increment retry_count
-          → if retry_count >= SYNC_RETRY_LIMIT: set status = "failed"
-          → else: set status = "pending"
+  â†’ query db.sync_queue where status = "pending"
+  â†’ for each item (ordered by created_at ASC):
+      â†’ set status = "syncing"
+      â†’ POST to /api/sync/push with item payload
+      â†’ on success: set status = "synced"
+      â†’ on failure:
+          â†’ increment retry_count
+          â†’ if retry_count >= SYNC_RETRY_LIMIT: set status = "failed"
+          â†’ else: set status = "pending"
 ```
 
 Conflict resolution strategy: **last-write-wins** using `updated_at`. The backend compares the payload's `updated_at` against the existing record's `updated_at` and accepts whichever is newer.
@@ -1160,22 +1166,31 @@ Conflict resolution strategy: **last-write-wins** using `updated_at`. The backen
 apps/backend/
 ├── src/
 │   ├── index.ts
+│   ├── app.ts
 │   ├── router.ts
-│   ├── trpc.ts
 │   ├── middleware/
 │   │   └── auth.ts
-│   └── routers/
-│       ├── health.ts
-│       ├── sync.ts
-│       ├── classes.ts
-│       ├── assignments.ts
-│       ├── exams.ts
-│       ├── expenses.ts
-│       ├── budgets.ts
-│       └── ai.ts
+│   ├── lib/
+│   │   ├── http-errors.ts
+│   │   ├── validation.ts
+│   │   └── supabase.ts
+│   ├── routes/
+│   │   ├── health.route.ts
+│   │   ├── sync.route.ts
+│   │   ├── classes.route.ts
+│   │   ├── assignments.route.ts
+│   │   ├── exams.route.ts
+│   │   ├── expenses.route.ts
+│   │   ├── budgets.route.ts
+│   │   └── ai.route.ts
+│   ├── controllers/
+│   ├── services/
+│   └── repositories/
 ├── package.json
 └── tsconfig.json
 ```
+
+The backend is a Hono REST API. Do not add alternate RPC routers or non-REST API mounts.
 
 ---
 
@@ -1184,120 +1199,108 @@ apps/backend/
 ### src/index.ts
 
 ```typescript
+import { serve } from "@hono/node-server";
+import { app } from "./app";
+
+const port = Number(process.env.PORT ?? 3001);
+
+serve({ fetch: app.fetch, port });
+```
+
+### src/app.ts
+
+```typescript
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { trpcServer } from "@hono/trpc-server";
-import { appRouter } from "./router";
-import { createContext } from "./trpc";
+import { registerRoutes } from "./router";
+import { handleHttpError } from "./lib/http-errors";
 
-const app = new Hono();
+export const app = new Hono();
 
 app.use(
   "/*",
   cors({
-    origin: process.env.FRONTEND_URL!,
+    origin: process.env.FRONTEND_URL ?? "*",
     credentials: true,
   }),
 );
 
-app.get("/health", (c) =>
-  c.json({ ok: true, timestamp: new Date().toISOString() }),
-);
+app.onError(handleHttpError);
 
-app.use(
-  "/api/trpc/*",
-  trpcServer({
-    router: appRouter,
-    createContext,
-  }),
-);
-
-export default app;
+registerRoutes(app);
 ```
 
 ---
 
-## 7.3 tRPC Context
+## 7.3 Auth Context and Middleware
 
-### src/trpc.ts
+### src/middleware/auth.ts
 
 ```typescript
-import { initTRPC, TRPCError } from "@trpc/server";
-import { createClient } from "@supabase/supabase-js";
-import type { Context } from "hono";
+import type { Context, Next } from "hono";
+import { createSupabaseClient } from "../lib/supabase";
+import { unauthenticated } from "../lib/http-errors";
 
-export async function createContext({ req }: { req: Request }) {
-  const authHeader = req.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "");
+export async function requireAuth(c: Context, next: Next) {
+  const authHeader = c.req.header("Authorization");
+  const token = authHeader?.replace(/^Bearer\s+/i, "");
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-
-  let userId: string | null = null;
-
-  if (token) {
-    const { data } = await supabase.auth.getUser(token);
-    userId = data.user?.id ?? null;
+  if (!token) {
+    throw unauthenticated("Missing bearer token.");
   }
 
-  return { supabase, userId };
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.auth.getUser(token);
+
+  if (error || !data.user?.id) {
+    throw unauthenticated("Invalid or expired bearer token.");
+  }
+
+  c.set("userId", data.user.id);
+  c.set("supabase", supabase);
+
+  await next();
 }
-
-export type TRPCContext = Awaited<ReturnType<typeof createContext>>;
-
-const t = initTRPC.context<TRPCContext>().create();
-
-export const router = t.router;
-export const publicProcedure = t.procedure;
-
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-  if (!ctx.userId) {
-    throw new TRPCError({ code: "UNAUTHORIZED" });
-  }
-  return next({ ctx: { ...ctx, userId: ctx.userId } });
-});
 ```
+
+Protected handlers read `c.get("userId")`. Client-provided `user_id` is never authoritative.
 
 ---
 
-## 7.4 App Router
+## 7.4 Root Route Registration
 
 ### src/router.ts
 
 ```typescript
-import { router } from "./trpc";
-import { healthRouter } from "./routers/health";
-import { syncRouter } from "./routers/sync";
-import { classesRouter } from "./routers/classes";
-import { assignmentsRouter } from "./routers/assignments";
-import { examsRouter } from "./routers/exams";
-import { expensesRouter } from "./routers/expenses";
-import { budgetsRouter } from "./routers/budgets";
-import { aiRouter } from "./routers/ai";
+import type { Hono } from "hono";
+import { healthRoute } from "./routes/health.route";
+import { syncRoute } from "./routes/sync.route";
+import { classesRoute } from "./routes/classes.route";
+import { assignmentsRoute } from "./routes/assignments.route";
+import { examsRoute } from "./routes/exams.route";
+import { expensesRoute } from "./routes/expenses.route";
+import { budgetsRoute } from "./routes/budgets.route";
+import { aiRoute } from "./routes/ai.route";
 
-export const appRouter = router({
-  health: healthRouter,
-  sync: syncRouter,
-  classes: classesRouter,
-  assignments: assignmentsRouter,
-  exams: examsRouter,
-  expenses: expensesRouter,
-  budgets: budgetsRouter,
-  ai: aiRouter,
-});
-
-export type AppRouter = typeof appRouter;
+export function registerRoutes(app: Hono) {
+  app.route("/", healthRoute);
+  app.route("/api/sync", syncRoute);
+  app.route("/api/classes", classesRoute);
+  app.route("/api/assignments", assignmentsRoute);
+  app.route("/api/exams", examsRoute);
+  app.route("/api/expenses", expensesRoute);
+  app.route("/api/budgets", budgetsRoute);
+  app.route("/api/ai", aiRoute);
+}
 ```
 
 ---
 
-## 7.5 Sync Router
+## 7.5 Sync Route
 
-### src/routers/sync.ts
+### src/routes/sync.route.ts
 
-Procedure: `sync.push`
+Endpoint: `POST /api/sync/push`
 
 Input:
 
@@ -1322,81 +1325,81 @@ for each item:
   switch entity_type:
     case "class":
       switch operation:
-        case "create" → upsert into classes
-        case "update" → update where id = entity_id AND updated_at <= payload.updated_at
-        case "delete" → set deleted_at = NOW() where id = entity_id
-    ... repeat for other entity types
+        case "create" -> upsert into classes
+        case "update" -> update if payload.updated_at is newer than stored updated_at
+        case "delete" -> set deleted_at = now
+    ... repeat for supported entity types
 ```
 
-Returns: `{ synced: string[], failed: string[] }` — arrays of `sync_queue` IDs.
+Returns: `{ synced: string[], failed: string[] }`.
 
 ---
 
-## 7.6 CRUD Routers — Interface Contract
+## 7.6 CRUD Routes - Interface Contract
 
-Each entity router exposes the following procedures:
+Each entity route group exposes REST endpoints matching `docs/core/ENDPOINT_REF.md`:
 
-| Procedure       | Input                              | Description                                                              |
-| --------------- | ---------------------------------- | ------------------------------------------------------------------------ |
-| `entity.list`   | `{ since?: string }`               | List non-deleted records; `since` filters by `updated_at` for delta sync |
-| `entity.get`    | `{ id: string }`                   | Get single record                                                        |
-| `entity.create` | Entity create input                | Create record (upsert on conflict)                                       |
-| `entity.update` | `{ id: string } & Partial<entity>` | Update record with last-write-wins                                       |
-| `entity.delete` | `{ id: string }`                   | Soft delete                                                              |
+| Endpoint | Description |
+| -------- | ----------- |
+| `GET /api/:entity?since=...` | List non-deleted records; `since` filters by `updated_at` for delta sync |
+| `GET /api/:entity/:id` | Get single record |
+| `POST /api/:entity` | Create record; server injects authenticated `user_id` |
+| `PATCH /api/:entity/:id` | Update record with last-write-wins |
+| `DELETE /api/:entity/:id` | Soft delete where supported |
 
-All procedures are `protectedProcedure` and scope queries to `userId`.
+All protected route groups use `requireAuth` and scope queries to the authenticated `userId`.
 
 ---
 
-## 7.7 AI Router
+## 7.7 AI Route
 
-### src/routers/ai.ts
+### src/routes/ai.route.ts
 
-Procedure: `ai.chat`
+Endpoint: `POST /api/ai/chat`
 
 Input:
 
 ```typescript
 z.object({
   message: z.string().min(1).max(1000),
-  context: z
-    .object({
-      today: z.string(), // ISO date
-      upcoming_deadlines: z.array(
-        z.object({
-          title: z.string(),
-          due_date: z.string(),
-          type: z.enum(["assignment", "exam"]),
-        }),
-      ),
-      budget_remaining: z.number().nullable(),
-    })
-    .optional(),
+  context: z.object({
+    today: z.string(),
+    current_time: z.string(),
+    todays_classes: z.array(
+      z.object({
+        subject: z.string(),
+        start_time: z.string(),
+        end_time: z.string(),
+      }),
+    ),
+    upcoming_deadlines: z.array(
+      z.object({
+        title: z.string(),
+        due_date: z.string(),
+        type: z.enum(["assignment", "exam"]),
+        status: z.enum(["pending", "in_progress"]),
+      }),
+    ),
+    budget_remaining: z.number().nullable(),
+    budget_period_end_date: z.string().nullable(),
+    avg_daily_spend: z.number().nullable(),
+  }),
 });
 ```
 
 Logic:
 
 ```text
-1. Call Gemini Flash with system prompt + user message + context
+1. Call Gemini Flash with system prompt + user message + frontend-provided context
 2. Parse structured JSON response
-3. Validate with Zod
+3. Validate parsed response with Zod
 4. Log to ai_logs table
 5. Return structured action or text response
 ```
 
-Returns:
-
-```typescript
-type AIResponse = {
-  intent: string;
-  action: Record<string, unknown> | null;
-  message: string;
-};
-```
+The AI route does not write academic or finance records. The frontend writes confirmed actions to Dexie and later persists them through `POST /api/sync/push`.
 
 ---
-
 # 8. packages/parser
 
 ## 8.1 Purpose
@@ -1409,24 +1412,24 @@ Local NLP processing layer. Operates fully offline. Handles simple, structured n
 
 ```text
 packages/parser/
-├── src/
-│   ├── index.ts
-│   ├── intent-router.ts
-│   ├── extractors/
-│   │   ├── date-extractor.ts
-│   │   ├── time-extractor.ts
-│   │   ├── amount-extractor.ts
-│   │   └── category-extractor.ts
-│   ├── intents/
-│   │   ├── create-assignment.ts
-│   │   ├── create-class.ts
-│   │   ├── create-exam.ts
-│   │   ├── log-expense.ts
-│   │   └── query-deadlines.ts
-│   └── schemas/
-│       └── parsed-action.ts
-├── package.json
-└── tsconfig.json
+â”œâ”€â”€ src/
+â”‚   â”œâ”€â”€ index.ts
+â”‚   â”œâ”€â”€ intent-router.ts
+â”‚   â”œâ”€â”€ extractors/
+â”‚   â”‚   â”œâ”€â”€ date-extractor.ts
+â”‚   â”‚   â”œâ”€â”€ time-extractor.ts
+â”‚   â”‚   â”œâ”€â”€ amount-extractor.ts
+â”‚   â”‚   â””â”€â”€ category-extractor.ts
+â”‚   â”œâ”€â”€ intents/
+â”‚   â”‚   â”œâ”€â”€ create-assignment.ts
+â”‚   â”‚   â”œâ”€â”€ create-class.ts
+â”‚   â”‚   â”œâ”€â”€ create-exam.ts
+â”‚   â”‚   â”œâ”€â”€ log-expense.ts
+â”‚   â”‚   â””â”€â”€ query-deadlines.ts
+â”‚   â””â”€â”€ schemas/
+â”‚       â””â”€â”€ parsed-action.ts
+â”œâ”€â”€ package.json
+â””â”€â”€ tsconfig.json
 ```
 
 ---
@@ -1591,16 +1594,16 @@ Wrapper around Gemini Flash API. Used by the backend AI router. Handles prompt c
 
 ```text
 packages/ai-core/
-├── src/
-│   ├── index.ts
-│   ├── gemini-client.ts
-│   ├── prompts/
-│   │   ├── system-prompt.ts
-│   │   └── daily-briefing-prompt.ts
-│   └── parsers/
-│       └── response-parser.ts
-├── package.json
-└── tsconfig.json
+â”œâ”€â”€ src/
+â”‚   â”œâ”€â”€ index.ts
+â”‚   â”œâ”€â”€ gemini-client.ts
+â”‚   â”œâ”€â”€ prompts/
+â”‚   â”‚   â”œâ”€â”€ system-prompt.ts
+â”‚   â”‚   â””â”€â”€ daily-briefing-prompt.ts
+â”‚   â””â”€â”€ parsers/
+â”‚       â””â”€â”€ response-parser.ts
+â”œâ”€â”€ package.json
+â””â”€â”€ tsconfig.json
 ```
 
 ---
@@ -1673,9 +1676,9 @@ Logic:
 
 ```text
 On entity create/update:
-  → compute notification schedule based on NOTIFICATION_OFFSETS
-  → store notifications in Dexie notifications table
-  → register setTimeout or ServiceWorker scheduled message
+  â†’ compute notification schedule based on NOTIFICATION_OFFSETS
+  â†’ store notifications in Dexie notifications table
+  â†’ register setTimeout or ServiceWorker scheduled message
     for each notification time
 ```
 
@@ -1789,9 +1792,9 @@ All route-level pages wrapped in React error boundaries. Error boundary logs to 
 
 ```text
 On sync item failure:
-  → increment retry_count
-  → if retry_count < SYNC_RETRY_LIMIT: requeue as "pending"
-  → if retry_count >= SYNC_RETRY_LIMIT: mark as "failed", surface toast to user
+  â†’ increment retry_count
+  â†’ if retry_count < SYNC_RETRY_LIMIT: requeue as "pending"
+  â†’ if retry_count >= SYNC_RETRY_LIMIT: mark as "failed", surface toast to user
 ```
 
 ---
@@ -1800,9 +1803,9 @@ On sync item failure:
 
 ```text
 On Gemini API error:
-  → log error to ai_logs with error field populated
-  → return fallback message: "I couldn't understand that. Try rephrasing."
-  → do not throw to the client
+  â†’ log error to ai_logs with error field populated
+  â†’ return fallback message: "I couldn't understand that. Try rephrasing."
+  â†’ do not throw to the client
 ```
 
 ---
@@ -1826,9 +1829,9 @@ On Gemini API error:
 
 Targets:
 
-- `packages/parser` — intent detection accuracy per intent
-- `packages/shared` — utility functions
-- `packages/ai-core` — response parser
+- `packages/parser` â€” intent detection accuracy per intent
+- `packages/shared` â€” utility functions
+- `packages/ai-core` â€” response parser
 
 Parser test format:
 
@@ -1851,7 +1854,7 @@ Targets:
 
 - Dexie CRUD operations
 - Sync engine flush logic
-- tRPC route handlers
+- REST route handlers
 
 ---
 
@@ -1873,10 +1876,11 @@ Targets:
 
 | Day   | LLD Sections Implemented                                                                                |
 | ----- | ------------------------------------------------------------------------------------------------------- |
-| Day 1 | Section 2 (Monorepo), Section 4 (DB Schema), Section 6.2–6.4 (Auth), Section 7.2–7.4 (Backend scaffold) |
+| Day 1 | Section 2 (Monorepo), Section 4 (DB Schema), Section 6.2â€“6.4 (Auth), Section 7.2â€“7.4 (Backend scaffold) |
 | Day 2 | Section 3 (database-types), Section 6.5 (Dexie), Section 6.6 (Hooks)                                    |
 | Day 3 | Section 6.1 (UI components), Section 10 (Notifications)                                                 |
-| Day 4 | Section 6.7 (Sync Engine), Section 7.5–7.6 (Sync + CRUD routers)                                        |
+| Day 4 | Section 6.7 (Sync Engine), Section 7.5â€“7.6 (Sync + CRUD routers)                                        |
 | Day 5 | Section 8 (parser package)                                                                              |
 | Day 6 | Section 9 (ai-core), Section 7.7 (AI router)                                                            |
 | Day 7 | PWA manifest, service worker, bug fixes                                                                 |
+

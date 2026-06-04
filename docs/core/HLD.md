@@ -141,7 +141,7 @@ This approach separates concerns and improves maintainability.
                   ▼
 ┌────────────────────────────────────┐
 │          Hono Backend              │
-│           tRPC API                 │
+│           REST API                 │
 └─────────────────┬──────────────────┘
                   │
         ┌─────────┴─────────┐
@@ -239,7 +239,7 @@ The synchronization engine ensures eventual consistency between local and cloud 
 Technology:
 
 - Hono
-- tRPC
+- Hono REST API
 
 Responsibilities:
 
@@ -534,7 +534,7 @@ Platform:
 Responsibilities:
 
 - Host Hono API
-- Host tRPC endpoints
+- Host REST endpoints
 
 ---
 
@@ -647,7 +647,7 @@ Phase 4:
 | Date Parsing    | Chrono                      |
 | Validation      | Zod                         |
 | Backend         | Hono                        |
-| API Layer       | tRPC                        |
+| API Layer       | Hono REST API               |
 | Database        | Supabase PostgreSQL         |
 | Authentication  | Supabase Auth               |
 | AI              | Gemini Flash                |
