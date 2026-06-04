@@ -4,12 +4,12 @@
 
 **Spec Name:** P2-S05-ai-chat-gemini-actions-and-logging  
 **Phase:** Phase 2  
-**Responsibility:** Implement the protected `ai.chat` procedure that turns student messages into structured actions or replies, logs Gemini activity, and remains stateless with respect to CRUD writes.
+**Responsibility:** Implement the protected `POST /api/ai/chat` endpoint that turns student messages into structured actions or replies, logs Gemini activity, and remains stateless with respect to CRUD writes.
 
 ## II. System Dependencies & Architectural Context
 
 **Upstream Dependencies:**
-- P2-S01-backend-trpc-auth-and-contract-foundation.
+- P2-S01-backend-rest-auth-and-contract-foundation.
 
 **Related Specs:**
 - P2-S02 academic CRUD provides the target entities for structured academic actions.
@@ -36,7 +36,7 @@
 
 ### A. In-Scope Elements
 
-- Protected `ai.chat` mutation.
+- Protected `POST /api/ai/chat` endpoint.
 - Gemini Flash request through `packages/ai-core`.
 - Structured output parsing and validation.
 - Intent support:
@@ -69,18 +69,18 @@
 
 ### A. Artifacts & Deliverables to Produce
 
-- `apps/backend/src/routers/ai.ts`
+- `apps/backend/src/routes/ai.route.ts`
 - `apps/backend/src/controllers/ai.controller.ts`
 - `apps/backend/src/services/ai.service.ts`
 - `apps/backend/src/repositories/ai-logs.repository.ts`
 - Zod schemas for AI request and response validation.
-- Root router update wiring `ai`.
+- Root route registration update wiring `/api/ai`.
 
 ### B. Core Implementation Constraints
 
-- `ai.chat` is a `protectedProcedure`.
-- The router validates request shape and calls one controller method.
-- The controller shapes final tRPC response and triggers logging through the service.
+- `POST /api/ai/chat` uses the shared auth middleware from P2-S01.
+- The route validates request shape and calls one controller method.
+- The controller shapes the final JSON response and triggers logging through the service.
 - The service owns Gemini calls, prompt/context assembly, response parsing, fallback behavior, and forecast/free-time calculations.
 - The repository owns writes to `ai_logs`.
 - The backend must not write domain CRUD records from this endpoint.
@@ -166,7 +166,7 @@ Output:
 
 A successful implementation must verifiably satisfy:
 
-- Unauthenticated requests return `UNAUTHORIZED` before Gemini or logging work runs.
+- Unauthenticated requests return `UNAUTHENTICATED` before Gemini or logging work runs.
 - Valid English and Filipino messages return structured responses.
 - `create_class` and low-confidence structured actions set `requires_confirmation: true`.
 - CRUD-oriented intents return `action` data but do not write domain records.
@@ -183,5 +183,4 @@ A successful implementation must verifiably satisfy:
 - Fallback tests for timeout, quota, malformed JSON, and validation failure.
 - Tests proving `ai.chat` does not call academic or finance repositories.
 - AI logging tests for success and failure.
-- Procedure auth gating test for `ai.chat`.
-
+- Endpoint auth gating test for `POST /api/ai/chat`.

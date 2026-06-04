@@ -1,33 +1,33 @@
-# UniLife.AI — tRPC Endpoint Reference
+# UniLife.AI — REST API Endpoint Reference
 
 **Version:** 1.0 MVP  
-**Transport:** tRPC over HTTP (Hono adapter)  
-**Base path:** `/api/trpc`  
-**Auth:** All protected procedures require `Authorization: Bearer <supabase_jwt>` header  
-**Protocol note:** tRPC serializes all calls as HTTP POST to `/api/trpc/<router>.<procedure>`. Inputs go in the request body as `{ "0": { "json": <input> } }`. This document describes logical input/output shapes; use the generated tRPC client on the frontend rather than calling raw HTTP.
+**Transport:** REST over HTTP (Hono)  
+**Base path:** `/api` for application endpoints; `/health` remains a public deployment health check  
+**Auth:** All protected endpoints require `Authorization: Bearer <supabase_jwt>` header  
+**Protocol note:** Request bodies are JSON. List filters use query parameters. Path parameters use the `:id` notation in this document.
 
 ---
 
-## Router Map
+## Resource Map
 
-| Router      | Prefix        | Auth Required |
-| ----------- | ------------- | ------------- |
-| Health      | `health`      | No            |
-| Sync        | `sync`        | Yes           |
-| Classes     | `classes`     | Yes           |
-| Assignments | `assignments` | Yes           |
-| Exams       | `exams`       | Yes           |
-| Expenses    | `expenses`    | Yes           |
-| Budgets     | `budgets`     | Yes           |
-| AI          | `ai`          | Yes           |
-
----
+| Resource    | Endpoints             | Auth Required |
+| ----------- | --------------------- | ------------- |
+| Health      | `GET /health`         | No            |
+| Sync        | `/api/sync/*`         | Yes           |
+| Classes     | `/api/classes/*`      | Yes           |
+| Assignments | `/api/assignments/*`  | Yes           |
+| Exams       | `/api/exams/*`        | Yes           |
+| Expenses    | `/api/expenses/*`     | Yes           |
+| Budgets     | `/api/budgets/*`      | Yes           |
+| AI          | `/api/ai/*`           | Yes           |
 
 ---
 
-## health.ping
+---
 
-**Type:** Query (public)  
+## GET /health
+
+**Type:** Public REST endpoint  
 **Responsibility:** Liveness check. Confirms the backend process is running and reachable. Used by deployment health checks and the frontend to detect connectivity.
 
 ### Request
@@ -47,9 +47,9 @@ No input.
 
 ---
 
-## sync.push
+## POST /api/sync/push
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Accepts a batch of offline-queued operations from the client sync engine and applies them to Supabase. Implements last-write-wins conflict resolution using `updated_at`. Returns which items succeeded and which failed so the client can update its local `sync_queue` statuses.
 
 ### Request
@@ -83,9 +83,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## classes.list
+## GET /api/classes
 
-**Type:** Query (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Returns all non-deleted classes for the authenticated user. Supports delta sync via optional `since` timestamp so the client only fetches records changed after its last sync.
 
 ### Request
@@ -127,9 +127,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## classes.get
+## GET /api/classes/:id
 
-**Type:** Query (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Fetches a single class record by ID. Used when navigating to the class detail bottom sheet and when the sync engine needs to verify a record exists before updating.
 
 ### Request
@@ -164,9 +164,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## classes.create
+## POST /api/classes
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Persists a new class record to Supabase. Called by the sync engine when flushing a `create` operation for a class. Not called directly by the frontend (frontend writes to Dexie first, then enqueues sync).
 
 ### Request
@@ -196,9 +196,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## classes.update
+## PATCH /api/classes/:id
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Updates a class record. Uses last-write-wins on `updated_at`. Called by sync engine only.
 
 ### Request
@@ -228,9 +228,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## classes.delete
+## DELETE /api/classes/:id
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Soft-deletes a class by setting `deleted_at`. Called by sync engine only. Does not cascade delete assignments — linked assignments remain and have `class_id` set to null by the DB foreign key constraint (`ON DELETE SET NULL`).
 
 ### Request
@@ -253,9 +253,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## assignments.list
+## GET /api/assignments
 
-**Type:** Query (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Returns all non-deleted assignments for the user. Used during initial load and delta sync. The dashboard and assignments screen read from Dexie locally; this endpoint is called by the sync engine to reconcile after reconnection.
 
 ### Request
@@ -289,9 +289,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## assignments.get
+## GET /api/assignments/:id
 
-**Type:** Query (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Fetches a single assignment by ID. Used when a notification deep-link opens the Assignment Detail screen and Dexie does not have the record (e.g. after app reinstall).
 
 ### Request
@@ -312,9 +312,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## assignments.create
+## POST /api/assignments
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Creates an assignment in Supabase. Called by sync engine for `create` operations. The notification schedule for this assignment should already be stored in Dexie locally; the backend does not re-schedule notifications (notifications are client-driven in MVP).
 
 ### Request
@@ -345,9 +345,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## assignments.update
+## PATCH /api/assignments/:id
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Updates an assignment. Covers status changes (pending → in_progress → completed), due date edits, and title changes. Called by sync engine only.
 
 ### Request
@@ -375,9 +375,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## assignments.delete
+## DELETE /api/assignments/:id
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Soft-deletes an assignment. Linked notifications in the `notifications` table remain but will not fire since the client removes them from Dexie on delete.
 
 ### Request
@@ -400,9 +400,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## exams.list
+## GET /api/exams
 
-**Type:** Query (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Returns all non-deleted exams for the user. Feeds the dashboard countdown display and the free time finder context. Delta-sync supported.
 
 ### Request
@@ -434,9 +434,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## exams.get
+## GET /api/exams/:id
 
-**Type:** Query (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Fetches a single exam record by ID.
 
 ### Request
@@ -457,9 +457,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## exams.create
+## POST /api/exams
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Persists a new exam to Supabase via sync engine.
 
 ### Request
@@ -489,9 +489,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## exams.update
+## PATCH /api/exams/:id
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Updates an exam record. Last-write-wins on `updated_at`.
 
 ### Request
@@ -518,9 +518,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## exams.delete
+## DELETE /api/exams/:id
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Soft-deletes an exam.
 
 ### Request
@@ -543,9 +543,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## expenses.list
+## GET /api/expenses
 
-**Type:** Query (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Returns all non-deleted expenses for the user. Used for the Expenses screen list and spending-by-category breakdown. Can be filtered by date range to scope to the active budget period.
 
 ### Request
@@ -586,9 +586,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## expenses.create
+## POST /api/expenses
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Persists a logged expense to Supabase. Called by sync engine. The `budget_id` should be the active budget's ID at the time of logging; the client resolves this locally before enqueueing.
 
 ### Request
@@ -618,10 +618,10 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## expenses.delete
+## DELETE /api/expenses/:id
 
-**Type:** Mutation (protected)  
-**Responsibility:** Soft-deletes an expense. No update procedure is provided in MVP — incorrect expenses must be deleted and re-logged.
+**Type:** Protected REST endpoint  
+**Responsibility:** Soft-deletes an expense. No update endpoint is provided in MVP — incorrect expenses must be deleted and re-logged.
 
 ### Request
 
@@ -643,9 +643,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## budgets.list
+## GET /api/budgets
 
-**Type:** Query (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Returns all budget periods for the user, ordered by `start_date` descending. The client uses this to identify the current active budget (the one where `start_date <= today <= end_date`).
 
 ### Request
@@ -675,9 +675,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## budgets.create
+## POST /api/budgets
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Creates a new budget period. Called during onboarding (Step 2 of the setup wizard) and when the user starts a new cycle. The client computes `start_date` and `end_date` from the selected `period` and the current date.
 
 ### Request
@@ -706,9 +706,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## budgets.update
+## PATCH /api/budgets/:id
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** Updates the budget amount or period. Typically called when the user edits their allowance settings.
 
 ### Request
@@ -735,9 +735,9 @@ For `update` operations: the backend compares `payload.updated_at` against the s
 
 ---
 
-## ai.chat
+## POST /api/ai/chat
 
-**Type:** Mutation (protected)  
+**Type:** Protected REST endpoint  
 **Responsibility:** The primary AI endpoint. Receives the user's raw chat message and a rich context payload, sends it to Gemini Flash with a structured system prompt, and returns a parsed intent + action + friendly reply. Handles all queries that the local parser cannot resolve with sufficient confidence: Filipino-language inputs, planning queries, allowance forecasts, free time analysis, and general questions.
 
 This endpoint also handles Story 6 (allowance forecast), Story 7 (Filipino class creation), and Story 10 (free time finder). The `context` object must be populated by the frontend before calling — it is not fetched server-side.
@@ -860,49 +860,47 @@ This endpoint also handles Story 6 (allowance forecast), Story 7 (Filipino class
 
 ## Error Shapes
 
-All tRPC errors follow the standard tRPC error envelope:
+All REST errors use the same JSON envelope:
 
 ```ts
 {
   error: {
-    json: {
-      message: string;
-      code: number;
-      data: {
-        code: "UNAUTHORIZED" |
-          "FORBIDDEN" |
-          "NOT_FOUND" |
-          "BAD_REQUEST" |
-          "INTERNAL_SERVER_ERROR";
-        httpStatus: 401 | 403 | 404 | 400 | 500;
-        path: string; // e.g. "assignments.create"
-      }
-    }
+    code:
+      | "UNAUTHENTICATED"
+      | "FORBIDDEN"
+      | "NOT_FOUND"
+      | "VALIDATION_ERROR"
+      | "CONFLICT"
+      | "EXTERNAL_SERVICE_UNAVAILABLE"
+      | "INTERNAL_ERROR";
+    message: string;
+    details?: unknown;
   }
 }
 ```
 
-| Scenario                          | tRPC code               | HTTP status |
-| --------------------------------- | ----------------------- | ----------- |
-| Missing or expired JWT            | `UNAUTHORIZED`          | 401         |
-| Accessing another user's resource | `FORBIDDEN`             | 403         |
-| Record not found                  | `NOT_FOUND`             | 404         |
-| Zod validation failure            | `BAD_REQUEST`           | 400         |
-| Gemini API unavailable            | `INTERNAL_SERVER_ERROR` | 503         |
-| Unexpected server error           | `INTERNAL_SERVER_ERROR` | 500         |
+| Scenario                          | Error code                       | HTTP status |
+| --------------------------------- | -------------------------------- | ----------- |
+| Missing or expired JWT            | `UNAUTHENTICATED`                | 401         |
+| Accessing another user's resource | `FORBIDDEN`                      | 403         |
+| Record not found                  | `NOT_FOUND`                      | 404         |
+| Request validation failure        | `VALIDATION_ERROR`               | 400         |
+| Stale write conflict              | `CONFLICT`                       | 409         |
+| Gemini API unavailable            | `EXTERNAL_SERVICE_UNAVAILABLE`   | 503         |
+| Unexpected server error           | `INTERNAL_ERROR`                 | 500         |
 
 ---
 
 ## Endpoint Count Summary
 
-| Router      | Procedures | Types                        |
-| ----------- | ---------- | ---------------------------- |
-| health      | 1          | 1 query                      |
-| sync        | 1          | 1 mutation                   |
-| classes     | 5          | 2 queries, 3 mutations       |
-| assignments | 5          | 2 queries, 3 mutations       |
-| exams       | 5          | 2 queries, 3 mutations       |
-| expenses    | 3          | 1 query, 2 mutations         |
-| budgets     | 3          | 1 query, 2 mutations         |
-| ai          | 1          | 1 mutation                   |
-| **Total**   | **24**     | **10 queries, 14 mutations** |
+| Resource    | Endpoints | Methods                         |
+| ----------- | --------- | ------------------------------- |
+| health      | 1         | 1 GET                           |
+| sync        | 1         | 1 POST                          |
+| classes     | 5         | 2 GET, 1 POST, 1 PATCH, 1 DELETE |
+| assignments | 5         | 2 GET, 1 POST, 1 PATCH, 1 DELETE |
+| exams       | 5         | 2 GET, 1 POST, 1 PATCH, 1 DELETE |
+| expenses    | 3         | 1 GET, 1 POST, 1 DELETE         |
+| budgets     | 3         | 1 GET, 1 POST, 1 PATCH          |
+| ai          | 1         | 1 POST                          |
+| **Total**   | **24**    | **9 GET, 7 POST, 4 PATCH, 4 DELETE** |

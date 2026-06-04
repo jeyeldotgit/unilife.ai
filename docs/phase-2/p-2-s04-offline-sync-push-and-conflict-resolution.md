@@ -4,12 +4,12 @@
 
 **Spec Name:** P2-S04-offline-sync-push-and-conflict-resolution  
 **Phase:** Phase 2  
-**Responsibility:** Implement `sync.push` as the offline-first reconciliation endpoint that applies queued client operations and reports per-item success or failure.
+**Responsibility:** Implement `POST /api/sync/push` as the offline-first reconciliation endpoint that applies queued client operations and reports per-item success or failure.
 
 ## II. System Dependencies & Architectural Context
 
 **Upstream Dependencies:**
-- P2-S01-backend-trpc-auth-and-contract-foundation.
+- P2-S01-backend-rest-auth-and-contract-foundation.
 - P2-S02-academic-crud-classes-assignments-and-exams.
 - P2-S03-finance-crud-expenses-and-budgets.
 
@@ -27,7 +27,7 @@
 - Existing repositories/services from P2-S02 and P2-S03.
 
 **Resolved Gaps:**
-- `sync_queue` is a client-side queue for MVP behavior; `sync.push` must not mutate server `sync_queue` statuses.
+- `sync_queue` is a client-side queue for MVP behavior; `POST /api/sync/push` must not mutate server `sync_queue` statuses.
 - The server response reports which client queue item IDs synced or failed.
 - Older updates are considered successfully processed when the server version wins; they are not listed as failed.
 - Unsupported operation/entity combinations fail per item without aborting the batch.
@@ -36,7 +36,7 @@
 
 ### A. In-Scope Elements
 
-- Protected `sync.push` mutation.
+- Protected `POST /api/sync/push` endpoint.
 - Batch processing for queued operations.
 - Entity types:
   - `class`
@@ -66,16 +66,16 @@
 
 ### A. Artifacts & Deliverables to Produce
 
-- `apps/backend/src/routers/sync.ts`
+- `apps/backend/src/routes/sync.route.ts`
 - `apps/backend/src/controllers/sync.controller.ts`
 - `apps/backend/src/services/sync.service.ts`
 - Any narrow sync-specific types/helpers needed to route items to existing services.
-- Root router update wiring `sync`.
+- Root route registration update wiring `/api/sync`.
 
 ### B. Core Implementation Constraints
 
-- `sync.push` is a `protectedProcedure`.
-- The router validates only the batch shape and calls one controller method.
+- `POST /api/sync/push` uses the shared auth middleware from P2-S01.
+- The route validates only the batch shape and calls one controller method.
 - The controller passes authenticated `userId` and Supabase client into the sync service.
 - The sync service owns entity/operation dispatch.
 - Repositories remain the only layer issuing Supabase queries.
@@ -128,7 +128,7 @@ Response:
 
 A successful implementation must verifiably satisfy:
 
-- Unauthenticated requests return `UNAUTHORIZED` before batch processing.
+- Unauthenticated requests return `UNAUTHENTICATED` before batch processing.
 - Valid mixed batches process every item.
 - Successful item IDs are returned in `synced`.
 - Failed item IDs are returned in `failed`.
@@ -146,6 +146,5 @@ A successful implementation must verifiably satisfy:
 - Tests for operation matrix enforcement.
 - Tests for stale update handling.
 - Tests proving one failed item does not abort the remaining batch.
-- Procedure auth gating test for `sync.push`.
+- Endpoint auth gating test for `POST /api/sync/push`.
 - Regression test that authenticated `userId` overrides or ignores `payload.user_id`.
-

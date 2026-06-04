@@ -4,12 +4,12 @@
 
 **Spec Name:** P2-S02-academic-crud-classes-assignments-and-exams  
 **Phase:** Phase 2  
-**Responsibility:** Implement protected academic CRUD procedures for classes, assignments, and exams using the required router-controller-service-repository architecture.
+**Responsibility:** Implement protected academic REST CRUD endpoints for classes, assignments, and exams using the required route-controller-service-repository architecture.
 
 ## II. System Dependencies & Architectural Context
 
 **Upstream Dependencies:**
-- P2-S01-backend-trpc-auth-and-contract-foundation.
+- P2-S01-backend-rest-auth-and-contract-foundation.
 
 **Downstream Dependents:**
 - P2-S04 offline sync push, which reuses academic repositories/services for queued operations.
@@ -38,26 +38,26 @@
 
 ### A. In-Scope Elements
 
-- Protected routers/controllers/services/repositories for:
+- Protected routes/controllers/services/repositories for:
   - `classes`
   - `assignments`
   - `exams`
-- Procedures:
-  - `classes.list`
-  - `classes.get`
-  - `classes.create`
-  - `classes.update`
-  - `classes.delete`
-  - `assignments.list`
-  - `assignments.get`
-  - `assignments.create`
-  - `assignments.update`
-  - `assignments.delete`
-  - `exams.list`
-  - `exams.get`
-  - `exams.create`
-  - `exams.update`
-  - `exams.delete`
+- Endpoints:
+  - `GET /api/classes`
+  - `GET /api/classes/:id`
+  - `POST /api/classes`
+  - `PATCH /api/classes/:id`
+  - `DELETE /api/classes/:id`
+  - `GET /api/assignments`
+  - `GET /api/assignments/:id`
+  - `POST /api/assignments`
+  - `PATCH /api/assignments/:id`
+  - `DELETE /api/assignments/:id`
+  - `GET /api/exams`
+  - `GET /api/exams/:id`
+  - `POST /api/exams`
+  - `PATCH /api/exams/:id`
+  - `DELETE /api/exams/:id`
 - User scoping by authenticated `ctx.userId`.
 - Ownership checks for single-record reads, updates, and deletes.
 - Soft delete using `deleted_at`.
@@ -78,10 +78,10 @@
 
 ### A. Artifacts & Deliverables to Produce
 
-- Academic tRPC routers:
-  - `apps/backend/src/routers/classes.ts`
-  - `apps/backend/src/routers/assignments.ts`
-  - `apps/backend/src/routers/exams.ts`
+- Academic REST routes:
+  - `apps/backend/src/routes/classes.route.ts`
+  - `apps/backend/src/routes/assignments.route.ts`
+  - `apps/backend/src/routes/exams.route.ts`
 - Controllers:
   - `classes.controller.ts`
   - `assignments.controller.ts`
@@ -94,58 +94,58 @@
   - `classes.repository.ts`
   - `assignments.repository.ts`
   - `exams.repository.ts`
-- Root router updates wiring all three routers under their documented names.
+- Root route registration updates wiring all three route groups under their documented paths.
 - Shared academic validation helpers only if they reduce duplication without hiding endpoint-specific schema rules.
 
 ### B. Core Implementation Constraints
 
-- All procedures are `protectedProcedure`.
-- Routers define Zod schemas and call exactly one controller method.
-- Controllers may throw `TRPCError` for:
+- All endpoints use the shared auth middleware from P2-S01.
+- Routes define Zod schemas, parse path/query/body input, and call exactly one controller method.
+- Controllers may return or throw mapped REST errors for:
   - `NOT_FOUND`
   - `FORBIDDEN`
   - mapped service/repository failures where appropriate.
 - Services implement last-write-wins and shape records for create/update.
 - Repositories perform Supabase queries with both `id` and `user_id` filters where applicable.
 - List repositories always exclude `deleted_at` rows.
-- `get` procedures return `{ class: null }`, `{ assignment: null }`, or `{ exam: null }` for missing records, matching `ENDPOINT_REF.md`.
-- Update procedures return the full record or `null` when the incoming `updated_at` loses conflict resolution.
-- Delete procedures return `{ ok: boolean }` and must not hard-delete rows.
+- `GET /:id` endpoints return `{ class: null }`, `{ assignment: null }`, or `{ exam: null }` for missing records, matching `ENDPOINT_REF.md`.
+- Update endpoints return the full record or `null` when the incoming `updated_at` loses conflict resolution.
+- Delete endpoints return `{ ok: boolean }` and must not hard-delete rows.
 
 ### C. Endpoint Contracts
 
-Class procedures must support:
-- `list({ since?: string })`
-- `get({ id })`
-- `create({ id, subject, day_of_week, start_time, end_time, room?, instructor?, color?, created_at, updated_at })`
-- `update({ id, subject?, room?, instructor?, day_of_week?, start_time?, end_time?, color?, is_active?, updated_at })`
-- `delete({ id })`
+Class endpoints must support:
+- `GET /api/classes?since=...`
+- `GET /api/classes/:id`
+- `POST /api/classes`
+- `PATCH /api/classes/:id`
+- `DELETE /api/classes/:id`
 
-Assignment procedures must support:
-- `list({ since?: string })`
-- `get({ id })`
-- `create({ id, title, due_date, class_id?, description?, status?, priority?, created_at, updated_at })`
-- `update({ id, title?, due_date?, class_id?, description?, status?, priority?, updated_at })`
-- `delete({ id })`
+Assignment endpoints must support:
+- `GET /api/assignments?since=...`
+- `GET /api/assignments/:id`
+- `POST /api/assignments`
+- `PATCH /api/assignments/:id`
+- `DELETE /api/assignments/:id`
 
-Exam procedures must support:
-- `list({ since?: string })`
-- `get({ id })`
-- `create({ id, title, exam_date, class_id?, description?, location?, created_at, updated_at })`
-- `update({ id, title?, exam_date?, class_id?, description?, location?, updated_at })`
-- `delete({ id })`
+Exam endpoints must support:
+- `GET /api/exams?since=...`
+- `GET /api/exams/:id`
+- `POST /api/exams`
+- `PATCH /api/exams/:id`
+- `DELETE /api/exams/:id`
 
 ## V. Validation & Exit Criteria
 
 A successful implementation must verifiably satisfy:
 
-- All academic procedures reject unauthenticated requests before business logic runs.
+- All academic endpoints reject unauthenticated requests before business logic runs.
 - Users can only read or mutate their own records.
-- List procedures exclude soft-deleted records.
-- List procedures return only records with `updated_at > since` when `since` is provided.
-- Create procedures write authenticated `user_id` from context, never from client input.
-- Update procedures do not overwrite newer server records with older client payloads.
-- Delete procedures set `deleted_at` and return `{ ok: true }` when the target belongs to the user.
+- List endpoints exclude soft-deleted records.
+- List endpoints return only records with `updated_at > since` when `since` is provided.
+- Create endpoints write authenticated `user_id` from context, never from client input.
+- Update endpoints do not overwrite newer server records with older client payloads.
+- Delete endpoints set `deleted_at` and return `{ ok: true }` when the target belongs to the user.
 - Academic repositories can be called by P2-S04 without duplicating Supabase query logic.
 - `pnpm --filter @unilife-ai/backend build` succeeds.
 
@@ -154,6 +154,5 @@ A successful implementation must verifiably satisfy:
 - Build check: `pnpm --filter @unilife-ai/backend build`.
 - Service unit tests with mocked repositories for last-write-wins wins/losses.
 - Repository integration-style tests with mocked Supabase chains for user scoping and soft-delete filters.
-- Procedure tests for auth gating on each academic router.
+- Endpoint tests for auth gating on each academic route group.
 - Regression tests for ownership, `since` filtering, create user injection, update conflict rejection, and soft delete.
-

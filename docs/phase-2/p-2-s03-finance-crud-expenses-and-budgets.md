@@ -4,12 +4,12 @@
 
 **Spec Name:** P2-S03-finance-crud-expenses-and-budgets  
 **Phase:** Phase 2  
-**Responsibility:** Implement protected finance procedures for expenses and budgets, including list filters, budget ordering, and finance service behavior needed by onboarding and allowance features.
+**Responsibility:** Implement protected finance REST endpoints for expenses and budgets, including list filters, budget ordering, and finance service behavior needed by onboarding and allowance features.
 
 ## II. System Dependencies & Architectural Context
 
 **Upstream Dependencies:**
-- P2-S01-backend-trpc-auth-and-contract-foundation.
+- P2-S01-backend-rest-auth-and-contract-foundation.
 
 **Downstream Dependents:**
 - P2-S04 offline sync push.
@@ -36,16 +36,16 @@
 
 ### A. In-Scope Elements
 
-- Protected routers/controllers/services/repositories for:
+- Protected routes/controllers/services/repositories for:
   - `expenses`
   - `budgets`
-- Procedures:
-  - `expenses.list`
-  - `expenses.create`
-  - `expenses.delete`
-  - `budgets.list`
-  - `budgets.create`
-  - `budgets.update`
+- Endpoints:
+  - `GET /api/expenses`
+  - `POST /api/expenses`
+  - `DELETE /api/expenses/:id`
+  - `GET /api/budgets`
+  - `POST /api/budgets`
+  - `PATCH /api/budgets/:id`
 - Expense filtering:
   - `since`
   - `from`
@@ -59,8 +59,8 @@
 
 ### B. Out-of-Scope Elements
 
-- Expense update procedure.
-- Budget delete procedure.
+- Expense update endpoint.
+- Budget delete endpoint.
 - Academic entities.
 - Sync batch orchestration.
 - AI Gemini call implementation.
@@ -70,9 +70,9 @@
 
 ### A. Artifacts & Deliverables to Produce
 
-- Finance tRPC routers:
-  - `apps/backend/src/routers/expenses.ts`
-  - `apps/backend/src/routers/budgets.ts`
+- Finance REST routes:
+  - `apps/backend/src/routes/expenses.route.ts`
+  - `apps/backend/src/routes/budgets.route.ts`
 - Controllers:
   - `expenses.controller.ts`
   - `budgets.controller.ts`
@@ -82,11 +82,11 @@
 - Repositories:
   - `expenses.repository.ts`
   - `budgets.repository.ts`
-- Root router updates wiring finance routers under `expenses` and `budgets`.
+- Root route registration updates wiring finance route groups under `/api/expenses` and `/api/budgets`.
 
 ### B. Core Implementation Constraints
 
-- All finance procedures are `protectedProcedure`.
+- All finance endpoints use the shared auth middleware from P2-S01.
 - Client input must never be trusted for `user_id`; context user ID is authoritative.
 - Expense repositories must exclude `deleted_at` rows for reads.
 - Expense delete must set `deleted_at`, not hard-delete.
@@ -97,10 +97,10 @@
 
 ### C. Endpoint Contracts
 
-Expense procedures must support:
-- `list({ since?: string, from?: string, to?: string, category?: ExpenseCategory })`
-- `create({ id, amount, category, budget_id?, description?, spent_at, created_at, updated_at })`
-- `delete({ id })`
+Expense endpoints must support:
+- `GET /api/expenses?since=...&from=...&to=...&category=...`
+- `POST /api/expenses`
+- `DELETE /api/expenses/:id`
 
 Expense categories:
 - `food`
@@ -109,10 +109,10 @@ Expense categories:
 - `entertainment`
 - `miscellaneous`
 
-Budget procedures must support:
-- `list({ since?: string })`
-- `create({ id, amount, period, start_date, end_date, created_at, updated_at })`
-- `update({ id, amount?, period?, end_date?, updated_at })`
+Budget endpoints must support:
+- `GET /api/budgets?since=...`
+- `POST /api/budgets`
+- `PATCH /api/budgets/:id`
 
 Budget periods:
 - `weekly`
@@ -123,7 +123,7 @@ Budget periods:
 
 A successful implementation must verifiably satisfy:
 
-- All finance procedures reject unauthenticated requests before business logic runs.
+- All finance endpoints reject unauthenticated requests before business logic runs.
 - Expense reads are scoped to authenticated user and exclude soft-deleted rows.
 - `expenses.list` applies date/category/delta filters together.
 - `expenses.list` returns `{ expenses, total }`, where `total` is a number matching returned records.
@@ -138,6 +138,5 @@ A successful implementation must verifiably satisfy:
 
 - Build check: `pnpm --filter @unilife-ai/backend build`.
 - Service unit tests for expense totals and budget last-write-wins.
-- Procedure tests for auth gating on `expenses` and `budgets`.
+- Endpoint tests for auth gating on `expenses` and `budgets`.
 - Regression tests for expense filter combinations, soft delete, budget ordering, user scoping, and stale budget update rejection.
-

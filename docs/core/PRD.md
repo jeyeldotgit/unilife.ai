@@ -549,7 +549,7 @@ Supabase
 ### Technology Stack
 
 - Hono
-- tRPC
+- Hono REST API
 - TypeScript
 
 ### Responsibilities
