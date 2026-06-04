@@ -1,0 +1,14 @@
+<svg width="140" height="140" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>UniLife.AI app icon</title>
+  <desc>Rounded square icon in #0058be with white speech bubble, lightning bolt tail, U with mortarboard</desc>
+
+  <rect width="140" height="140" rx="32" fill="#0058be"/>
+  <rect x="18" y="18" width="104" height="76" rx="14" fill="white"/>
+  <polygon points="42,94 28,119 38,119 24,140 52,112 40,112" fill="white"/>
+  <text x="70" y="80" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="52" fill="#0058be" text-anchor="middle">U</text>
+  <rect x="38" y="18" width="64" height="9" rx="2.5" fill="#0058be"/>
+  <rect x="52" y="27" width="36" height="10" rx="3" fill="#0058be"/>
+  <line x1="102" y1="22" x2="114" y2="40" stroke="#0058be" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="114" cy="44" r="4.5" fill="#0058be"/>
+  <circle cx="120" cy="20" r="6" fill="#FFD23F"/>
+</svg>
