@@ -1,59 +1,23 @@
-"use client";
+import { AuthAlternateAction } from "../components/AuthAlternateAction";
+import { AuthHeader } from "../components/AuthHeader";
+import { AuthPageShell } from "../components/AuthPageShell";
+import RegistrationForm from "./components/RegistrationForm";
 
-import { useActionState } from "react";
-import { register, type RegisterState } from "./actions";
-
-const initialState: RegisterState = {
-  error: null,
+const SignUpPage = () => {
+  return (
+    <AuthPageShell>
+      <AuthHeader
+        title="Create your account"
+        description="Join the modern academic companion designed for your success."
+      />
+      <RegistrationForm />
+      <AuthAlternateAction
+        prompt="Already have an account?"
+        href="/login"
+        linkLabel="Sign In"
+      />
+    </AuthPageShell>
+  );
 };
 
-export default function RegisterPage() {
-  const [state, formAction, isPending] = useActionState(register, initialState);
-
-  return (
-    <div className="mx-auto max-w-md p-6">
-      <h1 className="mb-6 text-2xl font-bold">Create Account</h1>
-
-      <form action={formAction} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="mb-1 block text-sm font-medium">
-            Email
-          </label>
-
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            className="w-full rounded border px-3 py-2"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="password" className="mb-1 block text-sm font-medium">
-            Password
-          </label>
-
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            minLength={8}
-            className="w-full rounded border px-3 py-2"
-          />
-        </div>
-
-        {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-
-        <button
-          type="submit"
-          disabled={isPending}
-          className="w-full rounded border px-4 py-2"
-        >
-          {isPending ? "Creating account..." : "Create account"}
-        </button>
-      </form>
-    </div>
-  );
-}
+export default SignUpPage;
