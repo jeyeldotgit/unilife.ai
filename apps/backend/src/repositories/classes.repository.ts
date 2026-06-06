@@ -48,6 +48,25 @@ export class ClassesRepository {
     return data as ClassRecord;
   }
 
+  async findByIdIncludingDeletedForUser(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from("classes")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+
+      throw new Error(error.message);
+    }
+
+    return data as ClassRecord;
+  }
+
   async existsForOtherUser(id: string, userId: string) {
     const { data, error } = await this.supabase
       .from("classes")
@@ -68,10 +87,43 @@ export class ClassesRepository {
     return Boolean(data);
   }
 
+  async existsForOtherUserIncludingDeleted(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from("classes")
+      .select("id")
+      .eq("id", id)
+      .neq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) {
+        return false;
+      }
+
+      throw new Error(error.message);
+    }
+
+    return Boolean(data);
+  }
+
   async create(record: ClassRecord) {
     const { data, error } = await this.supabase
       .from("classes")
       .insert(record)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as ClassRecord;
+  }
+
+  async upsert(record: ClassRecord) {
+    const { data, error } = await this.supabase
+      .from("classes")
+      .upsert(record)
       .select()
       .single();
 

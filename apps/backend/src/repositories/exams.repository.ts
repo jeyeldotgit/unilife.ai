@@ -48,6 +48,25 @@ export class ExamsRepository {
     return data as Exam;
   }
 
+  async findByIdIncludingDeletedForUser(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from("exams")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+
+      throw new Error(error.message);
+    }
+
+    return data as Exam;
+  }
+
   async existsForOtherUser(id: string, userId: string) {
     const { data, error } = await this.supabase
       .from("exams")
@@ -68,8 +87,37 @@ export class ExamsRepository {
     return Boolean(data);
   }
 
+  async existsForOtherUserIncludingDeleted(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from("exams")
+      .select("id")
+      .eq("id", id)
+      .neq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) {
+        return false;
+      }
+
+      throw new Error(error.message);
+    }
+
+    return Boolean(data);
+  }
+
   async create(record: Exam) {
     const { data, error } = await this.supabase.from("exams").insert(record).select().single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as Exam;
+  }
+
+  async upsert(record: Exam) {
+    const { data, error } = await this.supabase.from("exams").upsert(record).select().single();
 
     if (error) {
       throw new Error(error.message);
