@@ -82,6 +82,25 @@ export class ExpensesRepository {
     return toExpense(data as DatabaseExpenseRow);
   }
 
+  async findByIdIncludingDeletedForUser(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from("expenses")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+
+      throw new Error(error.message);
+    }
+
+    return toExpense(data as DatabaseExpenseRow);
+  }
+
   async existsForOtherUser(id: string, userId: string) {
     const { data, error } = await this.supabase
       .from("expenses")
@@ -102,10 +121,43 @@ export class ExpensesRepository {
     return Boolean(data);
   }
 
+  async existsForOtherUserIncludingDeleted(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from("expenses")
+      .select("id")
+      .eq("id", id)
+      .neq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) {
+        return false;
+      }
+
+      throw new Error(error.message);
+    }
+
+    return Boolean(data);
+  }
+
   async create(record: Expense) {
     const { data, error } = await this.supabase
       .from("expenses")
       .insert(record)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return toExpense(data as DatabaseExpenseRow);
+  }
+
+  async upsert(record: Expense) {
+    const { data, error } = await this.supabase
+      .from("expenses")
+      .upsert(record)
       .select()
       .single();
 

@@ -7,6 +7,7 @@ import { classesRouter } from "./routes/classes.route.js";
 import { examsRouter } from "./routes/exams.route.js";
 import { expensesRouter } from "./routes/expenses.route.js";
 import { healthRouter } from "./routes/health.route.js";
+import { syncRouter } from "./routes/sync.route.js";
 
 export const apiRouter = new Hono<AppBindings>();
 
@@ -15,6 +16,7 @@ apiRouter.route("/assignments", assignmentsRouter);
 apiRouter.route("/exams", examsRouter);
 apiRouter.route("/expenses", expensesRouter);
 apiRouter.route("/budgets", budgetsRouter);
+apiRouter.route("/sync", syncRouter);
 
 export function registerRoutes(app: Hono<AppBindings>) {
   app.route("/", healthRouter);

@@ -91,6 +91,20 @@ export class BudgetsRepository {
     return toBudget(data as DatabaseBudgetRow);
   }
 
+  async upsert(record: Budget) {
+    const { data, error } = await this.supabase
+      .from("budgets")
+      .upsert(record)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return toBudget(data as DatabaseBudgetRow);
+  }
+
   async updateForUser(id: string, userId: string, changes: Partial<Budget>) {
     const { data, error } = await this.supabase
       .from("budgets")

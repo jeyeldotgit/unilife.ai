@@ -55,6 +55,25 @@ export class AssignmentsRepository {
     return data as Assignment;
   }
 
+  async findByIdIncludingDeletedForUser(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from("assignments")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+
+      throw new Error(error.message);
+    }
+
+    return data as Assignment;
+  }
+
   async existsForOtherUser(id: string, userId: string) {
     const { data, error } = await this.supabase
       .from("assignments")
@@ -75,10 +94,43 @@ export class AssignmentsRepository {
     return Boolean(data);
   }
 
+  async existsForOtherUserIncludingDeleted(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from("assignments")
+      .select("id")
+      .eq("id", id)
+      .neq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) {
+        return false;
+      }
+
+      throw new Error(error.message);
+    }
+
+    return Boolean(data);
+  }
+
   async create(record: Assignment) {
     const { data, error } = await this.supabase
       .from("assignments")
       .insert(record)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as Assignment;
+  }
+
+  async upsert(record: Assignment) {
+    const { data, error } = await this.supabase
+      .from("assignments")
+      .upsert(record)
       .select()
       .single();
 
