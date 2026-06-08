@@ -9,14 +9,17 @@
 ## II. System Dependencies & Architectural Context
 
 **Upstream Dependencies:**
+
 - P2-S01-backend-rest-auth-and-contract-foundation.
 
 **Related Specs:**
+
 - P2-S02 academic CRUD provides the target entities for structured academic actions.
 - P2-S03 finance CRUD provides the target entities for expense and budget-related actions.
 - P2-S04 sync push eventually persists frontend-confirmed actions.
 
 **Inputs (Reference Materials):**
+
 - `apps/backend/AGENTS.md`
 - `docs/core/BACKEND_ARCH.md`
 - `docs/core/ENDPOINT_REF.md`
@@ -27,6 +30,7 @@
 - `packages/types/src/ai-log.ts`
 
 **Resolved Gaps:**
+
 - `ai.chat` does not write classes, assignments, exams, expenses, or budgets directly.
 - The frontend is responsible for writing confirmed actions to Dexie and enqueueing sync.
 - Gemini failure should return a friendly `unknown` response instead of surfacing a 500 to the student.
@@ -111,11 +115,12 @@ Input:
     budget_remaining: number | null;
     budget_period_end_date: string | null;
     avg_daily_spend: number | null;
-  };
+  }
 }
 ```
 
 Validation requirements:
+
 - `message` must be 1 to 1000 characters.
 - Date/time fields must be accepted as strings and passed through consistently.
 - Context arrays may be empty.

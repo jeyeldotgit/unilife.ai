@@ -6,7 +6,7 @@ import {
   jsonb,
   numeric,
 } from "drizzle-orm/pg-core";
-import { users } from "./users";
+import { users } from "./users.js";
 
 export const aiLogs = pgTable("ai_logs", {
   id: uuid("id").primaryKey(),

@@ -6,7 +6,7 @@ import {
   jsonb,
   smallint,
 } from "drizzle-orm/pg-core";
-import { users } from "./users";
+import { users } from "./users.js";
 
 export const syncQueue = pgTable("sync_queue", {
   id: uuid("id").primaryKey(),

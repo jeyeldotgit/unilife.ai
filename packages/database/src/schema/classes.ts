@@ -6,7 +6,7 @@ import {
   time,
   boolean,
 } from "drizzle-orm/pg-core";
-import { users } from "./users";
+import { users } from "./users.js";
 
 export const classes = pgTable("classes", {
   id: uuid("id").primaryKey(),
