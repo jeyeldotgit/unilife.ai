@@ -51,16 +51,17 @@ Panel 1                    Panel 2                    Panel 3
 ```
 
 ```
-Panel 4                    Panel 5
-┌─────────────────┐        ┌─────────────────┐
-│                 │        │                 │
-│  Onboarding     │  ───▶  │  Dashboard      │
-│  Setup Wizard   │        │  (First View)   │
-│                 │        │                 │
-└─────────────────┘        └─────────────────┘
- App asks her budget        She lands on the
- period and first           empty dashboard,
- budget amount.             ready to begin.
+Panel 4                    Panel 5                    Panel 6
+┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐
+│                 │        │                 │        │                 │
+│  Budget Setup   │  ───▶  │  Academic       │  ───▶  │  Dashboard      │
+│                 │        │  Setup          │        │  (First View)   │
+│                 │        │                 │        │                 │
+└─────────────────┘        └─────────────────┘        └─────────────────┘
+ App asks her budget        App asks for her          She lands on the
+ period and first           first class or weekly     dashboard with
+ budget amount.             schedule, then an         starter data if
+                            optional assignment.      added, or empty state.
 ```
 
 ---
@@ -125,7 +126,7 @@ Panel 4                    Panel 5
 
 ```
 ┌─────────────────────────────────┐
-│  Step 2 of 2 — Set your budget  │
+│  Step 2 of 3 — Set your budget  │
 │  ●●○                            │
 │─────────────────────────────────│
 │                                 │
@@ -153,12 +154,50 @@ Panel 4                    Panel 5
 
 ---
 
+## UI Wireframe — Onboarding: Academic Setup
+
+```
+┌─────────────────────────────────┐
+│  Step 3 of 3 — Academic setup   │
+│  ●●●                            │
+│─────────────────────────────────│
+│                                 │
+│  Add your first class           │
+│  ┌───────────────────────────┐  │
+│  │ Subject: Math 101         │  │
+│  └───────────────────────────┘  │
+│  ┌──────────┐ ┌─────────────┐   │
+│  │ Tue/Thu  │ │  8:00 AM    │   │
+│  └──────────┘ └─────────────┘   │
+│                                 │
+│  Optional: add one task         │
+│  ┌───────────────────────────┐  │
+│  │ Research Paper            │  │
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ Due: Jun 12, 11:59 PM     │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  ████████████████████████████   │
+│  █   Finish Setup →          █  │
+│  ████████████████████████████   │
+│                                 │
+│  [ Skip for now ]               │
+│                                 │
+└─────────────────────────────────┘
+```
+
+---
+
 ## Acceptance Criteria
 
 - [ ] User can register with email, password, and display name
 - [ ] Inline validation shows errors before form submission
 - [ ] Onboarding collects budget period and amount
-- [ ] On completion, user lands on dashboard with empty state
+- [ ] Onboarding collects at least one starter academic input: first class or weekly schedule
+- [ ] User may optionally add one starter assignment during onboarding
+- [ ] User can skip academic setup and continue
+- [ ] On completion, user lands on dashboard with starter data if provided, otherwise empty state
 - [ ] If user already has account, login link is accessible
 
 ---

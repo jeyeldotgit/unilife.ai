@@ -1,0 +1,429 @@
+import type { ChatExpenseConfirmationPayload, ChatFreeTimeRecommendationPayload, ChatMessage } from "@/lib/types";
+import { AssignmentCard } from "@/components/ui/AssignmentCard";
+import { Icon } from "@/components/ui/Icon";
+
+type ChatBubbleProps = {
+  message: ChatMessage;
+  onAssignmentCtaClick?: (assignmentId: string) => void;
+  onExpenseCtaClick?: (expenseId: string) => void;
+};
+
+function AiAvatar() {
+  return (
+    <div
+      style={{
+        width: "24px",
+        height: "24px",
+        backgroundColor: "#3B82F6",
+        borderRadius: "9999px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <Icon name="smart_toy" filled size={14} className="text-white" />
+    </div>
+  );
+}
+
+function ExpenseConfirmationCard({
+  payload,
+  onClick,
+}: {
+  payload: ChatExpenseConfirmationPayload;
+  onClick?: (expenseId: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <p style={{ fontSize: "16px", lineHeight: "24px", margin: 0 }}>
+        {"\ud83d\udcb8"} Expense logged!
+      </p>
+      <div
+        style={{
+          backgroundColor: "#f3f4f5",
+          borderRadius: "12px",
+          padding: "16px",
+          border: "1px solid rgba(194,198,214,0.3)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              backgroundColor: "rgba(59,130,246,0.12)",
+              borderRadius: "9999px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Icon name={payload.icon} className="text-[#3B82F6]" size={20} />
+          </div>
+          <div>
+            <p
+              style={{
+                fontSize: "14px",
+                fontWeight: 600,
+                color: "#191c1d",
+                margin: 0,
+              }}
+            >
+              {payload.amountLabel} - {payload.categoryLabel}
+            </p>
+            <p
+              style={{
+                fontSize: "12px",
+                color: "#424754",
+                margin: "2px 0 0 0",
+              }}
+            >
+              {payload.spentAtLabel}
+            </p>
+          </div>
+        </div>
+        <div>
+          <p
+            style={{
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "#424754",
+              margin: "0 0 8px 0",
+            }}
+          >
+            Budget remaining:
+          </p>
+          <p
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#191c1d",
+              margin: 0,
+            }}
+          >
+            {payload.budgetRemainingLabel}{" "}
+            <span
+              style={{
+                fontSize: "14px",
+                fontWeight: 500,
+                color: "#424754",
+              }}
+            >
+              of {payload.budgetTotalLabel}
+            </span>
+          </p>
+          <div
+            style={{
+              width: "100%",
+              backgroundColor: "#edeeef",
+              height: "8px",
+              borderRadius: "9999px",
+              overflow: "hidden",
+              marginTop: "10px",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#10B981",
+                height: "100%",
+                width: `${payload.progressPercent}%`,
+                borderRadius: "9999px",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => onClick?.(payload.expenseId)}
+        style={{
+          width: "100%",
+          backgroundColor: "#3B82F6",
+          color: "#ffffff",
+          fontSize: "14px",
+          fontWeight: 600,
+          letterSpacing: "0.01em",
+          padding: "12px",
+          borderRadius: "12px",
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          transition: "opacity 0.15s",
+          fontFamily: "'Inter', sans-serif",
+        }}
+        onMouseOver={(event) => {
+          event.currentTarget.style.opacity = "0.9";
+        }}
+        onMouseOut={(event) => {
+          event.currentTarget.style.opacity = "1";
+        }}
+      >
+        {payload.ctaLabel}
+        <Icon name="arrow_forward" size={18} />
+      </button>
+    </div>
+  );
+}
+
+function FreeTimeRecommendationCard({
+  payload,
+}: {
+  payload: ChatFreeTimeRecommendationPayload;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div>
+        <p
+          style={{
+            fontSize: "18px",
+            lineHeight: "24px",
+            fontWeight: 600,
+            color: "#191c1d",
+            margin: 0,
+          }}
+        >
+          {"\ud83d\udd50"} {payload.freeWindowLabel}
+        </p>
+        <p
+          style={{
+            fontSize: "14px",
+            lineHeight: "20px",
+            color: "#424754",
+            margin: "6px 0 0 0",
+          }}
+        >
+          {payload.nextClassLabel}
+        </p>
+      </div>
+      <div>
+        <p
+          style={{
+            fontSize: "14px",
+            fontWeight: 600,
+            color: "#191c1d",
+            margin: "0 0 12px 0",
+          }}
+        >
+          Here&apos;s what I suggest:
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {payload.recommendations.map((recommendation, index) => (
+            <div
+              key={`${recommendation.assignmentId ?? recommendation.title}-${index}`}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "9999px",
+                  backgroundColor: "#d8e2ff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "#0058be",
+                  }}
+                >
+                  {index + 1}
+                </span>
+              </div>
+              <div>
+                <p
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    color: "#191c1d",
+                    margin: 0,
+                  }}
+                >
+                  {recommendation.title}
+                </p>
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: "#424754",
+                    margin: "2px 0 0 0",
+                  }}
+                >
+                  {recommendation.dueLabel}
+                </p>
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: "#424754",
+                    margin: "2px 0 0 0",
+                  }}
+                >
+                  {recommendation.subjectLabel}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p
+        style={{
+          fontSize: "14px",
+          lineHeight: "20px",
+          color: "#424754",
+          margin: 0,
+        }}
+      >
+        {payload.closingText}
+      </p>
+    </div>
+  );
+}
+
+export function ChatBubble({
+  message,
+  onAssignmentCtaClick,
+  onExpenseCtaClick,
+}: ChatBubbleProps) {
+  if (message.role === "user") {
+    const userText = message.kind === "text" ? message.text : "";
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: "4px",
+        }}
+      >
+        {message.timeLabel ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginBottom: "4px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: 500,
+                color: "#424754",
+              }}
+            >
+              {message.timeLabel}
+            </span>
+          </div>
+        ) : null}
+        <div
+          style={{
+            backgroundColor: "#0058be",
+            color: "#ffffff",
+            padding: "20px",
+            borderRadius: "16px",
+            borderTopRightRadius: "4px",
+            boxShadow: "0 2px 8px rgba(0,88,190,0.2)",
+            maxWidth: "85%",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "16px",
+              lineHeight: "24px",
+              margin: 0,
+            }}
+          >
+            {userText}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: "4px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          marginBottom: "4px",
+        }}
+      >
+        <AiAvatar />
+        <span
+          style={{
+            fontSize: "12px",
+            fontWeight: 500,
+            color: "#424754",
+          }}
+        >
+          UniLife AI
+        </span>
+      </div>
+      <div
+        className="glass-panel"
+        style={{
+          border: "1px solid #c2c6d6",
+          padding: "20px",
+          borderRadius: "16px",
+          borderTopLeftRadius: "4px",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+          maxWidth: "85%",
+        }}
+      >
+        {message.kind === "text" ? (
+          <p
+            style={{
+              fontSize: "16px",
+              lineHeight: "24px",
+              margin: 0,
+              color: "#191c1d",
+            }}
+          >
+            {message.text}
+          </p>
+        ) : null}
+        {message.kind === "assignment_confirmation" ? (
+          <AssignmentCard
+            variant="chat_confirmation"
+            confirmation={message.payload}
+            onCtaClick={onAssignmentCtaClick}
+          />
+        ) : null}
+        {message.kind === "expense_confirmation" ? (
+          <ExpenseConfirmationCard
+            payload={message.payload}
+            onClick={onExpenseCtaClick}
+          />
+        ) : null}
+        {message.kind === "free_time_recommendation" ? (
+          <FreeTimeRecommendationCard payload={message.payload} />
+        ) : null}
+      </div>
+    </div>
+  );
+}
