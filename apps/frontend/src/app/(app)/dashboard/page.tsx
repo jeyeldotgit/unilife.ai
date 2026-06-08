@@ -1,9 +1,48 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
+import { Icon } from "@/components/ui/Icon";
+import type { BudgetStatus } from "@/lib/types";
+
+const TODAY_CLASSES = [
+  {
+    time: "08:00",
+    subject: "Math 101",
+    location: "Room 3A \u2022 Building B",
+  },
+  {
+    time: "10:30",
+    subject: "Eng Lit",
+    location: "Room 12 \u2022 Library Wing",
+  },
+  {
+    time: "13:00",
+    subject: "PE",
+    location: "Gym \u2022 Sports Complex",
+  },
+];
+
+const DASHBOARD_BUDGET: BudgetStatus = {
+  budgetId: "dashboard-budget-preview",
+  period: "weekly",
+  cycleLabel: "Budget Status",
+  totalAmount: 2000,
+  spentAmount: 760,
+  remainingAmount: 1240,
+  totalLabel: "\u20b1 2,000",
+  spentLabel: "\u20b1 760",
+  remainingLabel: "\u20b1 1,240",
+  progressPercent: 38,
+  progressLabel: "38% used",
+  estimatedDaysLeft: 4,
+  estimateLabel: "Est. lasts 4 more days",
+  tone: "healthy",
+};
 
 export default function DashboardPage() {
-  const aiIconRef = useRef<HTMLSpanElement>(null);
+  const aiIconRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -12,21 +51,21 @@ export default function DashboardPage() {
         aiIconRef.current.style.transform = `translateY(${scrolled * 0.1}px)`;
       }
     };
+
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleClassItemClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
+  const handleClassItemClick = (event: MouseEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
     target.style.transform = "scale(0.98)";
-    setTimeout(() => {
+    window.setTimeout(() => {
       target.style.transform = "scale(1)";
     }, 100);
   };
 
   return (
     <>
-      {/* Google Fonts */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         .glass-card {
@@ -50,67 +89,36 @@ export default function DashboardPage() {
           minHeight: "100dvh",
         }}
       >
-        {/* TopAppBar */}
-        <header
-          style={{
-            backgroundColor: "#f8f9fa",
-            position: "sticky",
-            top: 0,
-            zIndex: 50,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "16px",
-              width: "100%",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "9999px",
-                  overflow: "hidden",
-                  backgroundColor: "#e1e3e4",
-                  border: "1px solid #c2c6d6",
-                  flexShrink: 0,
-                }}
-              >
-                <img
-                  alt="Juan's Avatar"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBi6bUWVAa9B1N0mhWR0j7Pjd27lA5Kd1VOymbLeUpxWqzX59u-1oHMevqXkmOFnfrLItuF9Jg5D_GXg3pbLsYrg2DUS0pcA7eJVGZ9kddm7vFvjDGD41Aeqh-yUQcs244nEB6HpPJ2Mwm2AIJaVTJZUOwgbS-qKfqknRKyJKEurmqaHhqPiXCChlLB5jcXDN0w_cx6lVMlNxeCQIK_9Udb6mkj-0jbvZH26JM1bHhM_aQW6vPLntdZNcCBPIVRADtndQmvrtLl3Wg"
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <h1
-                  style={{
-                    color: "#3B82F6",
-                    fontSize: "24px",
-                    lineHeight: "32px",
-                    fontWeight: 600,
-                    margin: 0,
-                  }}
-                >
-                  Hi, Juan
-                </h1>
-                <span
-                  style={{
-                    fontSize: "14px",
-                    lineHeight: "20px",
-                    fontWeight: 600,
-                    color: "#424754",
-                  }}
-                >
-                  Wednesday, June 3
-                </span>
-              </div>
+        <PageHeader
+          className="sticky top-0 z-50 bg-[#f8f9fa]"
+          contentClassName="flex justify-between items-center px-4 py-4 w-full"
+          title="Hi, Juan"
+          subtitle="Wednesday, June 3"
+          leading={
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "9999px",
+                overflow: "hidden",
+                backgroundColor: "#e1e3e4",
+                border: "1px solid #c2c6d6",
+                flexShrink: 0,
+              }}
+            >
+              <img
+                alt="Juan's Avatar"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBi6bUWVAa9B1N0mhWR0j7Pjd27lA5Kd1VOymbLeUpxWqzX59u-1oHMevqXkmOFnfrLItuF9Jg5D_GXg3pbLsYrg2DUS0pcA7eJVGZ9kddm7vFvjDGD41Aeqh-yUQcs244nEB6HpPJ2Mwm2AIJaVTJZUOwgbS-qKfqknRKyJKEurmqaHhqPiXCChlLB5jcXDN0w_cx6lVMlNxeCQIK_9Udb6mkj-0jbvZH26JM1bHhM_aQW6vPLntdZNcCBPIVRADtndQmvrtLl3Wg"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
             </div>
+          }
+          titleWrapperClassName="flex flex-col"
+          titleClassName="m-0 text-2xl font-semibold leading-8 text-[#3B82F6]"
+          subtitleClassName="text-sm font-semibold leading-5 text-[#424754]"
+          trailing={
             <button
+              type="button"
               style={{
                 background: "none",
                 border: "none",
@@ -119,20 +127,18 @@ export default function DashboardPage() {
                 borderRadius: "9999px",
                 transition: "opacity 0.15s",
               }}
-              onMouseOver={(e) => (e.currentTarget.style.opacity = "0.8")}
-              onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseOver={(event) => {
+                event.currentTarget.style.opacity = "0.8";
+              }}
+              onMouseOut={(event) => {
+                event.currentTarget.style.opacity = "1";
+              }}
             >
-              <span
-                className="material-symbols-outlined"
-                style={{ color: "#424754" }}
-              >
-                notifications
-              </span>
+              <Icon name="notifications" style={{ color: "#424754" }} />
             </button>
-          </div>
-        </header>
+          }
+        />
 
-        {/* Main Content */}
         <main
           style={{
             padding: "16px 16px 96px",
@@ -143,7 +149,6 @@ export default function DashboardPage() {
             gap: "24px",
           }}
         >
-          {/* AI Suggests Card */}
           <section
             className="glass-card academic-shadow"
             style={{
@@ -162,19 +167,18 @@ export default function DashboardPage() {
                 padding: "8px",
               }}
             >
-              <span
-                ref={aiIconRef}
-                className="material-symbols-outlined"
-                style={{
-                  color: "#3B82F6",
-                  opacity: 0.2,
-                  fontSize: "60px",
-                  display: "block",
-                  userSelect: "none",
-                }}
-              >
-                smart_toy
-              </span>
+              <div ref={aiIconRef}>
+                <Icon
+                  name="smart_toy"
+                  style={{
+                    color: "#3B82F6",
+                    opacity: 0.2,
+                    fontSize: "60px",
+                    display: "block",
+                    userSelect: "none",
+                  }}
+                />
+              </div>
             </div>
             <div style={{ position: "relative", zIndex: 10 }}>
               <div
@@ -185,12 +189,7 @@ export default function DashboardPage() {
                   marginBottom: "8px",
                 }}
               >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ color: "#3B82F6" }}
-                >
-                  auto_awesome
-                </span>
+                <Icon name="auto_awesome" style={{ color: "#3B82F6" }} />
                 <h2
                   style={{
                     fontSize: "14px",
@@ -214,12 +213,11 @@ export default function DashboardPage() {
                 }}
               >
                 Start <span style={{ color: "#3B82F6" }}>Research Paper</span>{" "}
-                today — due in 2 days.
+                today - due in 2 days.
               </p>
             </div>
           </section>
 
-          {/* Bento Grid */}
           <div
             style={{
               display: "grid",
@@ -227,7 +225,6 @@ export default function DashboardPage() {
               gap: "16px",
             }}
           >
-            {/* Today's Classes */}
             <section
               className="academic-shadow"
               style={{
@@ -256,12 +253,7 @@ export default function DashboardPage() {
                     margin: 0,
                   }}
                 >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ color: "#0058be" }}
-                  >
-                    menu_book
-                  </span>
+                  <Icon name="menu_book" style={{ color: "#0058be" }} />
                   TODAY&apos;S CLASSES
                 </h3>
                 <span
@@ -284,23 +276,7 @@ export default function DashboardPage() {
                   gap: "16px",
                 }}
               >
-                {[
-                  {
-                    time: "08:00",
-                    subject: "Math 101",
-                    location: "Room 3A • Building B",
-                  },
-                  {
-                    time: "10:30",
-                    subject: "Eng Lit",
-                    location: "Room 12 • Library Wing",
-                  },
-                  {
-                    time: "13:00",
-                    subject: "PE",
-                    location: "Gym • Sports Complex",
-                  },
-                ].map(({ time, subject, location }) => (
+                {TODAY_CLASSES.map(({ time, subject, location }) => (
                   <div
                     key={subject}
                     onClick={handleClassItemClick}
@@ -315,12 +291,12 @@ export default function DashboardPage() {
                       cursor: "pointer",
                       transition: "border-color 0.2s, transform 0.1s",
                     }}
-                    onMouseOver={(e) =>
-                      (e.currentTarget.style.borderColor = "#3B82F6")
-                    }
-                    onMouseOut={(e) =>
-                      (e.currentTarget.style.borderColor = "transparent")
-                    }
+                    onMouseOver={(event) => {
+                      event.currentTarget.style.borderColor = "#3B82F6";
+                    }}
+                    onMouseOut={(event) => {
+                      event.currentTarget.style.borderColor = "transparent";
+                    }}
                   >
                     <div style={{ display: "flex", gap: "12px" }}>
                       <div
@@ -364,18 +340,15 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <span
-                      className="material-symbols-outlined"
+                    <Icon
+                      name="chevron_right"
                       style={{ color: "#424754", fontSize: "18px" }}
-                    >
-                      chevron_right
-                    </span>
+                    />
                   </div>
                 ))}
               </div>
             </section>
 
-            {/* Upcoming Deadlines */}
             <section
               className="academic-shadow"
               style={{
@@ -396,12 +369,7 @@ export default function DashboardPage() {
                   margin: "0 0 16px 0",
                 }}
               >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ color: "#ba1a1a" }}
-                >
-                  assignment_late
-                </span>
+                <Icon name="assignment_late" style={{ color: "#ba1a1a" }} />
                 UPCOMING DEADLINES
               </h3>
               <div
@@ -411,7 +379,6 @@ export default function DashboardPage() {
                   gap: "12px",
                 }}
               >
-                {/* Urgent deadline */}
                 <div
                   style={{
                     display: "flex",
@@ -423,15 +390,13 @@ export default function DashboardPage() {
                     borderLeft: "4px solid #ba1a1a",
                   }}
                 >
-                  <span
-                    className="material-symbols-outlined"
+                  <Icon
+                    name="warning"
+                    filled
                     style={{
                       color: "#ba1a1a",
-                      fontVariationSettings: "'FILL' 1",
                     }}
-                  >
-                    warning
-                  </span>
+                  />
                   <div style={{ flex: 1 }}>
                     <h4
                       style={{
@@ -455,7 +420,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Normal deadline */}
                 <div
                   style={{
                     display: "flex",
@@ -467,12 +431,7 @@ export default function DashboardPage() {
                     borderLeft: "4px solid #c2c6d6",
                   }}
                 >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ color: "#424754" }}
-                  >
-                    quiz
-                  </span>
+                  <Icon name="quiz" style={{ color: "#424754" }} />
                   <div style={{ flex: 1 }}>
                     <h4
                       style={{
@@ -495,7 +454,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Add Task placeholder */}
                 <div
                   style={{
                     height: "48px",
@@ -521,122 +479,8 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            {/* Budget Status — full width */}
-            <section
-              className="academic-shadow"
-              style={{
-                backgroundColor: "#ffffff",
-                border: "1px solid #c2c6d6",
-                borderRadius: "12px",
-                padding: "20px",
-                gridColumn: "1 / -1",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "16px",
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <h3
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      color: "#424754",
-                      margin: "0 0 8px 0",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ color: "#10B981" }}
-                    >
-                      account_balance_wallet
-                    </span>
-                    BUDGET STATUS
-                  </h3>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      gap: "8px",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "24px",
-                        fontWeight: 600,
-                        lineHeight: "32px",
-                      }}
-                    >
-                      ₱ 1,240
-                    </span>
-                    <span style={{ fontSize: "14px", color: "#424754" }}>
-                      remaining
-                    </span>
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "12px",
-                      color: "#424754",
-                      fontStyle: "italic",
-                      margin: 0,
-                    }}
-                  >
-                    Est. lasts 4 more days
-                  </p>
-                </div>
-                <div style={{ flex: 1, width: "100%" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span style={{ fontSize: "12px", color: "#424754" }}>
-                      Weekly Progress
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                        color: "#10B981",
-                      }}
-                    >
-                      62% left
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      width: "100%",
-                      height: "12px",
-                      backgroundColor: "#e1e3e4",
-                      borderRadius: "9999px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      className="study-teal-glow"
-                      style={{
-                        height: "100%",
-                        width: "62%",
-                        backgroundColor: "#10B981",
-                        borderRadius: "9999px",
-                        transition: "width 1s ease-out",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
+            <BudgetProgressCard variant="dashboard" budget={DASHBOARD_BUDGET} />
 
-            {/* Stats Preview — full width */}
             <section
               style={{
                 gridColumn: "1 / -1",
@@ -645,7 +489,6 @@ export default function DashboardPage() {
                 gap: "16px",
               }}
             >
-              {/* Attendance Rate */}
               <div
                 className="glass-card"
                 style={{
@@ -665,12 +508,7 @@ export default function DashboardPage() {
                     borderRadius: "8px",
                   }}
                 >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ color: "#3B82F6" }}
-                  >
-                    trending_up
-                  </span>
+                  <Icon name="trending_up" style={{ color: "#3B82F6" }} />
                 </div>
                 <div>
                   <p
@@ -694,7 +532,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Study Goal */}
               <div
                 className="glass-card"
                 style={{
@@ -714,12 +551,7 @@ export default function DashboardPage() {
                     borderRadius: "8px",
                   }}
                 >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ color: "#825100" }}
-                  >
-                    timer
-                  </span>
+                  <Icon name="timer" style={{ color: "#825100" }} />
                 </div>
                 <div>
                   <p
@@ -746,8 +578,8 @@ export default function DashboardPage() {
           </div>
         </main>
 
-        {/* FAB */}
         <button
+          type="button"
           style={{
             position: "fixed",
             bottom: "96px",
@@ -766,17 +598,20 @@ export default function DashboardPage() {
             zIndex: 40,
             transition: "transform 0.15s",
           }}
-          onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-          onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
-          onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.95)")}
-          onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+          onMouseOver={(event) => {
+            event.currentTarget.style.transform = "scale(1.05)";
+          }}
+          onMouseOut={(event) => {
+            event.currentTarget.style.transform = "scale(1)";
+          }}
+          onMouseDown={(event) => {
+            event.currentTarget.style.transform = "scale(0.95)";
+          }}
+          onMouseUp={(event) => {
+            event.currentTarget.style.transform = "scale(1.05)";
+          }}
         >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: "28px" }}
-          >
-            add
-          </span>
+          <Icon name="add" className="text-[28px] text-white" />
         </button>
       </div>
     </>

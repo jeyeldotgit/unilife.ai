@@ -1,195 +1,50 @@
 "use client";
-/* eslint-disable react/no-unescaped-entities */
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ChatBubble } from "@/components/chat/ChatBubble";
+import { ChatInput } from "@/components/chat/ChatInput";
+import { QuickActions } from "@/components/chat/QuickActions";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Icon } from "@/components/ui/Icon";
+import { listMockChatMessages, listMockQuickActions } from "@/lib/mock/chat";
+import type { ChatMessage, ChatQuickAction, ChatTextMessage } from "@/lib/types";
 
-type MessageRole = "ai" | "user";
-
-type Message = {
-  id: number;
-  role: MessageRole;
-  content: React.ReactNode;
-  time?: string;
-};
-
-const AssignmentCard = () => (
-  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-    <p style={{ fontSize: "16px", lineHeight: "24px", margin: 0 }}>
-      ✅ Got it! I've added:
-    </p>
-    <div
-      style={{
-        backgroundColor: "#f3f4f5",
-        borderRadius: "12px",
-        padding: "12px",
-        border: "1px solid rgba(194,198,214,0.3)",
-        display: "flex",
-        alignItems: "center",
-        gap: "16px",
-      }}
-    >
-      <div
-        style={{
-          width: "48px",
-          height: "48px",
-          backgroundColor: "rgba(16,185,129,0.1)",
-          borderRadius: "8px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <span
-          className="material-symbols-outlined"
-          style={{ color: "#10B981" }}
-        >
-          assignment
-        </span>
-      </div>
-      <div>
-        <h4
-          style={{
-            fontSize: "14px",
-            fontWeight: 600,
-            letterSpacing: "0.01em",
-            color: "#191c1d",
-            margin: "0 0 2px 0",
-          }}
-        >
-          Book Report
-        </h4>
-        <p style={{ fontSize: "12px", color: "#424754", margin: 0 }}>
-          Fri, Jun 12 • 11:59 PM
-        </p>
-      </div>
-    </div>
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        fontSize: "12px",
-        color: "#424754",
-        fontStyle: "italic",
-      }}
-    >
-      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-        link_off
-      </span>
-      No class linked
-    </div>
-    <button
-      style={{
-        width: "100%",
-        backgroundColor: "#3B82F6",
-        color: "#ffffff",
-        fontSize: "14px",
-        fontWeight: 600,
-        letterSpacing: "0.01em",
-        padding: "12px",
-        borderRadius: "12px",
-        border: "none",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "8px",
-        transition: "opacity 0.15s",
-        fontFamily: "'Inter', sans-serif",
-      }}
-      onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
-      onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
-      onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.95)")}
-      onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
-    >
-      View Assignment
-      <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
-        arrow_forward
-      </span>
-    </button>
-  </div>
-);
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: 1,
-    role: "ai",
-    content: "👋 Hey Lea! What would you like to do today?",
-  },
-  {
-    id: 2,
-    role: "user",
-    content: "book report next friday 11:59pm",
-    time: "10:42 AM",
-  },
-  {
-    id: 3,
-    role: "ai",
-    content: <AssignmentCard />,
-  },
-];
-
-const AiAvatar = () => (
-  <div
-    style={{
-      width: "24px",
-      height: "24px",
-      backgroundColor: "#3B82F6",
-      borderRadius: "9999px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0,
-    }}
-  >
-    <span
-      className="material-symbols-outlined"
-      style={{
-        fontSize: "14px",
-        color: "#ffffff",
-        fontVariationSettings: "'FILL' 1",
-      }}
-    >
-      smart_toy
-    </span>
-  </div>
-);
+const INITIAL_MESSAGES = listMockChatMessages();
+const INITIAL_QUICK_ACTIONS = listMockQuickActions();
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [quickActions] = useState<ChatQuickAction[]>(INITIAL_QUICK_ACTIONS);
   const [inputValue, setInputValue] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = () => {
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim()) {
+      return;
+    }
 
     const now = new Date();
-    const time = now.toLocaleTimeString([], {
+    const timeLabel = now.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        role: "user",
-        content: inputValue.trim(),
-        time,
-      },
-    ]);
-    setInputValue("");
-    inputRef.current?.focus();
-  };
+    const nextMessage: ChatTextMessage = {
+      id: String(Date.now()),
+      role: "user",
+      kind: "text",
+      text: inputValue.trim(),
+      createdAt: now.toISOString(),
+      timeLabel,
+    };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") handleSend();
+    setMessages((prev) => [...prev, nextMessage]);
+    setInputValue("");
   };
 
   return (
@@ -219,24 +74,11 @@ export default function ChatPage() {
           flexDirection: "column",
         }}
       >
-        {/* TopAppBar */}
-        <header
-          style={{
-            backgroundColor: "#f8f9fa",
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            zIndex: 50,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "16px",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-            boxSizing: "border-box",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <PageHeader
+          className="fixed left-0 top-0 z-50 w-full bg-[#f8f9fa] shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+          contentClassName="box-border flex justify-between items-center p-4"
+          title="Chat with UniLife"
+          leading={
             <div
               style={{
                 width: "40px",
@@ -257,36 +99,32 @@ export default function ChatPage() {
                 }}
               />
             </div>
-            <h1
+          }
+          titleClassName="m-0 text-2xl font-bold leading-8 text-[#0058be]"
+          trailing={
+            <button
+              type="button"
               style={{
-                fontSize: "24px",
-                lineHeight: "32px",
-                fontWeight: 700,
-                color: "#0058be",
-                margin: 0,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "#3B82F6",
+                padding: "8px",
+                borderRadius: "9999px",
+                transition: "opacity 0.15s",
+              }}
+              onMouseOver={(event) => {
+                event.currentTarget.style.opacity = "0.8";
+              }}
+              onMouseOut={(event) => {
+                event.currentTarget.style.opacity = "1";
               }}
             >
-              Chat with UniLife
-            </h1>
-          </div>
-          <button
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#3B82F6",
-              padding: "8px",
-              borderRadius: "9999px",
-              transition: "opacity 0.15s",
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.opacity = "0.8")}
-            onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
-          >
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-        </header>
+              <Icon name="notifications" />
+            </button>
+          }
+        />
 
-        {/* Chat Canvas */}
         <main
           className="chat-scroll"
           style={{
@@ -304,124 +142,27 @@ export default function ChatPage() {
           <div
             style={{ display: "flex", flexDirection: "column", gap: "24px" }}
           >
-            {messages.map((msg) =>
-              msg.role === "ai" ? (
-                /* AI Bubble */
-                <div
-                  key={msg.id}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-start",
-                    gap: "4px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    <AiAvatar />
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        color: "#424754",
-                      }}
-                    >
-                      UniLife AI
-                    </span>
-                  </div>
-                  <div
-                    className="glass-panel"
-                    style={{
-                      border: "1px solid #c2c6d6",
-                      padding: "20px",
-                      borderRadius: "16px",
-                      borderTopLeftRadius: "4px",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                      maxWidth: "85%",
-                    }}
-                  >
-                    {typeof msg.content === "string" ? (
-                      <p
-                        style={{
-                          fontSize: "16px",
-                          lineHeight: "24px",
-                          margin: 0,
-                          color: "#191c1d",
-                        }}
-                      >
-                        {msg.content}
-                      </p>
-                    ) : (
-                      msg.content
-                    )}
-                  </div>
-                </div>
-              ) : (
-                /* User Bubble */
-                <div
-                  key={msg.id}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                    gap: "4px",
-                  }}
-                >
-                  {msg.time && (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 500,
-                          color: "#424754",
-                        }}
-                      >
-                        {msg.time}
-                      </span>
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      backgroundColor: "#0058be",
-                      color: "#ffffff",
-                      padding: "20px",
-                      borderRadius: "16px",
-                      borderTopRightRadius: "4px",
-                      boxShadow: "0 2px 8px rgba(0,88,190,0.2)",
-                      maxWidth: "85%",
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontSize: "16px",
-                        lineHeight: "24px",
-                        margin: 0,
-                      }}
-                    >
-                      {msg.content}
-                    </p>
-                  </div>
-                </div>
-              ),
+            {messages.length > 0 ? (
+              messages.map((message) => (
+                <ChatBubble key={message.id} message={message} />
+              ))
+            ) : (
+              <EmptyState
+                icon="chat"
+                title="No messages yet"
+                description="Start a conversation with UniLife and your messages will appear here."
+              />
             )}
+
+            <QuickActions
+              actions={quickActions}
+              onAction={(action) => setInputValue(action.prompt)}
+            />
+
             <div ref={chatEndRef} />
           </div>
         </main>
 
-        {/* Chat Input */}
         <div
           style={{
             position: "fixed",
@@ -433,88 +174,12 @@ export default function ChatPage() {
             boxSizing: "border-box",
           }}
         >
-          <div
-            style={{
-              maxWidth: "768px",
-              margin: "0 auto",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              backgroundColor: "#ffffff",
-              border: "1px solid #c2c6d6",
-              padding: "8px",
-              borderRadius: "9999px",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-            }}
-          >
-            <button
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "8px",
-                color: "#424754",
-                transition: "color 0.2s",
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.color = "#0058be")}
-              onMouseOut={(e) => (e.currentTarget.style.color = "#424754")}
-            >
-              <span className="material-symbols-outlined">add_circle</span>
-            </button>
-
-            <input
-              ref={inputRef}
-              className="chat-input"
-              type="text"
-              placeholder="Type a message..."
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              style={{
-                flexGrow: 1,
-                background: "transparent",
-                border: "none",
-                fontSize: "16px",
-                lineHeight: "24px",
-                color: "#191c1d",
-                padding: "8px 4px",
-                fontFamily: "'Inter', sans-serif",
-              }}
-            />
-
-            <button
-              onClick={handleSend}
-              style={{
-                width: "40px",
-                height: "40px",
-                backgroundColor: "#3B82F6",
-                color: "#ffffff",
-                borderRadius: "9999px",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transition: "opacity 0.15s, transform 0.1s",
-                flexShrink: 0,
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
-              onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
-              onMouseDown={(e) =>
-                (e.currentTarget.style.transform = "scale(0.9)")
-              }
-              onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontVariationSettings: "'FILL' 1", fontSize: "20px" }}
-              >
-                send
-              </span>
-            </button>
-          </div>
+          <ChatInput
+            value={inputValue}
+            onValueChange={setInputValue}
+            onSubmit={handleSend}
+          />
         </div>
-
       </div>
     </>
   );

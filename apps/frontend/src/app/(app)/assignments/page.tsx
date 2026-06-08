@@ -1,78 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Icon } from "@/components/ui/Icon";
+import { AssignmentCard } from "@/components/ui/AssignmentCard";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { listMockAssignments } from "@/lib/mock/assignments";
 
 type FilterTab = "All" | "Pending" | "Done";
 
-type Assignment = {
-  id: number;
-  title: string;
-  subject: string;
-  date: string;
-  icon: string;
-  iconColor: string;
-  status: "pending" | "done";
-  urgency: {
-    label: string;
-    icon: string;
-    bgColor: string;
-    textColor: string;
-  };
-};
-
-const ASSIGNMENTS: Assignment[] = [
-  {
-    id: 1,
-    title: "Research Paper",
-    subject: "Math 101",
-    date: "Jun 5",
-    icon: "description",
-    iconColor: "#0058be",
-    status: "pending",
-    urgency: {
-      label: "DUE IN 2 DAYS",
-      icon: "schedule",
-      bgColor: "#ffdad6",
-      textColor: "#ba1a1a",
-    },
-  },
-  {
-    id: 2,
-    title: "Book Report",
-    subject: "No class",
-    date: "Jun 12",
-    icon: "book",
-    iconColor: "#825100",
-    status: "pending",
-    urgency: {
-      label: "DUE IN 9 DAYS",
-      icon: "event",
-      bgColor: "#ffddb8",
-      textColor: "#653e00",
-    },
-  },
-  {
-    id: 3,
-    title: "Lab Report",
-    subject: "Bio 101",
-    date: "Jun 1",
-    icon: "science",
-    iconColor: "#10B981",
-    status: "done",
-    urgency: {
-      label: "COMPLETED",
-      icon: "check_circle",
-      bgColor: "#6cf8bb",
-      textColor: "#00714d",
-    },
-  },
-];
+const ASSIGNMENTS = listMockAssignments();
 
 export default function AssignmentsPage() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
-  const [checkedIds, setCheckedIds] = useState<Set<number>>(new Set());
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
-  const toggleCheck = (id: number) => {
+  const toggleCheck = (id: string) => {
     setCheckedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -84,10 +27,16 @@ export default function AssignmentsPage() {
     });
   };
 
-  const filtered = ASSIGNMENTS.filter((a) => {
-    if (activeFilter === "All") return true;
-    if (activeFilter === "Pending") return a.status === "pending";
-    if (activeFilter === "Done") return a.status === "done";
+  const filtered = ASSIGNMENTS.filter((assignment) => {
+    if (activeFilter === "All") {
+      return true;
+    }
+    if (activeFilter === "Pending") {
+      return assignment.status === "pending";
+    }
+    if (activeFilter === "Done") {
+      return assignment.status === "completed";
+    }
     return true;
   });
 
@@ -95,16 +44,6 @@ export default function AssignmentsPage() {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        .academic-card {
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          transition: border-color 0.2s;
-        }
-        .academic-card:hover {
-          border-color: #3B82F6 !important;
-        }
-        .check-circle:hover {
-          border-color: #3B82F6 !important;
-        }
         .filter-tabs::-webkit-scrollbar { display: none; }
         .filter-tabs { scrollbar-width: none; }
         .focus-card-blob {
@@ -125,63 +64,30 @@ export default function AssignmentsPage() {
           WebkitFontSmoothing: "antialiased",
         }}
       >
-        {/* TopAppBar */}
-        <header
-          style={{
-            background: "rgba(248,249,250,0.8)",
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            position: "sticky",
-            top: 0,
-            zIndex: 40,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "16px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <img
-                alt="User Profile Picture"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDC2kYCxJ3KzGZsUOoiFILnLBTDX6njkmIJaPO8xHj30wLChReouRi33jnXUipuMGWSgbnmQZI0Ok1wFkjldfYpuKX-tzGPk8r4DgztV6uHdQx8Busd9cUiN5xlWsjgLbTMAJ3iCJLNCu9KDejptW6ZI5QO6FgMN3mKkLrp9Uu8SboBTwZnWNduK01MXoeTgmwMU_06xELSyn6WLC7PVqoJD2LDUOLOpJiOa6GPz6tjFRCQjW1hBIBTuAQsauIRtGt7UZAQKt9DYXA"
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "9999px",
-                  border: "2px solid rgba(0,88,190,0.1)",
-                  objectFit: "cover",
-                  flexShrink: 0,
-                }}
-              />
-              <div>
-                <h1
-                  style={{
-                    color: "#3B82F6",
-                    fontSize: "24px",
-                    lineHeight: "32px",
-                    fontWeight: 700,
-                    margin: 0,
-                  }}
-                >
-                  Hi, Alex
-                </h1>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 500,
-                    color: "#424754",
-                    margin: 0,
-                  }}
-                >
-                  Stay organized today
-                </p>
-              </div>
-            </div>
+        <PageHeader
+          className="sticky top-0 z-40 bg-[rgba(248,249,250,0.8)] backdrop-blur-[12px]"
+          contentClassName="flex justify-between items-center p-4"
+          title="Hi, Alex"
+          subtitle="Stay organized today"
+          leading={
+            <img
+              alt="User Profile Picture"
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDC2kYCxJ3KzGZsUOoiFILnLBTDX6njkmIJaPO8xHj30wLChReouRi33jnXUipuMGWSgbnmQZI0Ok1wFkjldfYpuKX-tzGPk8r4DgztV6uHdQx8Busd9cUiN5xlWsjgLbTMAJ3iCJLNCu9KDejptW6ZI5QO6FgMN3mKkLrp9Uu8SboBTwZnWNduK01MXoeTgmwMU_06xELSyn6WLC7PVqoJD2LDUOLOpJiOa6GPz6tjFRCQjW1hBIBTuAQsauIRtGt7UZAQKt9DYXA"
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "9999px",
+                border: "2px solid rgba(0,88,190,0.1)",
+                objectFit: "cover",
+                flexShrink: 0,
+              }}
+            />
+          }
+          titleClassName="m-0 text-2xl font-bold leading-8 text-[#3B82F6]"
+          subtitleClassName="text-xs font-medium text-[#424754]"
+          trailing={
             <button
+              type="button"
               style={{
                 background: "none",
                 border: "none",
@@ -190,15 +96,18 @@ export default function AssignmentsPage() {
                 padding: "4px",
                 transition: "opacity 0.15s",
               }}
-              onMouseOver={(e) => (e.currentTarget.style.opacity = "0.8")}
-              onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseOver={(event) => {
+                event.currentTarget.style.opacity = "0.8";
+              }}
+              onMouseOut={(event) => {
+                event.currentTarget.style.opacity = "1";
+              }}
             >
-              <span className="material-symbols-outlined">notifications</span>
+              <Icon name="notifications" />
             </button>
-          </div>
-        </header>
+          }
+        />
 
-        {/* Main */}
         <main
           style={{
             padding: "24px 16px 0",
@@ -206,7 +115,6 @@ export default function AssignmentsPage() {
             margin: "0 auto",
           }}
         >
-          {/* Assignments Hero */}
           <section style={{ marginBottom: "32px" }}>
             <div
               style={{
@@ -236,11 +144,10 @@ export default function AssignmentsPage() {
                   fontWeight: 500,
                 }}
               >
-                3 Active
+                {ASSIGNMENTS.length} Active
               </div>
             </div>
 
-            {/* Filter Tabs */}
             <div
               className="filter-tabs"
               style={{
@@ -252,9 +159,11 @@ export default function AssignmentsPage() {
             >
               {(["All", "Pending", "Done"] as FilterTab[]).map((tab) => {
                 const isActive = activeFilter === tab;
+
                 return (
                   <button
                     key={tab}
+                    type="button"
                     onClick={() => setActiveFilter(tab)}
                     style={{
                       backgroundColor: isActive ? "#2170e4" : "#e7e8e9",
@@ -278,201 +187,28 @@ export default function AssignmentsPage() {
             </div>
           </section>
 
-          {/* Assignment List */}
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-          >
-            {filtered.map((assignment) => {
-              const isDone = assignment.status === "done";
-              const isChecked = checkedIds.has(assignment.id);
-
-              return (
-                <div
+          {filtered.length > 0 ? (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            >
+              {filtered.map((assignment) => (
+                <AssignmentCard
                   key={assignment.id}
-                  className="academic-card"
-                  style={{
-                    backgroundColor: isDone ? "#f3f4f5" : "#ffffff",
-                    border: `1px solid ${isDone ? "rgba(194,198,214,0.3)" : "#c2c6d6"}`,
-                    padding: "20px",
-                    borderRadius: "12px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    opacity: isDone || isChecked ? 0.8 : 1,
-                    transition: "opacity 0.2s",
-                  }}
-                >
-                  {/* Left side */}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          color: assignment.iconColor,
-                          fontSize: "20px",
-                        }}
-                      >
-                        {assignment.icon}
-                      </span>
-                      <h3
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: 600,
-                          letterSpacing: "0.01em",
-                          color: "#111827",
-                          margin: 0,
-                          textDecoration: isDone ? "line-through" : "none",
-                        }}
-                      >
-                        {assignment.title}
-                      </h3>
-                    </div>
+                  variant="list"
+                  assignment={assignment}
+                  checked={checkedIds.has(assignment.id)}
+                  onToggleChecked={toggleCheck}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon="assignment"
+              title="No assignments in this view"
+              description="Try another filter or add a new task to see it here."
+            />
+          )}
 
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        color: "#6B7280",
-                      }}
-                    >
-                      <span>{assignment.subject}</span>
-                      <span
-                        style={{
-                          width: "4px",
-                          height: "4px",
-                          backgroundColor: "#c2c6d6",
-                          borderRadius: "9999px",
-                          display: "inline-block",
-                        }}
-                      />
-                      <span>{assignment.date}</span>
-                    </div>
-
-                    {/* Urgency badge */}
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "2px 10px",
-                        borderRadius: "4px",
-                        backgroundColor: assignment.urgency.bgColor,
-                        color: assignment.urgency.textColor,
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: "14px" }}
-                      >
-                        {assignment.urgency.icon}
-                      </span>
-                      {assignment.urgency.label}
-                    </div>
-                  </div>
-
-                  {/* Right side */}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-end",
-                      gap: "12px",
-                    }}
-                  >
-                    {isDone ? (
-                      <div
-                        style={{
-                          width: "24px",
-                          height: "24px",
-                          borderRadius: "9999px",
-                          backgroundColor: "#10B981",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <span
-                          className="material-symbols-outlined"
-                          style={{
-                            color: "#ffffff",
-                            fontSize: "16px",
-                            fontVariationSettings: "'FILL' 1",
-                          }}
-                        >
-                          check
-                        </span>
-                      </div>
-                    ) : (
-                      <div
-                        className="check-circle"
-                        onClick={() => toggleCheck(assignment.id)}
-                        style={{
-                          width: "24px",
-                          height: "24px",
-                          borderRadius: "9999px",
-                          border: `2px solid ${isChecked ? "#3B82F6" : "#c2c6d6"}`,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                          transition: "border-color 0.2s",
-                          backgroundColor: isChecked
-                            ? "rgba(59,130,246,0.1)"
-                            : "transparent",
-                        }}
-                      >
-                        {isChecked && (
-                          <div
-                            style={{
-                              width: "12px",
-                              height: "12px",
-                              borderRadius: "9999px",
-                              backgroundColor: "#0058be",
-                            }}
-                          />
-                        )}
-                      </div>
-                    )}
-
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: isDone ? 600 : 500,
-                        color: isDone ? "#10B981" : "#424754",
-                        padding: "2px 8px",
-                        borderRadius: "6px",
-                        backgroundColor: isDone ? "transparent" : "#edeeef",
-                      }}
-                    >
-                      {isDone ? "Done" : "Pending"}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* AI Productivity + Stats Bento */}
           <div
             style={{
               marginTop: "32px",
@@ -481,7 +217,6 @@ export default function AssignmentsPage() {
               gap: "16px",
             }}
           >
-            {/* Focus Session Card */}
             <div
               className="focus-card"
               style={{
@@ -498,16 +233,7 @@ export default function AssignmentsPage() {
               }}
             >
               <div style={{ position: "relative", zIndex: 1 }}>
-                <span
-                  className="material-symbols-outlined"
-                  style={{
-                    fontSize: "32px",
-                    display: "block",
-                    marginBottom: "8px",
-                  }}
-                >
-                  bolt
-                </span>
+                <Icon name="bolt" className="mb-2 block text-[32px]" />
                 <h4
                   style={{
                     fontSize: "24px",
@@ -530,6 +256,7 @@ export default function AssignmentsPage() {
                 </p>
               </div>
               <button
+                type="button"
                 style={{
                   position: "relative",
                   zIndex: 1,
@@ -547,19 +274,18 @@ export default function AssignmentsPage() {
                   transition: "background-color 0.2s",
                   fontFamily: "'Inter', sans-serif",
                 }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "rgba(255,255,255,0.3)")
-                }
-                onMouseOut={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "rgba(255,255,255,0.2)")
-                }
+                onMouseOver={(event) => {
+                  event.currentTarget.style.backgroundColor =
+                    "rgba(255,255,255,0.3)";
+                }}
+                onMouseOut={(event) => {
+                  event.currentTarget.style.backgroundColor =
+                    "rgba(255,255,255,0.2)";
+                }}
               >
                 Start Now
               </button>
 
-              {/* Decorative blob */}
               <div
                 className="focus-card-blob"
                 style={{
@@ -575,7 +301,6 @@ export default function AssignmentsPage() {
               />
             </div>
 
-            {/* Completion Rate Card */}
             <div
               style={{
                 backgroundColor: "#ffffff",
@@ -653,7 +378,6 @@ export default function AssignmentsPage() {
           </div>
         </main>
 
-        {/* FAB */}
         <div
           style={{
             position: "fixed",
@@ -663,6 +387,7 @@ export default function AssignmentsPage() {
           }}
         >
           <button
+            type="button"
             style={{
               width: "56px",
               height: "56px",
@@ -677,24 +402,22 @@ export default function AssignmentsPage() {
               cursor: "pointer",
               transition: "transform 0.2s",
             }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.transform = "scale(1.05)")
-            }
-            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
-            onMouseDown={(e) =>
-              (e.currentTarget.style.transform = "scale(0.9)")
-            }
-            onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+            onMouseOver={(event) => {
+              event.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseOut={(event) => {
+              event.currentTarget.style.transform = "scale(1)";
+            }}
+            onMouseDown={(event) => {
+              event.currentTarget.style.transform = "scale(0.9)";
+            }}
+            onMouseUp={(event) => {
+              event.currentTarget.style.transform = "scale(1.05)";
+            }}
           >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "28px" }}
-            >
-              add
-            </span>
+            <Icon name="add" className="text-[28px] text-white" />
           </button>
         </div>
-
       </div>
     </>
   );

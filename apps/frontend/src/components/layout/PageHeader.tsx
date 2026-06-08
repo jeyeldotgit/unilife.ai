@@ -8,6 +8,8 @@ type PageHeaderProps = {
   children?: ReactNode;
   className?: string;
   contentClassName?: string;
+  leadingGroupClassName?: string;
+  titleWrapperClassName?: string;
   titleClassName?: string;
   subtitleClassName?: string;
 };
@@ -20,15 +22,17 @@ export function PageHeader({
   children,
   className = "",
   contentClassName = "flex justify-between items-center px-4 py-4 w-full",
+  leadingGroupClassName = "flex items-center gap-3",
+  titleWrapperClassName = "",
   titleClassName = "text-2xl font-bold text-[#0058be]",
   subtitleClassName = "text-xs font-medium text-[#424754]",
 }: PageHeaderProps) {
   return (
     <header className={className}>
       <div className={contentClassName}>
-        <div className="flex items-center gap-3">
+        <div className={leadingGroupClassName}>
           {leading}
-          <div>
+          <div className={titleWrapperClassName}>
             <h1 className={titleClassName}>{title}</h1>
             {subtitle ? (
               <p className={subtitleClassName}>{subtitle}</p>
