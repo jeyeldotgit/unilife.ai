@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 
+import { aiRouter } from "./routes/ai.route.js";
 import type { AppBindings } from "./lib/hono.js";
 import { assignmentsRouter } from "./routes/assignments.route.js";
 import { budgetsRouter } from "./routes/budgets.route.js";
@@ -17,6 +18,7 @@ apiRouter.route("/exams", examsRouter);
 apiRouter.route("/expenses", expensesRouter);
 apiRouter.route("/budgets", budgetsRouter);
 apiRouter.route("/sync", syncRouter);
+apiRouter.route("/ai", aiRouter);
 
 export function registerRoutes(app: Hono<AppBindings>) {
   app.route("/", healthRouter);
