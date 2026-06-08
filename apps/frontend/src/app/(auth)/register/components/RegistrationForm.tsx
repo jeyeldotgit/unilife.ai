@@ -5,10 +5,10 @@ import { useActionState } from "react";
 
 import { AuthDivider } from "@/app/(auth)/components/AuthDivider";
 import { AuthSocialButtons } from "@/app/(auth)/components/AuthSocialButtons";
+import { register, type RegisterState } from "@/actions/auth";
 import EmailField from "@/app/(auth)/components/EmailField";
 import PasswordField from "@/app/(auth)/components/PasswordField";
 import PasswordStrengthBar from "@/app/(auth)/components/PasswordStrengthBar";
-import { register, type RegisterState } from "../actions";
 
 const initialState: RegisterState = {
   error: null,

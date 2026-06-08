@@ -1,7 +1,12 @@
-import type { ApiRequestOptions, BudgetStatus } from "@/lib/types";
+import type {
+  ApiRequestOptions,
+  BudgetStatus,
+  OnboardingBudgetInput,
+} from "@/lib/types";
 import {
   getMockBudgetCycle,
   getMockEstimatedDailySpend,
+  updateMockBudgetCycle,
 } from "@/lib/mock/budget";
 import { listMockExpenses } from "@/lib/mock/expenses";
 import { withMockLatency } from "@/lib/api/_mock";
@@ -35,7 +40,12 @@ export function buildBudgetStatusSnapshot(): BudgetStatus {
   return {
     budgetId: cycle.id,
     period: cycle.period,
-    cycleLabel: "Weekly Budget",
+    cycleLabel:
+      cycle.period === "weekly"
+        ? "Weekly Budget"
+        : cycle.period === "biweekly"
+          ? "Bi-Weekly Budget"
+          : "Monthly Budget",
     totalAmount: cycle.amount,
     spentAmount,
     remainingAmount,
@@ -52,4 +62,14 @@ export function buildBudgetStatusSnapshot(): BudgetStatus {
 
 export async function getBudgetStatus(options?: ApiRequestOptions) {
   return withMockLatency(() => buildBudgetStatusSnapshot(), options);
+}
+
+export async function saveBudgetCycle(
+  input: OnboardingBudgetInput,
+  options?: ApiRequestOptions,
+) {
+  return withMockLatency(() => {
+    updateMockBudgetCycle(input);
+    return buildBudgetStatusSnapshot();
+  }, options);
 }

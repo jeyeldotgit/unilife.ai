@@ -4,10 +4,9 @@ import { useActionState, useState } from "react";
 
 import { AuthDivider } from "@/app/(auth)/components/AuthDivider";
 import { AuthSocialButtons } from "@/app/(auth)/components/AuthSocialButtons";
+import { login, type LoginState } from "@/actions/auth";
 import EmailField from "@/app/(auth)/components/EmailField";
 import PasswordField from "@/app/(auth)/components/PasswordField";
-
-import { login, type LoginState } from "../actions";
 
 const initialState: LoginState = {
   error: null,
