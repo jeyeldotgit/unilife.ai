@@ -6,7 +6,7 @@ import {
   numeric,
   date,
 } from "drizzle-orm/pg-core";
-import { users } from "./users";
+import { users } from "./users.js";
 
 export const budgets = pgTable("budgets", {
   id: uuid("id").primaryKey(),

@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
-import { users } from "./users";
-import { classes } from "./classes";
+import { users } from "./users.js";
+import { classes } from "./classes.js";
 
 export const exams = pgTable("exams", {
   id: uuid("id").primaryKey(),
