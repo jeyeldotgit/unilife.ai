@@ -3,7 +3,9 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "pretest": "pnpm --filter @unilife-ai/ai-core build",
     "dev": "tsx watch --tsconfig tsconfig.json src/index.ts",
+    "prebuild": "pnpm --filter @unilife-ai/ai-core build",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run"
@@ -13,6 +15,7 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
     "@trpc/server": "^11.17.0",
+    "@unilife-ai/ai-core": "workspace:*",
     "@unilife-ai/database": "workspace:*",
     "@unilife-ai/types": "workspace:*",
     "dotenv": "^17.4.2",
