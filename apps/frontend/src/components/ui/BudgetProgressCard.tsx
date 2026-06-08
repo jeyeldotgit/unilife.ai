@@ -42,8 +42,11 @@ export function BudgetProgressCard({
   if (variant === "dashboard") {
     return (
       <section
-        className={`academic-shadow rounded-[12px] border border-[#c2c6d6] bg-white p-5 ${className}`.trim()}
-        style={{ gridColumn: "1 / -1" }}
+        className={`rounded-[12px] border border-[#c2c6d6] bg-white p-5 ${className}`.trim()}
+        style={{
+          gridColumn: "1 / -1",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+        }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ flex: 1 }}>
@@ -127,13 +130,13 @@ export function BudgetProgressCard({
               }}
             >
               <div
-                className="study-teal-glow"
                 style={{
                   height: "100%",
                   width: `${remainingPercent}%`,
                   backgroundColor: tone.fillBg,
                   borderRadius: "9999px",
                   transition: "width 1s ease-out",
+                  boxShadow: `0 0 8px ${tone.fillBg}66`,
                 }}
               />
             </div>
@@ -192,4 +195,3 @@ export function BudgetProgressCard({
     </section>
   );
 }
-
