@@ -627,10 +627,14 @@ export default function DashboardClient({
                   icon={budgetAvailable ? "wallet" : "sync_problem"}
                   title={
                     budgetAvailable
-                      ? "Budget data is unavailable"
+                      ? "No budget set yet"
                       : "Budget could not be loaded"
                   }
-                  message="We couldn't render your budget summary right now, but the rest of the dashboard is still working."
+                  message={
+                    budgetAvailable
+                      ? "Create an active budget cycle to see your allowance summary here."
+                      : "We couldn't render your budget summary right now, but the rest of the dashboard is still working."
+                  }
                 />
               </section>
             )}

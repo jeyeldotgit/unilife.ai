@@ -33,7 +33,7 @@ function buildOfflineTextMessage(text: string): ChatMessage {
       role: "ai",
       kind: "text",
       text:
-        "You are offline right now, so I cannot run an allowance forecast yet. I can still help capture expenses and assignments while you are disconnected.",
+        "You are offline right now, so I cannot run an allowance forecast yet. Try again once your connection is back.",
       createdAt: new Date().toISOString(),
     };
   }
@@ -58,7 +58,7 @@ function buildOfflineTextMessage(text: string): ChatMessage {
     role: "ai",
     kind: "text",
     text:
-      "You are offline right now. I can still help with simple local actions, and I will keep the chat stable until you reconnect.",
+      "You are offline right now. Chat will stay stable, but AI replies need a connection until the local parser work lands.",
     createdAt: new Date().toISOString(),
   };
 }
@@ -75,15 +75,7 @@ export async function submitChatMessageAction(
     };
   }
 
-  if (
-    input.offline &&
-    (text.toLowerCase().includes("allowance") ||
-      text.toLowerCase().includes("budget") ||
-      text.toLowerCase().includes("last until") ||
-      text.toLowerCase().includes("add class") ||
-      text.toLowerCase().includes("may pasok") ||
-      text.toLowerCase().includes("klase"))
-  ) {
+  if (input.offline) {
     return {
       ok: false,
       error: "Offline fallback used.",

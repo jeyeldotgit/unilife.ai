@@ -446,8 +446,8 @@ export default function ScheduleClient({
           className="text-center"
           style={{
             display: "grid",
-            gridTemplateColumns: "60px repeat(5, 1fr)",
-            gridTemplateRows: "auto repeat(9, 60px)",
+            gridTemplateColumns: `60px repeat(${scheduleWeek.days.length}, 1fr)`,
+            gridTemplateRows: `auto repeat(${scheduleWeek.hours.length}, 60px)`,
           }}
         >
           <div className="flex h-12 items-center justify-center border-b border-r border-[#c2c6d6]/20" />

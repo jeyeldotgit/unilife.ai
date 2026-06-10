@@ -64,9 +64,9 @@ export async function deleteExpenseAction(
   }
 
   try {
-    const removedExpense = await deleteExpense(id);
+    const deleted = await deleteExpense(id);
 
-    if (!removedExpense) {
+    if (!deleted) {
       return {
         ok: false,
         error: "That expense no longer exists.",

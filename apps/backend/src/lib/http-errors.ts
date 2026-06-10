@@ -49,6 +49,10 @@ function toHttpError(error: unknown) {
     return validationError("Request validation failed.", error.flatten());
   }
 
+  if (error instanceof Error) {
+    return internalError(error.message);
+  }
+
   return internalError("An unexpected error occurred.");
 }
 

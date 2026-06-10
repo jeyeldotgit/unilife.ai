@@ -1,34 +1,55 @@
-import type {
-  ApiRequestOptions,
-  BudgetStatus,
-  OnboardingBudgetInput,
-} from "@/lib/types";
-import {
-  getMockBudgetCycle,
-  getMockEstimatedDailySpend,
-  updateMockBudgetCycle,
-} from "@/lib/mock/budget";
-import { listMockExpenses } from "@/lib/mock/expenses";
-import { withMockLatency } from "@/lib/api/_mock";
+import type { Budget } from "@unilife-ai/types";
 
-function formatAmount(amount: number) {
-  return `₱ ${amount.toLocaleString("en-PH", {
-    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`;
+import { requestBackend } from "@/lib/api/client";
+import { getFinanceSnapshot, listExpenseRecords, listBudgetRecords } from "@/lib/api/finance-data";
+import {
+  calculateBudgetEndDate,
+  formatAmount,
+  getBudgetCycleLabel,
+  getLocalDateKey,
+} from "@/lib/api/utils";
+import type { BudgetStatus, OnboardingBudgetInput } from "@/lib/types";
+
+type BudgetResponse = {
+  budget: Budget | null;
+};
+
+function diffCalendarDaysInclusive(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  return Math.max(
+    1,
+    Math.floor((end.getTime() - start.getTime()) / dayMs) + 1,
+  );
 }
 
-export function buildBudgetStatusSnapshot(): BudgetStatus {
-  const cycle = getMockBudgetCycle();
-  const spentAmount = listMockExpenses().reduce((sum, expense) => {
-    return sum + expense.amount;
-  }, 0);
+function calculateAverageDailySpend(
+  startDate: string,
+  expenses: Array<{ amount: number }>,
+) {
+  const elapsedDays = diffCalendarDaysInclusive(startDate, getLocalDateKey());
+  const totalSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+  return elapsedDays === 0 ? 0 : totalSpent / elapsedDays;
+}
+
+export function buildBudgetStatusSnapshot(
+  cycle: Pick<Budget, "amount" | "end_date" | "id" | "period" | "start_date">,
+  expenses: Array<{ amount: number }>,
+): BudgetStatus {
+  const spentAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const remainingAmount = Math.max(cycle.amount - spentAmount, 0);
   const progressPercent =
     cycle.amount === 0 ? 0 : Math.round((spentAmount / cycle.amount) * 100);
+  const averageDailySpend = Math.max(
+    calculateAverageDailySpend(cycle.start_date, expenses),
+    1,
+  );
   const estimatedDaysLeft = Math.max(
     0,
-    Math.round(remainingAmount / getMockEstimatedDailySpend()),
+    Math.round(remainingAmount / averageDailySpend),
   );
   const tone =
     remainingAmount <= cycle.amount * 0.15
@@ -40,12 +61,7 @@ export function buildBudgetStatusSnapshot(): BudgetStatus {
   return {
     budgetId: cycle.id,
     period: cycle.period,
-    cycleLabel:
-      cycle.period === "weekly"
-        ? "Weekly Budget"
-        : cycle.period === "biweekly"
-          ? "Bi-Weekly Budget"
-          : "Monthly Budget",
+    cycleLabel: getBudgetCycleLabel(cycle.period),
     totalAmount: cycle.amount,
     spentAmount,
     remainingAmount,
@@ -60,16 +76,95 @@ export function buildBudgetStatusSnapshot(): BudgetStatus {
   };
 }
 
-export async function getBudgetStatus(options?: ApiRequestOptions) {
-  return withMockLatency(() => buildBudgetStatusSnapshot(), options);
+export async function getBudgetStatus() {
+  const { activeBudget, expenses } = await getFinanceSnapshot();
+
+  if (!activeBudget) {
+    return null;
+  }
+
+  return buildBudgetStatusSnapshot(activeBudget, expenses);
+}
+
+export async function getBudgetChatContext() {
+  const { activeBudget, expenses } = await getFinanceSnapshot();
+
+  if (!activeBudget) {
+    return {
+      avgDailySpend: null,
+      budgetPeriodEndDate: null,
+      budgetRemaining: null,
+    };
+  }
+
+  const status = buildBudgetStatusSnapshot(activeBudget, expenses);
+
+  return {
+    avgDailySpend: Number(
+      calculateAverageDailySpend(activeBudget.start_date, expenses).toFixed(2),
+    ),
+    budgetPeriodEndDate: activeBudget.end_date,
+    budgetRemaining: status.remainingAmount,
+  };
 }
 
 export async function saveBudgetCycle(
   input: OnboardingBudgetInput,
-  options?: ApiRequestOptions,
 ) {
-  return withMockLatency(() => {
-    updateMockBudgetCycle(input);
-    return buildBudgetStatusSnapshot();
-  }, options);
+  const budgets = await listBudgetRecords();
+  const today = getLocalDateKey();
+  const activeBudget =
+    budgets
+      .filter((budget) => budget.start_date <= today && budget.end_date >= today)
+      .sort((left, right) => right.start_date.localeCompare(left.start_date))[0] ??
+    null;
+
+  if (activeBudget) {
+    const response = await requestBackend<BudgetResponse>(
+      `/api/budgets/${activeBudget.id}`,
+      {
+        method: "PATCH",
+        body: {
+          amount: input.amount,
+          period: input.period,
+          end_date: calculateBudgetEndDate(activeBudget.start_date, input.period),
+          updated_at: new Date().toISOString(),
+        },
+      },
+    );
+
+    const updatedBudget = response.budget;
+    if (!updatedBudget) {
+      throw new Error("The backend did not return the updated budget.");
+    }
+
+    const expenses = await listExpenseRecords({
+      from: updatedBudget.start_date,
+      to: updatedBudget.end_date,
+    });
+
+    return buildBudgetStatusSnapshot(updatedBudget, expenses);
+  }
+
+  const createdAt = new Date().toISOString();
+  const startDate = today;
+  const response = await requestBackend<BudgetResponse>("/api/budgets", {
+    method: "POST",
+    body: {
+      id: crypto.randomUUID(),
+      amount: input.amount,
+      period: input.period,
+      start_date: startDate,
+      end_date: calculateBudgetEndDate(startDate, input.period),
+      created_at: createdAt,
+      updated_at: createdAt,
+    },
+  });
+
+  const createdBudget = response.budget;
+  if (!createdBudget) {
+    throw new Error("The backend did not return the created budget.");
+  }
+
+  return buildBudgetStatusSnapshot(createdBudget, []);
 }
