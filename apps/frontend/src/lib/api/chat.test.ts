@@ -106,6 +106,12 @@ describe("chat adapter", () => {
       kind: "free_time_recommendation",
       payload: expect.objectContaining({
         nextClassLabel: "Physics starts at 15:00",
+        recommendations: [
+          expect.objectContaining({
+            kind: "assignment",
+            typeLabel: "Assignment",
+          }),
+        ],
       }),
     });
   });
@@ -121,23 +127,20 @@ describe("chat adapter", () => {
       message: "I added that for you.",
       requires_confirmation: false,
     });
-    mocks.createAssignment.mockResolvedValue({
-      id: "assignment-1",
-      title: "Research Paper",
-      subject: "No class",
-      dueAt: "2099-06-05T23:59:00.000Z",
-    });
 
     const { sendMessage } = await import("@/lib/api/chat");
     const result = await sendMessage({ text: "book report next friday 11:59pm" });
 
-    expect(mocks.createAssignment).toHaveBeenCalled();
-    expect(result.responseMessage).toMatchObject({
-      kind: "assignment_confirmation",
+    expect(result.clientEffect).toMatchObject({
+      kind: "create_assignment",
       payload: expect.objectContaining({
-        assignmentId: "assignment-1",
+        dueAt: "2099-06-05T23:59:00.000Z",
         title: "Research Paper",
       }),
+    });
+    expect(result.responseMessage).toMatchObject({
+      kind: "text",
+      text: "I added that for you.",
     });
   });
 
@@ -151,30 +154,118 @@ describe("chat adapter", () => {
       message: "Logged.",
       requires_confirmation: false,
     });
-    mocks.logExpense.mockResolvedValue({
-      id: "expense-1",
-      label: "Lunch",
-      amountLabel: "PHP 85",
-      categoryLabel: "Food",
-      dayLabel: "Today",
-      timeLabel: "12:30 PM",
-    });
-    mocks.getBudgetStatus.mockResolvedValue({
-      remainingLabel: "PHP 415",
-      totalLabel: "PHP 500",
-      progressPercent: 17,
-    });
 
     const { sendMessage } = await import("@/lib/api/chat");
     const result = await sendMessage({ text: "lunch 85" });
 
-    expect(mocks.logExpense).toHaveBeenCalled();
-    expect(result.responseMessage).toMatchObject({
-      kind: "expense_confirmation",
+    expect(result.clientEffect).toMatchObject({
+      kind: "log_expense",
       payload: expect.objectContaining({
-        expenseId: "expense-1",
-        amountLabel: "PHP 85",
+        amount: 85,
+        category: "food",
+        label: "Lunch",
       }),
+    });
+    expect(result.responseMessage).toMatchObject({
+      kind: "text",
+      text: "Logged.",
+    });
+  });
+
+  it("maps complete class intents into a local class client effect", async () => {
+    mocks.requestBackend.mockResolvedValue({
+      intent: "create_class",
+      action: {
+        day_of_week: "friday",
+        end_time: "19:00:00",
+        start_time: "17:00:00",
+        subject: "Orgman",
+      },
+      message: "Sige, idadagdag ko ang klase mo sa Orgman.",
+      requires_confirmation: false,
+    });
+
+    const { sendMessage } = await import("@/lib/api/chat");
+    const result = await sendMessage({ text: "add class on orgman tomorrow 5pm to 7pm" });
+
+    expect(result.clientEffect).toMatchObject({
+      kind: "create_class",
+      payload: expect.objectContaining({
+        dayOfWeek: "friday",
+        dayIndex: 4,
+        endTime: "19:00",
+        startTime: "17:00",
+        subject: "Orgman",
+      }),
+    });
+  });
+
+  it("maps complete exam intents into a local exam client effect", async () => {
+    mocks.requestBackend.mockResolvedValue({
+      intent: "create_exam",
+      action: {
+        title: "Chemistry Quiz",
+        exam_date: "2099-06-20T08:30:00.000Z",
+        class_id: "class-1",
+        location: "Room 204",
+      },
+      message: "I added your exam.",
+      requires_confirmation: false,
+    });
+
+    const { sendMessage } = await import("@/lib/api/chat");
+    const result = await sendMessage({ text: "add chemistry quiz on june 20 at 8:30am" });
+
+    expect(result.clientEffect).toMatchObject({
+      kind: "create_exam",
+      payload: expect.objectContaining({
+        title: "Chemistry Quiz",
+        examAt: "2099-06-20T08:30:00.000Z",
+        classId: "class-1",
+        location: "Room 204",
+      }),
+    });
+  });
+
+  it("infers expense category from the raw chat input when AI omits it", async () => {
+    mocks.requestBackend.mockResolvedValue({
+      intent: "log_expense",
+      action: {
+        amount: 120,
+      },
+      message: "Logged.",
+      requires_confirmation: false,
+    });
+
+    const { sendMessage } = await import("@/lib/api/chat");
+    const result = await sendMessage({ text: "transpo 120" });
+
+    expect(result.clientEffect).toMatchObject({
+      kind: "log_expense",
+      payload: expect.objectContaining({
+        amount: 120,
+        category: "transportation",
+        label: "Transpo",
+      }),
+    });
+  });
+
+  it("returns a specific class clarification instead of a generic fallback", async () => {
+    mocks.requestBackend.mockResolvedValue({
+      intent: "create_class",
+      action: {
+        subject: "Orgman",
+      },
+      message: "I couldn't understand that. Try rephrasing.",
+      requires_confirmation: true,
+    });
+
+    const { sendMessage } = await import("@/lib/api/chat");
+    const result = await sendMessage({ text: "add my orgman class" });
+
+    expect(result.responseMessage).toMatchObject({
+      kind: "text",
+      text: "I can add that class once I have the subject, day, start time, and end time.",
     });
   });
 
@@ -227,5 +318,44 @@ describe("chat adapter", () => {
         }),
       }),
     );
+  });
+
+  it("keeps exam recommendations distinct in the free-time card", async () => {
+    mocks.requestBackend.mockResolvedValue({
+      intent: "free_time_finder",
+      action: null,
+      message: "Focus on the quiz first.",
+      requires_confirmation: false,
+      free_time: {
+        window_minutes: 90,
+        next_class_subject: null,
+        next_class_time: null,
+        suggested_tasks: [
+          {
+            title: "Biology Midterm",
+            due_date: "2099-06-11T09:00:00.000Z",
+            type: "exam",
+            urgency_days: 1,
+          },
+        ],
+      },
+    });
+
+    const { sendMessage } = await import("@/lib/api/chat");
+    const result = await sendMessage({ text: "what should I do right now?" });
+
+    expect(result.responseMessage).toMatchObject({
+      kind: "free_time_recommendation",
+      payload: expect.objectContaining({
+        nextClassLabel: "No more classes are scheduled after this window.",
+        recommendations: [
+          expect.objectContaining({
+            kind: "exam",
+            typeLabel: "Exam",
+            title: "Biology Midterm",
+          }),
+        ],
+      }),
+    });
   });
 });

@@ -1,0 +1,718 @@
+import type {
+  Assignment as AssignmentRecord,
+  Budget,
+  ClassRecord,
+  Exam as ExamRecord,
+  Expense as ExpenseRecord,
+  SyncEntityType,
+  SyncOperation,
+  SyncQueueItem,
+} from "@unilife-ai/types";
+
+import { calculateBudgetEndDate, inferExpenseCategory } from "@/lib/api/utils";
+import { db } from "@/lib/db/dexie";
+import {
+  getCurrentUserId,
+  setCurrentUserId,
+} from "@/lib/session/current-user";
+import {
+  buildBudgetStatusSnapshot,
+  findActiveBudget,
+  normalizeExpenseRecord,
+} from "@/lib/selectors/finance";
+import { normalizeAssignmentRecord } from "@/lib/selectors/assignments";
+import { normalizeExamRecord } from "@/lib/selectors/exams";
+import { createClient } from "@/lib/supabase/client";
+import type {
+  CreateAssignmentInput,
+  CreateClassInput,
+  CreateExamInput,
+  LogExpenseInput,
+  OnboardingBudgetInput,
+  UpdateExamInput,
+  UpdateClassInput,
+} from "@/lib/types";
+
+async function getMutationUserId() {
+  const existingUserId = getCurrentUserId();
+
+  if (existingUserId) {
+    return existingUserId;
+  }
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error("The current user is not available in the browser session.");
+  }
+
+  setCurrentUserId(user.id);
+  return user.id;
+}
+
+function createQueueItem(input: {
+  entityId: string;
+  entityType: SyncEntityType;
+  operation: SyncOperation;
+  payload: Record<string, unknown>;
+  userId: string;
+}): SyncQueueItem {
+  return {
+    created_at: new Date().toISOString(),
+    entity_id: input.entityId,
+    entity_type: input.entityType,
+    id: crypto.randomUUID(),
+    last_attempted_at: null,
+    operation: input.operation,
+    payload: input.payload,
+    retry_count: 0,
+    status: "pending",
+    user_id: input.userId,
+  };
+}
+
+function maybeSetNullableString(
+  key: string,
+  value: string | null | undefined,
+  target: Record<string, unknown>,
+) {
+  if (value === undefined) {
+    return;
+  }
+
+  target[key] = value;
+}
+
+async function getClassSubjectById(userId: string) {
+  const classes = await db.classes
+    .where("user_id")
+    .equals(userId)
+    .and((record) => record.deleted_at === null)
+    .toArray();
+
+  return new Map(classes.map((record) => [record.id, record.subject] as const));
+}
+
+export async function createClassLocal(input: CreateClassInput) {
+  const userId = await getMutationUserId();
+  const timestamp = new Date().toISOString();
+  const record: ClassRecord = {
+    color: input.color ?? null,
+    created_at: timestamp,
+    day_of_week: input.dayOfWeek,
+    deleted_at: null,
+    end_time: input.endTime,
+    id: crypto.randomUUID(),
+    instructor: input.instructor ?? null,
+    is_active: true,
+    room: input.room ?? null,
+    start_time: input.startTime,
+    subject: input.subject,
+    updated_at: timestamp,
+    user_id: userId,
+  };
+  const payload: Record<string, unknown> = {
+    created_at: record.created_at,
+    day_of_week: record.day_of_week,
+    end_time: record.end_time,
+    start_time: record.start_time,
+    subject: record.subject,
+    updated_at: record.updated_at,
+  };
+
+  if (record.room) {
+    payload.room = record.room;
+  }
+  if (record.instructor) {
+    payload.instructor = record.instructor;
+  }
+  if (record.color) {
+    payload.color = record.color;
+  }
+
+  await db.transaction("rw", db.classes, db.sync_queue, async () => {
+    await db.classes.put(record);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: record.id,
+        entityType: "class",
+        operation: "create",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  return record;
+}
+
+export async function updateClassLocal(id: string, input: UpdateClassInput) {
+  const userId = await getMutationUserId();
+  const existingRecord = await db.classes.get(id);
+
+  if (!existingRecord || existingRecord.user_id !== userId || existingRecord.deleted_at) {
+    return null;
+  }
+
+  const updatedRecord: ClassRecord = {
+    ...existingRecord,
+    color: input.color !== undefined ? input.color : existingRecord.color,
+    day_of_week:
+      input.dayOfWeek !== undefined ? input.dayOfWeek : existingRecord.day_of_week,
+    end_time: input.endTime !== undefined ? input.endTime : existingRecord.end_time,
+    instructor:
+      input.instructor !== undefined ? input.instructor : existingRecord.instructor,
+    is_active: input.isActive !== undefined ? input.isActive : existingRecord.is_active,
+    room: input.room !== undefined ? input.room : existingRecord.room,
+    start_time:
+      input.startTime !== undefined ? input.startTime : existingRecord.start_time,
+    subject: input.subject !== undefined ? input.subject : existingRecord.subject,
+    updated_at: new Date().toISOString(),
+  };
+  const payload: Record<string, unknown> = {
+    updated_at: updatedRecord.updated_at,
+  };
+
+  if (input.subject !== undefined) {
+    payload.subject = input.subject;
+  }
+  if (input.dayOfWeek !== undefined) {
+    payload.day_of_week = input.dayOfWeek;
+  }
+  if (input.startTime !== undefined) {
+    payload.start_time = input.startTime;
+  }
+  if (input.endTime !== undefined) {
+    payload.end_time = input.endTime;
+  }
+  if (input.isActive !== undefined) {
+    payload.is_active = input.isActive;
+  }
+  maybeSetNullableString("room", input.room, payload);
+  maybeSetNullableString("instructor", input.instructor, payload);
+  maybeSetNullableString("color", input.color, payload);
+
+  await db.transaction("rw", db.classes, db.sync_queue, async () => {
+    await db.classes.put(updatedRecord);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: id,
+        entityType: "class",
+        operation: "update",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  return updatedRecord;
+}
+
+export async function deleteClassLocal(id: string) {
+  const userId = await getMutationUserId();
+  const existingRecord = await db.classes.get(id);
+
+  if (!existingRecord || existingRecord.user_id !== userId || existingRecord.deleted_at) {
+    return false;
+  }
+
+  const deletedAt = new Date().toISOString();
+
+  await db.transaction("rw", db.classes, db.sync_queue, async () => {
+    await db.classes.put({
+      ...existingRecord,
+      deleted_at: deletedAt,
+      is_active: false,
+      updated_at: deletedAt,
+    });
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: id,
+        entityType: "class",
+        operation: "delete",
+        payload: { deleted_at: deletedAt },
+        userId,
+      }),
+    );
+  });
+
+  return true;
+}
+
+export async function createAssignmentLocal(input: CreateAssignmentInput) {
+  const userId = await getMutationUserId();
+  const timestamp = new Date().toISOString();
+  const record: AssignmentRecord = {
+    class_id: input.classId ?? null,
+    created_at: timestamp,
+    deleted_at: null,
+    description: input.description ?? null,
+    due_date: input.dueAt,
+    id: crypto.randomUUID(),
+    priority: input.priority ?? 2,
+    status: "pending",
+    title: input.title,
+    updated_at: timestamp,
+    user_id: userId,
+  };
+  const payload: Record<string, unknown> = {
+    created_at: record.created_at,
+    due_date: record.due_date,
+    priority: record.priority,
+    status: record.status,
+    title: record.title,
+    updated_at: record.updated_at,
+  };
+  maybeSetNullableString("class_id", record.class_id, payload);
+  if (record.description) {
+    payload.description = record.description;
+  }
+
+  await db.transaction("rw", db.assignments, db.sync_queue, async () => {
+    await db.assignments.put(record);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: record.id,
+        entityType: "assignment",
+        operation: "create",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  const classSubjectById = await getClassSubjectById(userId);
+  return normalizeAssignmentRecord(record, {
+    classSubjectById,
+  });
+}
+
+export async function updateAssignmentLocal(
+  id: string,
+  input: Partial<{
+    classId: string | null;
+    description: string | null;
+    dueAt: string;
+    priority: number;
+    status: AssignmentRecord["status"];
+    title: string;
+  }>,
+) {
+  const userId = await getMutationUserId();
+  const existingRecord = await db.assignments.get(id);
+
+  if (!existingRecord || existingRecord.user_id !== userId || existingRecord.deleted_at) {
+    return null;
+  }
+
+  const updatedRecord: AssignmentRecord = {
+    ...existingRecord,
+    class_id: input.classId !== undefined ? input.classId : existingRecord.class_id,
+    description:
+      input.description !== undefined ? input.description : existingRecord.description,
+    due_date: input.dueAt !== undefined ? input.dueAt : existingRecord.due_date,
+    priority: input.priority !== undefined ? input.priority : existingRecord.priority,
+    status: input.status !== undefined ? input.status : existingRecord.status,
+    title: input.title !== undefined ? input.title : existingRecord.title,
+    updated_at: new Date().toISOString(),
+  };
+  const payload: Record<string, unknown> = {
+    updated_at: updatedRecord.updated_at,
+  };
+
+  if (input.title !== undefined) {
+    payload.title = input.title;
+  }
+  if (input.dueAt !== undefined) {
+    payload.due_date = input.dueAt;
+  }
+  if (input.priority !== undefined) {
+    payload.priority = input.priority;
+  }
+  if (input.status !== undefined) {
+    payload.status = input.status;
+  }
+  maybeSetNullableString("class_id", input.classId, payload);
+  maybeSetNullableString("description", input.description, payload);
+
+  await db.transaction("rw", db.assignments, db.sync_queue, async () => {
+    await db.assignments.put(updatedRecord);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: id,
+        entityType: "assignment",
+        operation: "update",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  const classSubjectById = await getClassSubjectById(userId);
+  return normalizeAssignmentRecord(updatedRecord, {
+    classSubjectById,
+  });
+}
+
+export async function deleteAssignmentLocal(id: string) {
+  const userId = await getMutationUserId();
+  const existingRecord = await db.assignments.get(id);
+
+  if (!existingRecord || existingRecord.user_id !== userId || existingRecord.deleted_at) {
+    return false;
+  }
+
+  const deletedAt = new Date().toISOString();
+
+  await db.transaction("rw", db.assignments, db.sync_queue, async () => {
+    await db.assignments.put({
+      ...existingRecord,
+      deleted_at: deletedAt,
+      updated_at: deletedAt,
+    });
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: id,
+        entityType: "assignment",
+        operation: "delete",
+        payload: { deleted_at: deletedAt },
+        userId,
+      }),
+    );
+  });
+
+  return true;
+}
+
+export async function createExamLocal(input: CreateExamInput) {
+  const userId = await getMutationUserId();
+  const timestamp = new Date().toISOString();
+  const record: ExamRecord = {
+    class_id: input.classId ?? null,
+    created_at: timestamp,
+    deleted_at: null,
+    description: input.description ?? null,
+    exam_date: input.examAt,
+    id: crypto.randomUUID(),
+    location: input.location ?? null,
+    title: input.title,
+    updated_at: timestamp,
+    user_id: userId,
+  };
+  const payload: Record<string, unknown> = {
+    created_at: record.created_at,
+    exam_date: record.exam_date,
+    title: record.title,
+    updated_at: record.updated_at,
+  };
+  maybeSetNullableString("class_id", record.class_id, payload);
+  if (record.description) {
+    payload.description = record.description;
+  }
+  if (record.location) {
+    payload.location = record.location;
+  }
+
+  await db.transaction("rw", db.exams, db.sync_queue, async () => {
+    await db.exams.put(record);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: record.id,
+        entityType: "exam",
+        operation: "create",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  const classSubjectById = await getClassSubjectById(userId);
+  return normalizeExamRecord(record, {
+    classSubjectById,
+  });
+}
+
+export async function updateExamLocal(id: string, input: UpdateExamInput) {
+  const userId = await getMutationUserId();
+  const existingRecord = await db.exams.get(id);
+
+  if (!existingRecord || existingRecord.user_id !== userId || existingRecord.deleted_at) {
+    return null;
+  }
+
+  const updatedRecord: ExamRecord = {
+    ...existingRecord,
+    class_id: input.classId !== undefined ? input.classId : existingRecord.class_id,
+    description:
+      input.description !== undefined ? input.description : existingRecord.description,
+    exam_date: input.examAt !== undefined ? input.examAt : existingRecord.exam_date,
+    location: input.location !== undefined ? input.location : existingRecord.location,
+    title: input.title !== undefined ? input.title : existingRecord.title,
+    updated_at: new Date().toISOString(),
+  };
+  const payload: Record<string, unknown> = {
+    updated_at: updatedRecord.updated_at,
+  };
+
+  if (input.title !== undefined) {
+    payload.title = input.title;
+  }
+  if (input.examAt !== undefined) {
+    payload.exam_date = input.examAt;
+  }
+  maybeSetNullableString("class_id", input.classId, payload);
+  maybeSetNullableString("description", input.description, payload);
+  maybeSetNullableString("location", input.location, payload);
+
+  await db.transaction("rw", db.exams, db.sync_queue, async () => {
+    await db.exams.put(updatedRecord);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: id,
+        entityType: "exam",
+        operation: "update",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  const classSubjectById = await getClassSubjectById(userId);
+  return normalizeExamRecord(updatedRecord, {
+    classSubjectById,
+  });
+}
+
+export async function deleteExamLocal(id: string) {
+  const userId = await getMutationUserId();
+  const existingRecord = await db.exams.get(id);
+
+  if (!existingRecord || existingRecord.user_id !== userId || existingRecord.deleted_at) {
+    return false;
+  }
+
+  const deletedAt = new Date().toISOString();
+
+  await db.transaction("rw", db.exams, db.sync_queue, async () => {
+    await db.exams.put({
+      ...existingRecord,
+      deleted_at: deletedAt,
+      updated_at: deletedAt,
+    });
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: id,
+        entityType: "exam",
+        operation: "delete",
+        payload: { deleted_at: deletedAt },
+        userId,
+      }),
+    );
+  });
+
+  return true;
+}
+
+export async function logExpenseLocal(input: LogExpenseInput) {
+  const userId = await getMutationUserId();
+  const budgets = await db.budgets.where("user_id").equals(userId).toArray();
+  const activeBudget = findActiveBudget(budgets);
+  const timestamp = new Date().toISOString();
+  const record: ExpenseRecord = {
+    amount: input.amount,
+    budget_id: activeBudget?.id ?? null,
+    category: input.category ?? inferExpenseCategory(input.label),
+    created_at: timestamp,
+    deleted_at: null,
+    description: input.label.trim(),
+    id: crypto.randomUUID(),
+    spent_at: input.spentAt ?? timestamp,
+    updated_at: timestamp,
+    user_id: userId,
+  };
+  const payload: Record<string, unknown> = {
+    amount: record.amount,
+    category: record.category,
+    created_at: record.created_at,
+    spent_at: record.spent_at,
+    updated_at: record.updated_at,
+  };
+  maybeSetNullableString("budget_id", record.budget_id, payload);
+  if (record.description) {
+    payload.description = record.description;
+  }
+
+  await db.transaction("rw", db.expenses, db.sync_queue, async () => {
+    await db.expenses.put(record);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: record.id,
+        entityType: "expense",
+        operation: "create",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  return normalizeExpenseRecord(record);
+}
+
+export async function deleteExpenseLocal(id: string) {
+  const userId = await getMutationUserId();
+  const existingRecord = await db.expenses.get(id);
+
+  if (!existingRecord || existingRecord.user_id !== userId || existingRecord.deleted_at) {
+    return false;
+  }
+
+  const deletedAt = new Date().toISOString();
+
+  await db.transaction("rw", db.expenses, db.sync_queue, async () => {
+    await db.expenses.put({
+      ...existingRecord,
+      deleted_at: deletedAt,
+      updated_at: deletedAt,
+    });
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: id,
+        entityType: "expense",
+        operation: "delete",
+        payload: { deleted_at: deletedAt },
+        userId,
+      }),
+    );
+  });
+
+  return true;
+}
+
+async function createBudgetLocal(input: OnboardingBudgetInput) {
+  const userId = await getMutationUserId();
+  const createdAt = new Date().toISOString();
+  const startDate = new Date().toISOString().slice(0, 10);
+  const record: Budget = {
+    amount: input.amount,
+    created_at: createdAt,
+    end_date: calculateBudgetEndDate(startDate, input.period),
+    id: crypto.randomUUID(),
+    period: input.period,
+    start_date: startDate,
+    updated_at: createdAt,
+    user_id: userId,
+  };
+  const payload: Record<string, unknown> = {
+    amount: record.amount,
+    created_at: record.created_at,
+    end_date: record.end_date,
+    period: record.period,
+    start_date: record.start_date,
+    updated_at: record.updated_at,
+  };
+
+  await db.transaction("rw", db.budgets, db.sync_queue, async () => {
+    await db.budgets.put(record);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: record.id,
+        entityType: "budget",
+        operation: "create",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  return record;
+}
+
+async function updateBudgetLocal(id: string, input: OnboardingBudgetInput) {
+  const userId = await getMutationUserId();
+  const existingRecord = await db.budgets.get(id);
+
+  if (!existingRecord || existingRecord.user_id !== userId) {
+    return null;
+  }
+
+  const updatedRecord: Budget = {
+    ...existingRecord,
+    amount: input.amount,
+    end_date: calculateBudgetEndDate(existingRecord.start_date, input.period),
+    period: input.period,
+    updated_at: new Date().toISOString(),
+  };
+  const payload: Record<string, unknown> = {
+    amount: updatedRecord.amount,
+    end_date: updatedRecord.end_date,
+    period: updatedRecord.period,
+    updated_at: updatedRecord.updated_at,
+  };
+
+  await db.transaction("rw", db.budgets, db.sync_queue, async () => {
+    await db.budgets.put(updatedRecord);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: id,
+        entityType: "budget",
+        operation: "update",
+        payload,
+        userId,
+      }),
+    );
+  });
+
+  return updatedRecord;
+}
+
+export async function saveBudgetCycleLocal(input: OnboardingBudgetInput) {
+  const userId = await getMutationUserId();
+  const budgets = await db.budgets.where("user_id").equals(userId).toArray();
+  const activeBudget = findActiveBudget(budgets);
+  const budget = activeBudget
+    ? await updateBudgetLocal(activeBudget.id, input)
+    : await createBudgetLocal(input);
+
+  if (!budget) {
+    throw new Error("We couldn't update the active budget.");
+  }
+
+  const expenses = await db.expenses
+    .where("user_id")
+    .equals(userId)
+    .and(
+      (record) =>
+        record.deleted_at === null &&
+        record.spent_at >= `${budget.start_date}T00:00:00` &&
+        record.spent_at <= `${budget.end_date}T23:59:59.999`,
+    )
+    .toArray();
+
+  return buildBudgetStatusSnapshot(budget, expenses);
+}
+
+export async function getBudgetStatusLocal() {
+  const userId = await getMutationUserId();
+  const budgets = await db.budgets.where("user_id").equals(userId).toArray();
+  const activeBudget = findActiveBudget(budgets);
+
+  if (!activeBudget) {
+    return null;
+  }
+
+  const expenses = await db.expenses
+    .where("user_id")
+    .equals(userId)
+    .and(
+      (record) =>
+        record.deleted_at === null &&
+        record.spent_at >= `${activeBudget.start_date}T00:00:00` &&
+        record.spent_at <= `${activeBudget.end_date}T23:59:59.999`,
+    )
+    .toArray();
+
+  return buildBudgetStatusSnapshot(activeBudget, expenses);
+}

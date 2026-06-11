@@ -1,0 +1,156 @@
+import type {
+  Assignment,
+  Budget,
+  ClassRecord,
+  Exam,
+  Expense,
+} from "@unilife-ai/types";
+
+import { requestBackendClient } from "@/lib/api/client-browser";
+import { db, type SyncMetaEntity, type SyncMetaRecord } from "@/lib/db/dexie";
+
+type EntityRecordMap = {
+  assignment: Assignment;
+  budget: Budget;
+  class: ClassRecord;
+  exam: Exam;
+  expense: Expense;
+};
+
+type HydrationResponseMap = {
+  assignment: { assignments: Assignment[] };
+  budget: { budgets: Budget[] };
+  class: { classes: ClassRecord[] };
+  exam: { exams: Exam[] };
+  expense: { expenses: Expense[]; total: number };
+};
+
+type HydrationOptions = {
+  forceFull?: boolean;
+  userId: string;
+};
+
+const HYDRATION_ENTITIES: SyncMetaEntity[] = [
+  "class",
+  "assignment",
+  "exam",
+  "budget",
+  "expense",
+];
+
+const entityConfig: {
+  [T in SyncMetaEntity]: {
+    endpoint: string;
+    extract: (response: HydrationResponseMap[T]) => EntityRecordMap[T][];
+    table: "classes" | "assignments" | "exams" | "budgets" | "expenses";
+  };
+} = {
+  class: {
+    endpoint: "/api/classes",
+    extract: (response) => response.classes,
+    table: "classes",
+  },
+  assignment: {
+    endpoint: "/api/assignments",
+    extract: (response) => response.assignments,
+    table: "assignments",
+  },
+  exam: {
+    endpoint: "/api/exams",
+    extract: (response) => response.exams,
+    table: "exams",
+  },
+  budget: {
+    endpoint: "/api/budgets",
+    extract: (response) => response.budgets,
+    table: "budgets",
+  },
+  expense: {
+    endpoint: "/api/expenses",
+    extract: (response) => response.expenses,
+    table: "expenses",
+  },
+};
+
+function getMetaId(userId: string, entityType: SyncMetaEntity) {
+  return `${userId}:${entityType}`;
+}
+
+async function getMeta(userId: string, entityType: SyncMetaEntity) {
+  return db.sync_meta.get(getMetaId(userId, entityType));
+}
+
+function getMaxUpdatedAt<T extends { updated_at: string }>(records: T[]) {
+  if (records.length === 0) {
+    return null;
+  }
+
+  return records.reduce((latest, record) => {
+    return record.updated_at > latest ? record.updated_at : latest;
+  }, records[0].updated_at);
+}
+
+async function upsertMeta(record: SyncMetaRecord) {
+  await db.sync_meta.put(record);
+}
+
+async function hydrateEntity<T extends SyncMetaEntity>(
+  entityType: T,
+  options: HydrationOptions,
+) {
+  const config = entityConfig[entityType];
+  const currentMeta = options.forceFull
+    ? null
+    : await getMeta(options.userId, entityType);
+  const query = currentMeta?.last_hydrated_at
+    ? { since: currentMeta.last_hydrated_at }
+    : undefined;
+  const response = await requestBackendClient<HydrationResponseMap[T]>(
+    config.endpoint,
+    {
+      query,
+    },
+  );
+  const records = config.extract(response);
+
+  if (records.length > 0) {
+    await db.table(config.table).bulkPut(records);
+  }
+
+  const lastHydratedAt = getMaxUpdatedAt(records) ?? new Date().toISOString();
+  const nextMeta: SyncMetaRecord = {
+    id: getMetaId(options.userId, entityType),
+    user_id: options.userId,
+    entity_type: entityType,
+    last_hydrated_at: lastHydratedAt,
+    last_successful_sync_at: currentMeta?.last_successful_sync_at ?? null,
+  };
+
+  await upsertMeta(nextMeta);
+}
+
+export async function hydrateAllEntities(options: HydrationOptions) {
+  for (const entityType of HYDRATION_ENTITIES) {
+    await hydrateEntity(entityType, options);
+  }
+}
+
+export async function markHydrationSuccess(userId: string) {
+  const existingMetaRecords = await Promise.all(
+    HYDRATION_ENTITIES.map((entityType) => getMeta(userId, entityType)),
+  );
+  const timestamp = new Date().toISOString();
+
+  for (let index = 0; index < HYDRATION_ENTITIES.length; index += 1) {
+    const entityType = HYDRATION_ENTITIES[index];
+    const currentMeta = existingMetaRecords[index];
+
+    await upsertMeta({
+      id: getMetaId(userId, entityType),
+      user_id: userId,
+      entity_type: entityType,
+      last_hydrated_at: currentMeta?.last_hydrated_at ?? null,
+      last_successful_sync_at: timestamp,
+    });
+  }
+}

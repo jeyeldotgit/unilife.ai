@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { sendMessage } from "@/lib/api/chat";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatClientEffect, ChatMessage } from "@/lib/types";
 
 export type SubmitChatMessageInput = {
   text: string;
@@ -12,6 +12,7 @@ export type SubmitChatMessageInput = {
 export type ChatActionResult =
   | {
       ok: true;
+      clientEffect?: ChatClientEffect;
       responseMessage: ChatMessage;
     }
   | {
@@ -93,6 +94,7 @@ export async function submitChatMessageAction(
 
     return {
       ok: true,
+      clientEffect: result.clientEffect,
       responseMessage: result.responseMessage,
     };
   } catch (error) {

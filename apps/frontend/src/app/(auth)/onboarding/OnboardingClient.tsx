@@ -3,11 +3,12 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  completeOnboardingAction,
-  saveOnboardingBudgetAction,
-} from "@/actions/onboarding";
 import { Icon } from "@/components/ui/Icon";
+import {
+  createAssignmentLocal,
+  createClassLocal,
+  saveBudgetCycleLocal,
+} from "@/lib/mutations/local-data";
 import type {
   BudgetPeriod,
   DayOfWeek,
@@ -50,6 +51,16 @@ const dayLookup: Record<string, DayOfWeek> = {
   saturday: "saturday",
   sun: "sunday",
   sunday: "sunday",
+};
+
+const dayIndexMap: Record<DayOfWeek, number> = {
+  monday: 0,
+  tuesday: 1,
+  wednesday: 2,
+  thursday: 3,
+  friday: 4,
+  saturday: 5,
+  sunday: 6,
 };
 
 function toBudgetPeriod(frequency: Frequency): BudgetPeriod {
@@ -257,14 +268,18 @@ export default function OnboardingClient() {
     setSubmitState("loading");
     setErrorMessage(null);
 
-    const result = await saveOnboardingBudgetAction({
-      period: toBudgetPeriod(selectedFreq),
-      amount: numericAmount,
-    });
-
-    if (!result.ok) {
+    try {
+      await saveBudgetCycleLocal({
+        period: toBudgetPeriod(selectedFreq),
+        amount: numericAmount,
+      });
+    } catch (error) {
       setSubmitState("idle");
-      setErrorMessage(result.error ?? "We could not save your budget right now.");
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "We could not save your budget right now.",
+      );
       return;
     }
 
@@ -300,27 +315,47 @@ export default function OnboardingClient() {
     setSubmitState("loading");
     setErrorMessage(null);
 
-    const result = await completeOnboardingAction({
-      starterClass,
-      starterAssignment,
-    });
+    try {
+      if (starterClass) {
+        for (const dayOfWeek of starterClass.days) {
+          await createClassLocal({
+            color: starterClass.color,
+            dayIndex: dayIndexMap[dayOfWeek],
+            dayOfWeek,
+            endTime: starterClass.endTime,
+            instructor: starterClass.instructor ?? null,
+            room: starterClass.room ?? null,
+            startTime: starterClass.startTime,
+            subject: starterClass.subject.trim(),
+          });
+        }
+      }
 
-    if (!result.ok) {
+      if (starterAssignment) {
+        await createAssignmentLocal({
+          classId: starterAssignment.classId ?? null,
+          description: starterAssignment.description?.trim() || null,
+          dueAt: starterAssignment.dueAt,
+          subject: starterAssignment.subject?.trim() || undefined,
+          title: starterAssignment.title.trim(),
+        });
+      }
+    } catch (error) {
       setSubmitState("idle");
       setErrorMessage(
-        result.error ?? "We could not finish onboarding right now.",
+        error instanceof Error
+          ? error.message
+          : "We could not finish onboarding right now.",
       );
       return;
     }
 
     setSubmitState("success");
     router.push("/dashboard");
-    router.refresh();
   };
 
   const handleSkip = () => {
     router.push("/dashboard");
-    router.refresh();
   };
 
   return (

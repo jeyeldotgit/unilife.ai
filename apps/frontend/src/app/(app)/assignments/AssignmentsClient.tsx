@@ -6,19 +6,25 @@ import { AssignmentCard } from "@/components/ui/AssignmentCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { TasksRouteSwitcher } from "@/components/ui/TasksRouteSwitcher";
+import { useAssignments } from "@/hooks/use-assignments";
 import type { Assignment } from "@/lib/types";
 
 type FilterTab = "All" | "Pending" | "Done";
 
 export interface AssignmentsClientProps {
-  assignments: Assignment[];
-  assignmentsAvailable: boolean;
+  assignments?: Assignment[];
+  assignmentsAvailable?: boolean;
 }
 
 export default function AssignmentsClient({
-  assignments,
+  assignments: initialAssignments = [],
   assignmentsAvailable,
 }: AssignmentsClientProps) {
+  const assignmentsState = useAssignments();
+  const assignments =
+    initialAssignments.length > 0 ? initialAssignments : assignmentsState.assignments;
+  const resolvedAssignmentsAvailable =
+    assignmentsAvailable ?? assignmentsState.available;
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
@@ -53,7 +59,7 @@ export default function AssignmentsClient({
   });
 
   const renderAssignmentsContent = () => {
-    if (!assignmentsAvailable) {
+    if (!resolvedAssignmentsAvailable) {
       return (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-sm font-medium text-[#825100] shadow-sm">

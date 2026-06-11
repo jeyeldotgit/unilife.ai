@@ -1,23 +1,23 @@
-import { createAssignment, getAssignments } from "@/lib/api/assignments";
-import { getBudgetChatContext, getBudgetStatus } from "@/lib/api/budget";
+import { getAssignments } from "@/lib/api/assignments";
+import { getBudgetChatContext } from "@/lib/api/budget";
 import { requestBackend } from "@/lib/api/client";
 import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
-import { logExpense } from "@/lib/api/expenses";
 import { getExams } from "@/lib/api/exams";
 import { getClasses } from "@/lib/api/schedule";
 import {
-  formatDueDateTimeLabel,
+  inferExpenseCategory,
   formatTimeLabel,
+  getDayIndex as getScheduleDayIndex,
   titleCase,
 } from "@/lib/api/utils";
 import type {
-  ChatAssignmentConfirmationMessage,
-  ChatExpenseConfirmationMessage,
+  ChatClientEffect,
   ChatFreeTimeRecommendationMessage,
   ChatQuickAction,
   ChatSendResult,
   ChatState,
   ChatTextMessage,
+  DayOfWeek,
   ExpenseCategory,
   SendChatMessageInput,
 } from "@/lib/types";
@@ -128,51 +128,6 @@ function buildTextMessage(text: string) {
   } satisfies ChatTextMessage;
 }
 
-function buildAssignmentConfirmation(
-  assignment: Awaited<ReturnType<typeof createAssignment>>,
-): ChatAssignmentConfirmationMessage {
-  return {
-    id: crypto.randomUUID(),
-    role: "ai",
-    kind: "assignment_confirmation",
-    createdAt: new Date().toISOString(),
-    payload: {
-      assignmentId: assignment.id,
-      title: assignment.title,
-      dueLabel: formatDueDateTimeLabel(assignment.dueAt),
-      subjectLabel: assignment.subject,
-      classLinkLabel:
-        assignment.subject === "No class" ? "No class linked" : assignment.subject,
-      ctaLabel: "View Assignment",
-      icon: "assignment",
-    },
-  };
-}
-
-function buildExpenseConfirmation(
-  expense: Awaited<ReturnType<typeof logExpense>>,
-  budgetStatus: Awaited<ReturnType<typeof getBudgetStatus>>,
-): ChatExpenseConfirmationMessage {
-  return {
-    id: crypto.randomUUID(),
-    role: "ai",
-    kind: "expense_confirmation",
-    createdAt: new Date().toISOString(),
-    payload: {
-      expenseId: expense.id,
-      label: expense.label,
-      amountLabel: expense.amountLabel,
-      categoryLabel: expense.categoryLabel,
-      spentAtLabel: `${expense.dayLabel}, ${expense.timeLabel}`,
-      budgetRemainingLabel: budgetStatus?.remainingLabel ?? "No active budget",
-      budgetTotalLabel: budgetStatus?.totalLabel ?? "No active budget",
-      progressPercent: budgetStatus?.progressPercent ?? 0,
-      ctaLabel: "View Expenses",
-      icon: "payments",
-    },
-  };
-}
-
 function buildFreeTimeRecommendation(
   response: AiChatResponse,
 ): ChatFreeTimeRecommendationMessage | null {
@@ -194,13 +149,15 @@ function buildFreeTimeRecommendation(
         ? `${response.free_time.next_class_subject} starts at ${response.free_time.next_class_time}`
         : "No more classes are scheduled after this window.",
       recommendations: response.free_time.suggested_tasks.map((task) => ({
-        assignmentId: task.type === "assignment" ? task.title : null,
+        entityId: null,
+        kind: task.type,
         title: task.title,
         dueLabel:
           task.urgency_days <= 1
             ? "Due within 1 day"
             : `Due in ${task.urgency_days} days`,
         subjectLabel: task.type === "exam" ? "Exam" : "Assignment",
+        typeLabel: task.type === "exam" ? "Exam" : "Assignment",
         priorityLabel:
           task.urgency_days <= 2
             ? "High priority"
@@ -222,6 +179,20 @@ function normalizeExpenseLabelFromMessage(text: string) {
   }
 
   return titleCase(match[1].trim());
+}
+
+function getDayIndex(dayOfWeek: DayOfWeek) {
+  return getScheduleDayIndex(dayOfWeek);
+}
+
+function normalizeTimeValue(value: string) {
+  const withSecondsMatch = /^(\d{2}):(\d{2})(?::\d{2})$/.exec(value.trim());
+
+  if (withSecondsMatch) {
+    return `${withSecondsMatch[1]}:${withSecondsMatch[2]}`;
+  }
+
+  return value.trim();
 }
 
 function getAssignmentAction(action: Record<string, unknown> | null) {
@@ -266,6 +237,194 @@ function getExpenseAction(action: Record<string, unknown> | null) {
   };
 }
 
+function getClassAction(action: Record<string, unknown> | null) {
+  const resolvedDay =
+    typeof action?.day_of_week === "string"
+      ? action.day_of_week
+      : typeof action?.day === "string"
+        ? action.day
+        : null;
+
+  if (
+    !action ||
+    typeof action.subject !== "string" ||
+    typeof resolvedDay !== "string" ||
+    typeof action.start_time !== "string" ||
+    typeof action.end_time !== "string"
+  ) {
+    return null;
+  }
+
+  const dayOfWeek = resolvedDay as DayOfWeek;
+  const dayIndex = getDayIndex(dayOfWeek);
+
+  if (dayIndex < 0) {
+    return null;
+  }
+
+  return {
+    color: undefined,
+    dayIndex,
+    dayOfWeek,
+    endTime: normalizeTimeValue(action.end_time),
+    startTime: normalizeTimeValue(action.start_time),
+    subject: action.subject,
+  };
+}
+
+function getExamAction(action: Record<string, unknown> | null) {
+  if (
+    !action ||
+    typeof action.exam_date !== "string" ||
+    typeof action.title !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    title: action.title,
+    examAt: action.exam_date,
+    classId:
+      typeof action.class_id === "string" || action.class_id === null
+        ? action.class_id
+        : null,
+    description:
+      typeof action.description === "string" || action.description === null
+        ? action.description
+        : undefined,
+    location:
+      typeof action.location === "string" || action.location === null
+        ? action.location
+        : undefined,
+  };
+}
+
+function normalizeExpenseLabel(inputText: string, action: { category?: ExpenseCategory }) {
+  const normalizedFromMessage = normalizeExpenseLabelFromMessage(inputText);
+
+  if (normalizedFromMessage) {
+    return normalizedFromMessage;
+  }
+
+  const trimmedInput = inputText.trim();
+  const withoutTrailingAmount = trimmedInput.replace(/\s+\d+(?:\.\d{1,2})?\s*$/, "");
+  const semanticLabel = withoutTrailingAmount.trim() || trimmedInput;
+
+  if (semanticLabel) {
+    return titleCase(semanticLabel);
+  }
+
+  return action.category ? `${titleCase(action.category)} expense` : "Expense";
+}
+
+function getExpenseCategory(
+  inputText: string,
+  action: { category?: ExpenseCategory },
+  label: string,
+) {
+  if (action.category) {
+    return action.category;
+  }
+
+  const inferredFromInput = inferExpenseCategory(inputText);
+
+  if (inferredFromInput !== "miscellaneous") {
+    return inferredFromInput;
+  }
+
+  const inferredFromLabel = inferExpenseCategory(label);
+
+  if (inferredFromLabel !== "miscellaneous") {
+    return inferredFromLabel;
+  }
+
+  return "miscellaneous" as const;
+}
+
+function getClarifyingMessage(response: AiChatResponse) {
+  if (!response.requires_confirmation) {
+    return null;
+  }
+
+  if (response.intent === "create_class") {
+    return "I can add that class once I have the subject, day, start time, and end time.";
+  }
+
+  if (response.intent === "create_exam") {
+    return "I can add that exam once I have the title and exact exam date and time.";
+  }
+
+  if (response.intent === "log_expense") {
+    return "I can log that expense once I have the amount and what it was for.";
+  }
+
+  return null;
+}
+
+function getClientEffect(
+  inputText: string,
+  response: AiChatResponse,
+): ChatClientEffect | undefined {
+  if (
+    response.intent === "create_assignment" &&
+    !response.requires_confirmation
+  ) {
+    const action = getAssignmentAction(response.action);
+
+    if (action) {
+      return {
+        kind: "create_assignment",
+        payload: {
+          classId: action.classId,
+          dueAt: action.dueAt,
+          title: action.title,
+        },
+      };
+    }
+  }
+
+  if (response.intent === "create_class" && !response.requires_confirmation) {
+    const action = getClassAction(response.action);
+
+    if (action) {
+      return {
+        kind: "create_class",
+        payload: action,
+      };
+    }
+  }
+
+  if (response.intent === "create_exam" && !response.requires_confirmation) {
+    const action = getExamAction(response.action);
+
+    if (action) {
+      return {
+        kind: "create_exam",
+        payload: action,
+      };
+    }
+  }
+
+  if (response.intent === "log_expense" && !response.requires_confirmation) {
+    const action = getExpenseAction(response.action);
+
+    if (action) {
+      const label = normalizeExpenseLabel(inputText, action);
+
+      return {
+        kind: "log_expense",
+        payload: {
+          amount: action.amount,
+          category: getExpenseCategory(inputText, action, label),
+          label,
+        },
+      };
+    }
+  }
+
+  return undefined;
+}
+
 export async function getChatState(): Promise<ChatState> {
   return {
     messages: [],
@@ -304,46 +463,6 @@ export async function sendMessage(
     },
   });
 
-  if (
-    response.intent === "create_assignment" &&
-    !response.requires_confirmation
-  ) {
-    const action = getAssignmentAction(response.action);
-
-    if (action) {
-      const createdAssignment = await createAssignment({
-        title: action.title,
-        dueAt: action.dueAt,
-        classId: action.classId,
-      });
-
-      return {
-        userMessage,
-        responseMessage: buildAssignmentConfirmation(createdAssignment),
-      };
-    }
-  }
-
-  if (response.intent === "log_expense" && !response.requires_confirmation) {
-    const action = getExpenseAction(response.action);
-
-    if (action) {
-      const createdExpense = await logExpense({
-        label:
-          normalizeExpenseLabelFromMessage(input.text) ??
-          (action.category ? `${titleCase(action.category)} expense` : "Expense"),
-        amount: action.amount,
-        category: action.category,
-      });
-      const budgetStatus = await getBudgetStatus();
-
-      return {
-        userMessage,
-        responseMessage: buildExpenseConfirmation(createdExpense, budgetStatus),
-      };
-    }
-  }
-
   if (response.intent === "free_time_finder") {
     const recommendation = buildFreeTimeRecommendation(response);
 
@@ -356,7 +475,10 @@ export async function sendMessage(
   }
 
   return {
+    clientEffect: getClientEffect(input.text, response),
     userMessage,
-    responseMessage: buildTextMessage(response.message),
+    responseMessage: buildTextMessage(
+      getClarifyingMessage(response) ?? response.message,
+    ),
   };
 }

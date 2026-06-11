@@ -1,10 +1,18 @@
-import type { ChatExpenseConfirmationPayload, ChatFreeTimeRecommendationPayload, ChatMessage } from "@/lib/types";
+import type {
+  ChatClassConfirmationPayload,
+  ChatExamConfirmationPayload,
+  ChatExpenseConfirmationPayload,
+  ChatFreeTimeRecommendationPayload,
+  ChatMessage,
+} from "@/lib/types";
 import { AssignmentCard } from "@/components/ui/AssignmentCard";
 import { Icon } from "@/components/ui/Icon";
 
 type ChatBubbleProps = {
   message: ChatMessage;
   onAssignmentCtaClick?: (assignmentId: string) => void;
+  onClassCtaClick?: (classId: string) => void;
+  onExamCtaClick?: (examId: string) => void;
   onExpenseCtaClick?: (expenseId: string) => void;
 };
 
@@ -173,6 +181,164 @@ function ExpenseConfirmationCard({
   );
 }
 
+function SimpleConfirmationCard({
+  title,
+  subtitle,
+  meta,
+  icon,
+  ctaLabel,
+  onClick,
+}: {
+  title: string;
+  subtitle: string;
+  meta: string;
+  icon: string;
+  ctaLabel: string;
+  onClick?: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div
+        style={{
+          backgroundColor: "#f3f4f5",
+          borderRadius: "12px",
+          padding: "16px",
+          border: "1px solid rgba(194,198,214,0.3)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              backgroundColor: "rgba(59,130,246,0.12)",
+              borderRadius: "9999px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Icon name={icon} className="text-[#3B82F6]" size={20} />
+          </div>
+          <div>
+            <p
+              style={{
+                fontSize: "14px",
+                fontWeight: 600,
+                color: "#191c1d",
+                margin: 0,
+              }}
+            >
+              {title}
+            </p>
+            <p
+              style={{
+                fontSize: "12px",
+                color: "#424754",
+                margin: "2px 0 0 0",
+              }}
+            >
+              {subtitle}
+            </p>
+            <p
+              style={{
+                fontSize: "12px",
+                color: "#424754",
+                margin: "2px 0 0 0",
+              }}
+            >
+              {meta}
+            </p>
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          width: "100%",
+          backgroundColor: "#3B82F6",
+          color: "#ffffff",
+          fontSize: "14px",
+          fontWeight: 600,
+          letterSpacing: "0.01em",
+          padding: "12px",
+          borderRadius: "12px",
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          transition: "opacity 0.15s",
+          fontFamily: "'Inter', sans-serif",
+        }}
+        onMouseOver={(event) => {
+          event.currentTarget.style.opacity = "0.9";
+        }}
+        onMouseOut={(event) => {
+          event.currentTarget.style.opacity = "1";
+        }}
+      >
+        {ctaLabel}
+        <Icon name="arrow_forward" size={18} />
+      </button>
+    </div>
+  );
+}
+
+function ClassConfirmationCard({
+  payload,
+  onClick,
+}: {
+  payload: ChatClassConfirmationPayload;
+  onClick?: (classId: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <p style={{ fontSize: "16px", lineHeight: "24px", margin: 0 }}>
+        {"\ud83d\uddd3\ufe0f"} Class added!
+      </p>
+      <SimpleConfirmationCard
+        title={payload.subject}
+        subtitle={payload.meetingLabel}
+        meta={payload.locationLabel}
+        icon={payload.icon}
+        ctaLabel={payload.ctaLabel}
+        onClick={() => onClick?.(payload.classId)}
+      />
+    </div>
+  );
+}
+
+function ExamConfirmationCard({
+  payload,
+  onClick,
+}: {
+  payload: ChatExamConfirmationPayload;
+  onClick?: (examId: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <p style={{ fontSize: "16px", lineHeight: "24px", margin: 0 }}>
+        {"\ud83d\udcdd"} Exam added!
+      </p>
+      <SimpleConfirmationCard
+        title={payload.title}
+        subtitle={payload.examDateTimeLabel}
+        meta={`${payload.subjectLabel} • ${payload.locationLabel}`}
+        icon={payload.icon}
+        ctaLabel={payload.ctaLabel}
+        onClick={() => onClick?.(payload.examId)}
+      />
+    </div>
+  );
+}
+
 function FreeTimeRecommendationCard({
   payload,
 }: {
@@ -217,7 +383,7 @@ function FreeTimeRecommendationCard({
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {payload.recommendations.map((recommendation, index) => (
             <div
-              key={`${recommendation.assignmentId ?? recommendation.title}-${index}`}
+              key={`${recommendation.entityId ?? recommendation.title}-${index}`}
               style={{
                 display: "flex",
                 alignItems: "flex-start",
@@ -273,7 +439,7 @@ function FreeTimeRecommendationCard({
                     margin: "2px 0 0 0",
                   }}
                 >
-                  {recommendation.subjectLabel}
+                  {recommendation.typeLabel} • {recommendation.subjectLabel}
                 </p>
               </div>
             </div>
@@ -297,6 +463,8 @@ function FreeTimeRecommendationCard({
 export function ChatBubble({
   message,
   onAssignmentCtaClick,
+  onClassCtaClick,
+  onExamCtaClick,
   onExpenseCtaClick,
 }: ChatBubbleProps) {
   if (message.role === "user") {
@@ -412,6 +580,18 @@ export function ChatBubble({
             variant="chat_confirmation"
             confirmation={message.payload}
             onCtaClick={onAssignmentCtaClick}
+          />
+        ) : null}
+        {message.kind === "class_confirmation" ? (
+          <ClassConfirmationCard
+            payload={message.payload}
+            onClick={onClassCtaClick}
+          />
+        ) : null}
+        {message.kind === "exam_confirmation" ? (
+          <ExamConfirmationCard
+            payload={message.payload}
+            onClick={onExamCtaClick}
           />
         ) : null}
         {message.kind === "expense_confirmation" ? (

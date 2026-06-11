@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { Icon } from "@/components/ui/Icon";
+import { useAssignments } from "@/hooks/use-assignments";
+import { useClasses } from "@/hooks/use-classes";
+import { useExams } from "@/hooks/use-exams";
+import { useExpenses } from "@/hooks/use-expenses";
+import { getUpcomingDashboardDeadlines } from "@/lib/api/deadlines";
 import type {
   BudgetStatus,
   DashboardDeadlinePreview,
@@ -12,13 +17,13 @@ import type {
 } from "@/lib/types";
 
 export interface DashboardClientProps {
-  todayClasses: ScheduleAgendaItem[];
-  upcomingDeadlines: DashboardDeadlinePreview[];
-  budget: BudgetStatus | null;
-  scheduleAvailable: boolean;
-  deadlinesAvailable: boolean;
-  deadlinesPartiallyAvailable: boolean;
-  budgetAvailable: boolean;
+  todayClasses?: ScheduleAgendaItem[];
+  upcomingDeadlines?: DashboardDeadlinePreview[];
+  budget?: BudgetStatus | null;
+  scheduleAvailable?: boolean;
+  deadlinesAvailable?: boolean;
+  deadlinesPartiallyAvailable?: boolean;
+  budgetAvailable?: boolean;
 }
 
 function DashboardSectionFallback({
@@ -83,15 +88,39 @@ function DashboardSectionFallback({
 }
 
 export default function DashboardClient({
-  todayClasses,
-  upcomingDeadlines,
-  budget,
+  todayClasses: initialTodayClasses = [],
+  upcomingDeadlines: initialUpcomingDeadlines = [],
+  budget = null,
   scheduleAvailable,
   deadlinesAvailable,
   deadlinesPartiallyAvailable,
   budgetAvailable,
 }: DashboardClientProps) {
   const router = useRouter();
+  const classesState = useClasses();
+  const assignmentsState = useAssignments();
+  const examsState = useExams();
+  const expensesState = useExpenses();
+  const todayClasses =
+    initialTodayClasses.length > 0
+      ? initialTodayClasses
+      : classesState.scheduleWeek.todayClasses;
+  const upcomingDeadlines =
+    initialUpcomingDeadlines.length > 0
+      ? initialUpcomingDeadlines
+      : getUpcomingDashboardDeadlines(
+          assignmentsState.assignments,
+          examsState.exams,
+        );
+  const resolvedBudget = budget ?? expensesState.budgetStatus;
+  const resolvedScheduleAvailable = scheduleAvailable ?? classesState.available;
+  const resolvedDeadlinesAvailable =
+    deadlinesAvailable ?? (assignmentsState.available || examsState.available);
+  const resolvedDeadlinesPartiallyAvailable =
+    deadlinesPartiallyAvailable ??
+    (resolvedDeadlinesAvailable &&
+      !(assignmentsState.available && examsState.available));
+  const resolvedBudgetAvailable = budgetAvailable ?? expensesState.budgetAvailable;
   const aiIconRef = useRef<HTMLDivElement>(null);
   const [isOnline, setIsOnline] = useState(() => {
     if (typeof navigator === "undefined") {
@@ -352,7 +381,7 @@ export default function DashboardClient({
                   {todayClasses.length} Session{todayClasses.length === 1 ? "" : "s"}
                 </span>
               </div>
-              {!scheduleAvailable ? (
+              {!resolvedScheduleAvailable ? (
                 <DashboardSectionFallback
                   icon="cloud_off"
                   title="Classes are unavailable"
@@ -473,7 +502,7 @@ export default function DashboardClient({
                 <Icon name="assignment_late" style={{ color: "#ba1a1a" }} />
                 UPCOMING DEADLINES
               </h3>
-              {!deadlinesAvailable ? (
+              {!resolvedDeadlinesAvailable ? (
                 <DashboardSectionFallback
                   icon="assignment_late"
                   title="Deadlines are unavailable"
@@ -487,7 +516,7 @@ export default function DashboardClient({
                     gap: "12px",
                   }}
                 >
-                  {deadlinesPartiallyAvailable ? (
+                  {resolvedDeadlinesPartiallyAvailable ? (
                     <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-left text-sm font-medium text-[#825100] shadow-sm">
                       Some deadlines may be missing right now, but available items
                       are still shown below.
@@ -597,7 +626,7 @@ export default function DashboardClient({
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  {deadlinesPartiallyAvailable ? (
+                  {resolvedDeadlinesPartiallyAvailable ? (
                     <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-left text-sm font-medium text-[#825100] shadow-sm">
                       Some deadlines may be missing right now, but no upcoming items
                       are available from the data we could load.
@@ -612,8 +641,8 @@ export default function DashboardClient({
               )}
             </section>
 
-            {budgetAvailable && budget ? (
-              <BudgetProgressCard variant="dashboard" budget={budget} />
+            {resolvedBudgetAvailable && resolvedBudget ? (
+              <BudgetProgressCard variant="dashboard" budget={resolvedBudget} />
             ) : (
               <section
                 className="academic-shadow"
@@ -643,14 +672,14 @@ export default function DashboardClient({
                   BUDGET STATUS
                 </h3>
                 <DashboardSectionFallback
-                  icon={budgetAvailable ? "wallet" : "sync_problem"}
+                  icon={resolvedBudgetAvailable ? "wallet" : "sync_problem"}
                   title={
-                    budgetAvailable
+                    resolvedBudgetAvailable
                       ? "No budget set yet"
                       : "Budget could not be loaded"
                   }
                   message={
-                    budgetAvailable
+                    resolvedBudgetAvailable
                       ? "Create an active budget cycle to see your allowance summary here."
                       : "We couldn't render your budget summary right now, but the rest of the dashboard is still working."
                   }

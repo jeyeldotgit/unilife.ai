@@ -6,13 +6,13 @@ import {
   useTransition,
   type FormEvent,
 } from "react";
-import { useRouter } from "next/navigation";
-import { createScheduleClass } from "@/actions/schedule";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ClassBlock } from "@/components/ui/ClassBlock";
 import { ClassDetailSheet } from "@/components/ui/ClassDetailSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
+import { useClasses } from "@/hooks/use-classes";
+import { createClassLocal } from "@/lib/mutations/local-data";
 import type {
   CreateClassInput,
   DayOfWeek,
@@ -70,8 +70,8 @@ const COLOR_OPTIONS: Array<{
 ];
 
 export interface ScheduleClientProps {
-  scheduleWeek: ScheduleWeek | null;
-  scheduleAvailable: boolean;
+  scheduleWeek?: ScheduleWeek | null;
+  scheduleAvailable?: boolean;
 }
 
 function FreeWindowInner() {
@@ -323,10 +323,12 @@ function AddClassSheet({
 }
 
 export default function ScheduleClient({
-  scheduleWeek,
-  scheduleAvailable,
+  scheduleWeek: initialScheduleWeek,
+  scheduleAvailable: initialScheduleAvailable,
 }: ScheduleClientProps) {
-  const router = useRouter();
+  const classesState = useClasses();
+  const scheduleWeek = initialScheduleWeek ?? classesState.scheduleWeek;
+  const scheduleAvailable = initialScheduleAvailable ?? classesState.available;
   const dayOptions =
     scheduleWeek && scheduleWeek.days.length > 0
       ? scheduleWeek.days
@@ -398,17 +400,20 @@ export default function ScheduleClient({
 
     startTransition(() => {
       void (async () => {
-        const result = await createScheduleClass(payload);
-
-        if (!result.ok) {
-          setSubmitError(result.error ?? "We couldn't save the class right now.");
+        try {
+          await createClassLocal(payload);
+        } catch (error) {
+          setSubmitError(
+            error instanceof Error
+              ? error.message
+              : "We couldn't save the class right now.",
+          );
           return;
         }
 
         setAddSheetOpen(false);
         setSelectedDetail(null);
         setSubmitError(null);
-        router.refresh();
       })();
     });
   };

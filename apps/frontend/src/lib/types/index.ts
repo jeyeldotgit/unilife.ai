@@ -302,6 +302,25 @@ export type ChatAssignmentConfirmationPayload = {
   icon: string;
 };
 
+export type ChatClassConfirmationPayload = {
+  classId: string;
+  subject: string;
+  meetingLabel: string;
+  locationLabel: string;
+  ctaLabel: string;
+  icon: string;
+};
+
+export type ChatExamConfirmationPayload = {
+  examId: string;
+  title: string;
+  subjectLabel: string;
+  examDateTimeLabel: string;
+  locationLabel: string;
+  ctaLabel: string;
+  icon: string;
+};
+
 export type ChatExpenseConfirmationPayload = {
   expenseId: string;
   label: string;
@@ -316,10 +335,12 @@ export type ChatExpenseConfirmationPayload = {
 };
 
 export type ChatFreeTimeRecommendationItem = {
-  assignmentId: string | null;
+  entityId: string | null;
+  kind: "assignment" | "exam";
   title: string;
   dueLabel: string;
   subjectLabel: string;
+  typeLabel: string;
   priorityLabel: string;
   icon: string;
 };
@@ -336,6 +357,16 @@ export type ChatAssignmentConfirmationMessage = ChatMessageBase & {
   payload: ChatAssignmentConfirmationPayload;
 };
 
+export type ChatClassConfirmationMessage = ChatMessageBase & {
+  kind: "class_confirmation";
+  payload: ChatClassConfirmationPayload;
+};
+
+export type ChatExamConfirmationMessage = ChatMessageBase & {
+  kind: "exam_confirmation";
+  payload: ChatExamConfirmationPayload;
+};
+
 export type ChatExpenseConfirmationMessage = ChatMessageBase & {
   kind: "expense_confirmation";
   payload: ChatExpenseConfirmationPayload;
@@ -349,6 +380,8 @@ export type ChatFreeTimeRecommendationMessage = ChatMessageBase & {
 export type ChatMessage =
   | ChatTextMessage
   | ChatAssignmentConfirmationMessage
+  | ChatClassConfirmationMessage
+  | ChatExamConfirmationMessage
   | ChatExpenseConfirmationMessage
   | ChatFreeTimeRecommendationMessage;
 
@@ -362,7 +395,26 @@ export type SendChatMessageInput = {
   createdAt?: string;
 };
 
+export type ChatClientEffect =
+  | {
+      kind: "create_assignment";
+      payload: CreateAssignmentInput;
+    }
+  | {
+      kind: "create_class";
+      payload: CreateClassInput;
+    }
+  | {
+      kind: "create_exam";
+      payload: CreateExamInput;
+    }
+  | {
+      kind: "log_expense";
+      payload: LogExpenseInput;
+    };
+
 export type ChatSendResult = {
+  clientEffect?: ChatClientEffect;
   userMessage: ChatTextMessage;
   responseMessage: ChatMessage;
 };
@@ -376,6 +428,17 @@ export type CreateClassInput = {
   room?: string | null;
   instructor?: string | null;
   color?: ScheduleColor;
+};
+
+export type UpdateClassInput = {
+  color?: string | null;
+  dayOfWeek?: DayOfWeek;
+  endTime?: string;
+  instructor?: string | null;
+  isActive?: boolean;
+  room?: string | null;
+  startTime?: string;
+  subject?: string;
 };
 
 export type OnboardingBudgetInput = {

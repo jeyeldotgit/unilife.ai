@@ -1,12 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import {
-  createExamAction,
-  deleteExamAction,
-  updateExamAction,
-} from "@/actions/exams";
 import {
   createEmptyExamFormState,
   createExamFormStateFromExam,
@@ -19,15 +13,21 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ExamCard } from "@/components/ui/ExamCard";
 import { Icon } from "@/components/ui/Icon";
 import { TasksRouteSwitcher } from "@/components/ui/TasksRouteSwitcher";
+import { useExams } from "@/hooks/use-exams";
+import {
+  createExamLocal,
+  deleteExamLocal,
+  updateExamLocal,
+} from "@/lib/mutations/local-data";
 import type { ClassOption, Exam } from "@/lib/types";
 
 type FilterTab = "Upcoming" | "Past";
 
 export interface ExamsClientProps {
-  exams: Exam[];
-  classOptions: ClassOption[];
-  examsAvailable: boolean;
-  classesAvailable: boolean;
+  exams?: Exam[];
+  classOptions?: ClassOption[];
+  examsAvailable?: boolean;
+  classesAvailable?: boolean;
 }
 
 function isUpcomingExam(exam: Exam) {
@@ -39,12 +39,17 @@ function sortExams(left: Exam, right: Exam) {
 }
 
 export default function ExamsClient({
-  exams: initialExams,
-  classOptions,
+  exams: initialExams = [],
+  classOptions = [],
   examsAvailable,
   classesAvailable,
 }: ExamsClientProps) {
-  const router = useRouter();
+  const examsState = useExams();
+  const resolvedExams = initialExams.length > 0 ? initialExams : examsState.exams;
+  const resolvedClassOptions =
+    classOptions.length > 0 ? classOptions : examsState.classOptions;
+  const resolvedExamsAvailable = examsAvailable ?? examsState.available;
+  const resolvedClassesAvailable = classesAvailable ?? examsState.classesAvailable;
   const [activeFilter, setActiveFilter] = useState<FilterTab>("Upcoming");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -58,11 +63,11 @@ export default function ExamsClient({
   >(null);
   const [isBusy, setIsBusy] = useState(false);
 
-  const upcomingExams = initialExams
+  const upcomingExams = resolvedExams
     .filter(isUpcomingExam)
     .slice()
     .sort(sortExams);
-  const pastExams = initialExams
+  const pastExams = resolvedExams
     .filter((exam) => !isUpcomingExam(exam))
     .slice()
     .sort((left, right) => sortExams(right, left));
@@ -126,28 +131,30 @@ export default function ExamsClient({
     setIsBusy(true);
 
     void (async () => {
-      const result =
-        formMode === "create"
-          ? await createExamAction(payload)
-          : selectedExam
-            ? await updateExamAction(selectedExam.id, payload)
-            : { ok: false, error: "No exam selected." };
+      try {
+        if (formMode === "create") {
+          await createExamLocal(payload);
+          setSelectedExam(null);
+        } else if (selectedExam) {
+          const exam = await updateExamLocal(selectedExam.id, payload);
+          setSelectedExam(exam);
+        } else {
+          setErrorMessage("No exam selected.");
+          return;
+        }
 
-      setPendingAction(null);
-      setIsBusy(false);
-
-      if (!result.ok) {
-        setErrorMessage(result.error ?? "We couldn't save the exam right now.");
-        return;
+        setFormOpen(false);
+        resetForm();
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "We couldn't save the exam right now.",
+        );
+      } finally {
+        setPendingAction(null);
+        setIsBusy(false);
       }
-
-      if (result.exam) {
-        setSelectedExam(formMode === "edit" ? result.exam : null);
-      }
-
-      setFormOpen(false);
-      resetForm();
-      router.refresh();
     })();
   };
 
@@ -157,24 +164,31 @@ export default function ExamsClient({
     setIsBusy(true);
 
     void (async () => {
-      const result = await deleteExamAction(exam.id);
+      try {
+        const deleted = await deleteExamLocal(exam.id);
 
-      setPendingAction(null);
-      setIsBusy(false);
+        if (!deleted) {
+          setErrorMessage("We couldn't delete that exam right now.");
+          return;
+        }
 
-      if (!result.ok) {
-        setErrorMessage(result.error ?? "We couldn't delete that exam right now.");
-        return;
+        setSelectedExam(null);
+        setFormOpen(false);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "We couldn't delete that exam right now.",
+        );
+      } finally {
+        setPendingAction(null);
+        setIsBusy(false);
       }
-
-      setSelectedExam(null);
-      setFormOpen(false);
-      router.refresh();
     })();
   };
 
   const renderExamsContent = () => {
-    if (!examsAvailable) {
+    if (!resolvedExamsAvailable) {
       return (
         <div className="flex flex-col gap-4">
           <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-sm font-medium text-[#825100] shadow-sm">
@@ -204,7 +218,7 @@ export default function ExamsClient({
       );
     }
 
-    if (initialExams.length === 0) {
+    if (resolvedExams.length === 0) {
       return (
         <EmptyState
           icon="quiz"
@@ -302,7 +316,7 @@ export default function ExamsClient({
           </div>
         </section>
 
-        {!classesAvailable ? (
+        {!resolvedClassesAvailable ? (
           <div className="mb-4 rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-sm font-medium text-[#825100] shadow-sm">
             Class links are temporarily unavailable. Exams can still be created
             and edited without linking a class.
@@ -344,8 +358,8 @@ export default function ExamsClient({
       <ExamFormSheet
         open={formOpen}
         mode={formMode}
-        classOptions={classOptions}
-        classesAvailable={classesAvailable}
+        classOptions={resolvedClassOptions}
+        classesAvailable={resolvedClassesAvailable}
         formState={formState}
         error={errorMessage}
         pending={isBusy && (pendingAction === "create" || pendingAction === "edit")}

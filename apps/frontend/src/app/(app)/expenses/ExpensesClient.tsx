@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { deleteExpenseAction } from "@/actions/expenses";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
+import { useExpenses } from "@/hooks/use-expenses";
+import { deleteExpenseLocal } from "@/lib/mutations/local-data";
 import type {
   BudgetStatus,
   ExpenseCategoryTotal,
@@ -14,11 +14,11 @@ import type {
 } from "@/lib/types";
 
 export interface ExpensesClientProps {
-  groups: ExpenseDayGroup[];
-  categoryTotals: ExpenseCategoryTotal[];
-  budget: BudgetStatus | null;
-  expensesAvailable: boolean;
-  budgetAvailable: boolean;
+  groups?: ExpenseDayGroup[];
+  categoryTotals?: ExpenseCategoryTotal[];
+  budget?: BudgetStatus | null;
+  expensesAvailable?: boolean;
+  budgetAvailable?: boolean;
 }
 
 function BudgetFallbackCard() {
@@ -80,14 +80,23 @@ function NoBudgetCard() {
 }
 
 export default function ExpensesClient({
-  groups: initialGroups,
-  categoryTotals,
-  budget,
+  groups: initialGroups = [],
+  categoryTotals = [],
+  budget = null,
   expensesAvailable,
   budgetAvailable,
 }: ExpensesClientProps) {
-  const router = useRouter();
-  const [groups, setGroups] = useState<ExpenseDayGroup[]>(initialGroups);
+  const expensesState = useExpenses();
+  const groups = initialGroups.length > 0 ? initialGroups : expensesState.snapshot.groups;
+  const resolvedCategoryTotals =
+    categoryTotals.length > 0
+      ? categoryTotals
+      : expensesState.snapshot.categoryTotals.filter((categoryTotal) =>
+          ["food", "school", "transportation"].includes(categoryTotal.category),
+        );
+  const resolvedBudget = budget ?? expensesState.budgetStatus;
+  const resolvedExpensesAvailable = expensesAvailable ?? expensesState.available;
+  const resolvedBudgetAvailable = budgetAvailable ?? expensesState.budgetAvailable;
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -100,36 +109,34 @@ export default function ExpensesClient({
     });
 
     window.setTimeout(() => {
-      setGroups((prev) =>
-        prev
-          .map((group) => ({
-            ...group,
-            expenses: group.expenses.filter((expense) => expense.id !== id),
-          }))
-          .filter((group) => group.expenses.length > 0),
-      );
+      setRemovingIds((prev) => new Set(prev));
     }, 300);
 
     void (async () => {
-      const result = await deleteExpenseAction(id);
+      try {
+        const deleted = await deleteExpenseLocal(id);
 
-      setRemovingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-
-      if (!result.ok) {
-        setGroups(initialGroups);
-        setErrorMessage(result.error ?? "We couldn't delete that expense right now.");
+        if (!deleted) {
+          setErrorMessage("We couldn't delete that expense right now.");
+        }
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "We couldn't delete that expense right now.",
+        );
+      } finally {
+        setRemovingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
-
-      router.refresh();
     })();
   };
 
   const renderRecentExpenses = () => {
-    if (!expensesAvailable) {
+    if (!resolvedExpensesAvailable) {
       return (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-sm font-medium text-[#825100] shadow-sm">
@@ -223,9 +230,9 @@ export default function ExpensesClient({
       />
 
       <main className="mx-auto max-w-2xl space-y-6 px-4 pt-4">
-        {budgetAvailable && budget ? (
-          <BudgetProgressCard variant="expenses" budget={budget} />
-        ) : budgetAvailable ? (
+        {resolvedBudgetAvailable && resolvedBudget ? (
+          <BudgetProgressCard variant="expenses" budget={resolvedBudget} />
+        ) : resolvedBudgetAvailable ? (
           <NoBudgetCard />
         ) : (
           <BudgetFallbackCard />
@@ -236,7 +243,7 @@ export default function ExpensesClient({
             Spending by Category
           </h3>
           <div className="grid grid-cols-2 gap-3">
-            {categoryTotals.map((category) =>
+            {resolvedCategoryTotals.map((category) =>
               category.wide ? (
                 <div
                   key={category.category}
