@@ -362,7 +362,22 @@ export type SendChatMessageInput = {
   createdAt?: string;
 };
 
+export type ChatClientEffect =
+  | {
+      kind: "create_assignment";
+      payload: CreateAssignmentInput;
+    }
+  | {
+      kind: "create_class";
+      payload: CreateClassInput;
+    }
+  | {
+      kind: "log_expense";
+      payload: LogExpenseInput;
+    };
+
 export type ChatSendResult = {
+  clientEffect?: ChatClientEffect;
   userMessage: ChatTextMessage;
   responseMessage: ChatMessage;
 };
@@ -376,6 +391,17 @@ export type CreateClassInput = {
   room?: string | null;
   instructor?: string | null;
   color?: ScheduleColor;
+};
+
+export type UpdateClassInput = {
+  color?: string | null;
+  dayOfWeek?: DayOfWeek;
+  endTime?: string;
+  instructor?: string | null;
+  isActive?: boolean;
+  room?: string | null;
+  startTime?: string;
+  subject?: string;
 };
 
 export type OnboardingBudgetInput = {

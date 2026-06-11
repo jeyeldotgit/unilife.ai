@@ -9,6 +9,16 @@ import { QuickActions } from "@/components/chat/QuickActions";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
+import {
+  buildAssignmentConfirmation,
+  buildExpenseConfirmation,
+} from "@/lib/chat/local-confirmations";
+import {
+  createAssignmentLocal,
+  createClassLocal,
+  getBudgetStatusLocal,
+  logExpenseLocal,
+} from "@/lib/mutations/local-data";
 import type { ChatMessage, ChatQuickAction, ChatTextMessage } from "@/lib/types";
 
 export type ChatClientProps = {
@@ -122,7 +132,58 @@ export default function ChatClient({
     });
 
     if (result.ok) {
-      setMessages((current) => [...current, result.responseMessage]);
+      if (result.clientEffect?.kind === "create_assignment") {
+        try {
+          const assignment = await createAssignmentLocal(result.clientEffect.payload);
+          setMessages((current) => [
+            ...current,
+            buildAssignmentConfirmation(assignment),
+          ]);
+        } catch (error) {
+          setMessages((current) => [
+            ...current,
+            buildFailureMessage(
+              error instanceof Error
+                ? error.message
+                : "We couldn't save that assignment right now.",
+            ),
+          ]);
+        }
+      } else if (result.clientEffect?.kind === "create_class") {
+        try {
+          await createClassLocal(result.clientEffect.payload);
+          setMessages((current) => [...current, result.responseMessage]);
+        } catch (error) {
+          setMessages((current) => [
+            ...current,
+            buildFailureMessage(
+              error instanceof Error
+                ? error.message
+                : "We couldn't save that class right now.",
+            ),
+          ]);
+        }
+      } else if (result.clientEffect?.kind === "log_expense") {
+        try {
+          const expense = await logExpenseLocal(result.clientEffect.payload);
+          const budgetStatus = await getBudgetStatusLocal();
+          setMessages((current) => [
+            ...current,
+            buildExpenseConfirmation(expense, budgetStatus),
+          ]);
+        } catch (error) {
+          setMessages((current) => [
+            ...current,
+            buildFailureMessage(
+              error instanceof Error
+                ? error.message
+                : "We couldn't log that expense right now.",
+            ),
+          ]);
+        }
+      } else {
+        setMessages((current) => [...current, result.responseMessage]);
+      }
     } else {
       const responseMessage = result.responseMessage;
 

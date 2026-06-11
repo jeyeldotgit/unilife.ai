@@ -1,23 +1,21 @@
-import { createAssignment, getAssignments } from "@/lib/api/assignments";
-import { getBudgetChatContext, getBudgetStatus } from "@/lib/api/budget";
+import { getAssignments } from "@/lib/api/assignments";
+import { getBudgetChatContext } from "@/lib/api/budget";
 import { requestBackend } from "@/lib/api/client";
 import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
-import { logExpense } from "@/lib/api/expenses";
 import { getExams } from "@/lib/api/exams";
 import { getClasses } from "@/lib/api/schedule";
 import {
-  formatDueDateTimeLabel,
   formatTimeLabel,
   titleCase,
 } from "@/lib/api/utils";
 import type {
-  ChatAssignmentConfirmationMessage,
-  ChatExpenseConfirmationMessage,
+  ChatClientEffect,
   ChatFreeTimeRecommendationMessage,
   ChatQuickAction,
   ChatSendResult,
   ChatState,
   ChatTextMessage,
+  DayOfWeek,
   ExpenseCategory,
   SendChatMessageInput,
 } from "@/lib/types";
@@ -128,51 +126,6 @@ function buildTextMessage(text: string) {
   } satisfies ChatTextMessage;
 }
 
-function buildAssignmentConfirmation(
-  assignment: Awaited<ReturnType<typeof createAssignment>>,
-): ChatAssignmentConfirmationMessage {
-  return {
-    id: crypto.randomUUID(),
-    role: "ai",
-    kind: "assignment_confirmation",
-    createdAt: new Date().toISOString(),
-    payload: {
-      assignmentId: assignment.id,
-      title: assignment.title,
-      dueLabel: formatDueDateTimeLabel(assignment.dueAt),
-      subjectLabel: assignment.subject,
-      classLinkLabel:
-        assignment.subject === "No class" ? "No class linked" : assignment.subject,
-      ctaLabel: "View Assignment",
-      icon: "assignment",
-    },
-  };
-}
-
-function buildExpenseConfirmation(
-  expense: Awaited<ReturnType<typeof logExpense>>,
-  budgetStatus: Awaited<ReturnType<typeof getBudgetStatus>>,
-): ChatExpenseConfirmationMessage {
-  return {
-    id: crypto.randomUUID(),
-    role: "ai",
-    kind: "expense_confirmation",
-    createdAt: new Date().toISOString(),
-    payload: {
-      expenseId: expense.id,
-      label: expense.label,
-      amountLabel: expense.amountLabel,
-      categoryLabel: expense.categoryLabel,
-      spentAtLabel: `${expense.dayLabel}, ${expense.timeLabel}`,
-      budgetRemainingLabel: budgetStatus?.remainingLabel ?? "No active budget",
-      budgetTotalLabel: budgetStatus?.totalLabel ?? "No active budget",
-      progressPercent: budgetStatus?.progressPercent ?? 0,
-      ctaLabel: "View Expenses",
-      icon: "payments",
-    },
-  };
-}
-
 function buildFreeTimeRecommendation(
   response: AiChatResponse,
 ): ChatFreeTimeRecommendationMessage | null {
@@ -224,6 +177,30 @@ function normalizeExpenseLabelFromMessage(text: string) {
   return titleCase(match[1].trim());
 }
 
+function getDayIndex(dayOfWeek: DayOfWeek) {
+  const dayOrder: DayOfWeek[] = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ];
+
+  return dayOrder.indexOf(dayOfWeek);
+}
+
+function normalizeTimeValue(value: string) {
+  const withSecondsMatch = /^(\d{2}):(\d{2})(?::\d{2})$/.exec(value.trim());
+
+  if (withSecondsMatch) {
+    return `${withSecondsMatch[1]}:${withSecondsMatch[2]}`;
+  }
+
+  return value.trim();
+}
+
 function getAssignmentAction(action: Record<string, unknown> | null) {
   if (
     !action ||
@@ -266,6 +243,82 @@ function getExpenseAction(action: Record<string, unknown> | null) {
   };
 }
 
+function getClassAction(action: Record<string, unknown> | null) {
+  if (
+    !action ||
+    typeof action.subject !== "string" ||
+    typeof action.day_of_week !== "string" ||
+    typeof action.start_time !== "string" ||
+    typeof action.end_time !== "string"
+  ) {
+    return null;
+  }
+
+  const dayOfWeek = action.day_of_week as DayOfWeek;
+
+  return {
+    color: undefined,
+    dayIndex: getDayIndex(dayOfWeek),
+    dayOfWeek,
+    endTime: normalizeTimeValue(action.end_time),
+    startTime: normalizeTimeValue(action.start_time),
+    subject: action.subject,
+  };
+}
+
+function getClientEffect(
+  inputText: string,
+  response: AiChatResponse,
+): ChatClientEffect | undefined {
+  if (
+    response.intent === "create_assignment" &&
+    !response.requires_confirmation
+  ) {
+    const action = getAssignmentAction(response.action);
+
+    if (action) {
+      return {
+        kind: "create_assignment",
+        payload: {
+          classId: action.classId,
+          dueAt: action.dueAt,
+          title: action.title,
+        },
+      };
+    }
+  }
+
+  if (response.intent === "create_class" && !response.requires_confirmation) {
+    const action = getClassAction(response.action);
+
+    if (action) {
+      return {
+        kind: "create_class",
+        payload: action,
+      };
+    }
+  }
+
+  if (response.intent === "log_expense" && !response.requires_confirmation) {
+    const action = getExpenseAction(response.action);
+
+    if (action) {
+      return {
+        kind: "log_expense",
+        payload: {
+          amount: action.amount,
+          category: action.category,
+          label:
+            normalizeExpenseLabelFromMessage(inputText) ??
+            (action.category ? `${titleCase(action.category)} expense` : "Expense"),
+        },
+      };
+    }
+  }
+
+  return undefined;
+}
+
 export async function getChatState(): Promise<ChatState> {
   return {
     messages: [],
@@ -304,46 +357,6 @@ export async function sendMessage(
     },
   });
 
-  if (
-    response.intent === "create_assignment" &&
-    !response.requires_confirmation
-  ) {
-    const action = getAssignmentAction(response.action);
-
-    if (action) {
-      const createdAssignment = await createAssignment({
-        title: action.title,
-        dueAt: action.dueAt,
-        classId: action.classId,
-      });
-
-      return {
-        userMessage,
-        responseMessage: buildAssignmentConfirmation(createdAssignment),
-      };
-    }
-  }
-
-  if (response.intent === "log_expense" && !response.requires_confirmation) {
-    const action = getExpenseAction(response.action);
-
-    if (action) {
-      const createdExpense = await logExpense({
-        label:
-          normalizeExpenseLabelFromMessage(input.text) ??
-          (action.category ? `${titleCase(action.category)} expense` : "Expense"),
-        amount: action.amount,
-        category: action.category,
-      });
-      const budgetStatus = await getBudgetStatus();
-
-      return {
-        userMessage,
-        responseMessage: buildExpenseConfirmation(createdExpense, budgetStatus),
-      };
-    }
-  }
-
   if (response.intent === "free_time_finder") {
     const recommendation = buildFreeTimeRecommendation(response);
 
@@ -356,6 +369,7 @@ export async function sendMessage(
   }
 
   return {
+    clientEffect: getClientEffect(input.text, response),
     userMessage,
     responseMessage: buildTextMessage(response.message),
   };

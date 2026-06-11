@@ -184,6 +184,50 @@ function diffCalendarDays(startDate: string, endDateTime: string) {
   return Math.max(0, Math.floor((end.getTime() - start.getTime()) / dayMs));
 }
 
+function resolveRelativeDay(
+  value: string,
+  today: string,
+): z.infer<typeof dayOfWeekSchema> | null {
+  const normalized = value.trim().toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const directDay = dayOfWeekSchema.safeParse(normalized);
+
+  if (directDay.success) {
+    return directDay.data;
+  }
+
+  const todayDate = toUtcMidnight(today);
+
+  if (!todayDate) {
+    return null;
+  }
+
+  if (normalized === "today") {
+    return dayOfWeekSchema.enum[
+      ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][
+        todayDate.getUTCDay()
+      ] as keyof typeof dayOfWeekSchema.enum
+    ];
+  }
+
+  if (normalized === "tomorrow") {
+    const tomorrow = new Date(todayDate);
+    tomorrow.setUTCDate(todayDate.getUTCDate() + 1);
+
+    return dayOfWeekSchema.enum[
+      ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][
+        tomorrow.getUTCDay()
+      ] as keyof typeof dayOfWeekSchema.enum
+    ];
+  }
+
+  return null;
+}
+
 function normalizeCreateAssignmentAction(
   action: Record<string, unknown> | null,
 ) {
@@ -207,14 +251,22 @@ function normalizeCreateAssignmentAction(
   return normalized;
 }
 
-function normalizeCreateClassAction(action: Record<string, unknown> | null) {
+function normalizeCreateClassAction(
+  action: Record<string, unknown> | null,
+  context: AIChatContext,
+) {
   if (!action || typeof action.subject !== "string") {
     return null;
   }
 
-  const dayOfWeek = dayOfWeekSchema.safeParse(action.day_of_week);
+  const dayOfWeek =
+    typeof action.day_of_week === "string"
+      ? resolveRelativeDay(action.day_of_week, context.today)
+      : typeof action.day === "string"
+        ? resolveRelativeDay(action.day, context.today)
+        : null;
 
-  if (!dayOfWeek.success) {
+  if (!dayOfWeek) {
     return null;
   }
 
@@ -227,7 +279,7 @@ function normalizeCreateClassAction(action: Record<string, unknown> | null) {
 
   return {
     subject: action.subject,
-    day_of_week: dayOfWeek.data,
+    day_of_week: dayOfWeek,
     start_time: action.start_time,
     end_time: action.end_time,
   };
@@ -277,12 +329,13 @@ function normalizeLogExpenseAction(action: Record<string, unknown> | null) {
 function normalizeAction(
   intent: GeminiIntent,
   action: Record<string, unknown> | null,
+  context: AIChatContext,
 ) {
   switch (intent) {
     case "create_assignment":
       return normalizeCreateAssignmentAction(action);
     case "create_class":
-      return normalizeCreateClassAction(action);
+      return normalizeCreateClassAction(action, context);
     case "create_exam":
       return normalizeCreateExamAction(action);
     case "log_expense":
@@ -430,7 +483,7 @@ export class AIService {
         context: input.context,
       });
       const action = sanitizeActionRecord(raw.action);
-      const normalizedAction = normalizeAction(raw.intent, action);
+      const normalizedAction = normalizeAction(raw.intent, action, input.context);
       const response = aiChatResponseSchema.parse({
         intent: raw.intent,
         action: isStructuredIntent(raw.intent) ? normalizedAction : null,
@@ -444,7 +497,7 @@ export class AIService {
             ? buildFreeTime(input.context)
             : undefined,
         requires_confirmation:
-          raw.intent === "create_class" ||
+          (isStructuredIntent(raw.intent) && normalizedAction === null) ||
           (isStructuredIntent(raw.intent) &&
             raw.confidence < AI_CONFIDENCE_THRESHOLD),
       });
