@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "pnpm --filter @unilife-ai/parser build",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -16,6 +17,7 @@
     "@trpc/client": "^11.17.0",
     "@trpc/react-query": "^11.17.0",
     "@unilife-ai/types": "workspace:*",
+    "@unilife-ai/parser": "workspace:*",
     "dexie": "^4.4.3",
     "next": "16.2.7",
     "react": "19.2.4",
