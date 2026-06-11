@@ -11,11 +11,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import {
   buildAssignmentConfirmation,
+  buildClassConfirmation,
+  buildExamConfirmation,
   buildExpenseConfirmation,
 } from "@/lib/chat/local-confirmations";
 import {
   createAssignmentLocal,
   createClassLocal,
+  createExamLocal,
   getBudgetStatusLocal,
   logExpenseLocal,
 } from "@/lib/mutations/local-data";
@@ -151,8 +154,18 @@ export default function ChatClient({
         }
       } else if (result.clientEffect?.kind === "create_class") {
         try {
-          await createClassLocal(result.clientEffect.payload);
-          setMessages((current) => [...current, result.responseMessage]);
+          const classRecord = await createClassLocal(result.clientEffect.payload);
+          setMessages((current) => [
+            ...current,
+            buildClassConfirmation({
+              id: classRecord.id,
+              subject: classRecord.subject,
+              dayOfWeek: classRecord.day_of_week,
+              startTime: classRecord.start_time,
+              endTime: classRecord.end_time,
+              room: classRecord.room,
+            }),
+          ]);
         } catch (error) {
           setMessages((current) => [
             ...current,
@@ -160,6 +173,20 @@ export default function ChatClient({
               error instanceof Error
                 ? error.message
                 : "We couldn't save that class right now.",
+            ),
+          ]);
+        }
+      } else if (result.clientEffect?.kind === "create_exam") {
+        try {
+          const exam = await createExamLocal(result.clientEffect.payload);
+          setMessages((current) => [...current, buildExamConfirmation(exam)]);
+        } catch (error) {
+          setMessages((current) => [
+            ...current,
+            buildFailureMessage(
+              error instanceof Error
+                ? error.message
+                : "We couldn't save that exam right now.",
             ),
           ]);
         }
@@ -298,6 +325,8 @@ export default function ChatClient({
                   key={message.id}
                   message={message}
                   onAssignmentCtaClick={() => router.push("/assignments")}
+                  onClassCtaClick={() => router.push("/schedule")}
+                  onExamCtaClick={() => router.push("/exams")}
                   onExpenseCtaClick={() => router.push("/expenses")}
                 />
               ))

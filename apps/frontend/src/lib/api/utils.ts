@@ -157,7 +157,11 @@ export function inferExpenseCategory(label: string): ExpenseCategory {
     normalized.includes("bus") ||
     normalized.includes("jeep") ||
     normalized.includes("commute") ||
-    normalized.includes("transport")
+    normalized.includes("transport") ||
+    normalized.includes("transpo") ||
+    normalized.includes("grab") ||
+    normalized.includes("taxi") ||
+    normalized.includes("trike")
   ) {
     return "transportation";
   }

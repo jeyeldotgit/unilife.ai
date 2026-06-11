@@ -5,7 +5,9 @@ import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
 import { getExams } from "@/lib/api/exams";
 import { getClasses } from "@/lib/api/schedule";
 import {
+  inferExpenseCategory,
   formatTimeLabel,
+  getDayIndex as getScheduleDayIndex,
   titleCase,
 } from "@/lib/api/utils";
 import type {
@@ -147,13 +149,15 @@ function buildFreeTimeRecommendation(
         ? `${response.free_time.next_class_subject} starts at ${response.free_time.next_class_time}`
         : "No more classes are scheduled after this window.",
       recommendations: response.free_time.suggested_tasks.map((task) => ({
-        assignmentId: task.type === "assignment" ? task.title : null,
+        entityId: null,
+        kind: task.type,
         title: task.title,
         dueLabel:
           task.urgency_days <= 1
             ? "Due within 1 day"
             : `Due in ${task.urgency_days} days`,
         subjectLabel: task.type === "exam" ? "Exam" : "Assignment",
+        typeLabel: task.type === "exam" ? "Exam" : "Assignment",
         priorityLabel:
           task.urgency_days <= 2
             ? "High priority"
@@ -178,17 +182,7 @@ function normalizeExpenseLabelFromMessage(text: string) {
 }
 
 function getDayIndex(dayOfWeek: DayOfWeek) {
-  const dayOrder: DayOfWeek[] = [
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-  ];
-
-  return dayOrder.indexOf(dayOfWeek);
+  return getScheduleDayIndex(dayOfWeek);
 }
 
 function normalizeTimeValue(value: string) {
@@ -244,26 +238,127 @@ function getExpenseAction(action: Record<string, unknown> | null) {
 }
 
 function getClassAction(action: Record<string, unknown> | null) {
+  const resolvedDay =
+    typeof action?.day_of_week === "string"
+      ? action.day_of_week
+      : typeof action?.day === "string"
+        ? action.day
+        : null;
+
   if (
     !action ||
     typeof action.subject !== "string" ||
-    typeof action.day_of_week !== "string" ||
+    typeof resolvedDay !== "string" ||
     typeof action.start_time !== "string" ||
     typeof action.end_time !== "string"
   ) {
     return null;
   }
 
-  const dayOfWeek = action.day_of_week as DayOfWeek;
+  const dayOfWeek = resolvedDay as DayOfWeek;
+  const dayIndex = getDayIndex(dayOfWeek);
+
+  if (dayIndex < 0) {
+    return null;
+  }
 
   return {
     color: undefined,
-    dayIndex: getDayIndex(dayOfWeek),
+    dayIndex,
     dayOfWeek,
     endTime: normalizeTimeValue(action.end_time),
     startTime: normalizeTimeValue(action.start_time),
     subject: action.subject,
   };
+}
+
+function getExamAction(action: Record<string, unknown> | null) {
+  if (
+    !action ||
+    typeof action.exam_date !== "string" ||
+    typeof action.title !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    title: action.title,
+    examAt: action.exam_date,
+    classId:
+      typeof action.class_id === "string" || action.class_id === null
+        ? action.class_id
+        : null,
+    description:
+      typeof action.description === "string" || action.description === null
+        ? action.description
+        : undefined,
+    location:
+      typeof action.location === "string" || action.location === null
+        ? action.location
+        : undefined,
+  };
+}
+
+function normalizeExpenseLabel(inputText: string, action: { category?: ExpenseCategory }) {
+  const normalizedFromMessage = normalizeExpenseLabelFromMessage(inputText);
+
+  if (normalizedFromMessage) {
+    return normalizedFromMessage;
+  }
+
+  const trimmedInput = inputText.trim();
+  const withoutTrailingAmount = trimmedInput.replace(/\s+\d+(?:\.\d{1,2})?\s*$/, "");
+  const semanticLabel = withoutTrailingAmount.trim() || trimmedInput;
+
+  if (semanticLabel) {
+    return titleCase(semanticLabel);
+  }
+
+  return action.category ? `${titleCase(action.category)} expense` : "Expense";
+}
+
+function getExpenseCategory(
+  inputText: string,
+  action: { category?: ExpenseCategory },
+  label: string,
+) {
+  if (action.category) {
+    return action.category;
+  }
+
+  const inferredFromInput = inferExpenseCategory(inputText);
+
+  if (inferredFromInput !== "miscellaneous") {
+    return inferredFromInput;
+  }
+
+  const inferredFromLabel = inferExpenseCategory(label);
+
+  if (inferredFromLabel !== "miscellaneous") {
+    return inferredFromLabel;
+  }
+
+  return "miscellaneous" as const;
+}
+
+function getClarifyingMessage(response: AiChatResponse) {
+  if (!response.requires_confirmation) {
+    return null;
+  }
+
+  if (response.intent === "create_class") {
+    return "I can add that class once I have the subject, day, start time, and end time.";
+  }
+
+  if (response.intent === "create_exam") {
+    return "I can add that exam once I have the title and exact exam date and time.";
+  }
+
+  if (response.intent === "log_expense") {
+    return "I can log that expense once I have the amount and what it was for.";
+  }
+
+  return null;
 }
 
 function getClientEffect(
@@ -299,18 +394,29 @@ function getClientEffect(
     }
   }
 
+  if (response.intent === "create_exam" && !response.requires_confirmation) {
+    const action = getExamAction(response.action);
+
+    if (action) {
+      return {
+        kind: "create_exam",
+        payload: action,
+      };
+    }
+  }
+
   if (response.intent === "log_expense" && !response.requires_confirmation) {
     const action = getExpenseAction(response.action);
 
     if (action) {
+      const label = normalizeExpenseLabel(inputText, action);
+
       return {
         kind: "log_expense",
         payload: {
           amount: action.amount,
-          category: action.category,
-          label:
-            normalizeExpenseLabelFromMessage(inputText) ??
-            (action.category ? `${titleCase(action.category)} expense` : "Expense"),
+          category: getExpenseCategory(inputText, action, label),
+          label,
         },
       };
     }
@@ -371,6 +477,8 @@ export async function sendMessage(
   return {
     clientEffect: getClientEffect(input.text, response),
     userMessage,
-    responseMessage: buildTextMessage(response.message),
+    responseMessage: buildTextMessage(
+      getClarifyingMessage(response) ?? response.message,
+    ),
   };
 }
