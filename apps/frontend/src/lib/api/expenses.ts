@@ -1,18 +1,32 @@
+import type { Expense as ExpenseRecord } from "@unilife-ai/types";
+
+import { requestBackend } from "@/lib/api/client";
+import {
+  findActiveBudget,
+  listBudgetRecords,
+  listExpenseRecords,
+} from "@/lib/api/finance-data";
+import {
+  formatAmount,
+  formatExpenseDayLabel,
+  formatTimeLabel,
+  getExpenseCategoryIcon,
+  getExpenseCategoryLabel,
+  inferExpenseCategory,
+  titleCase,
+} from "@/lib/api/utils";
 import type {
-  ApiRequestOptions,
   ExpenseCategory,
   ExpenseCategoryTotal,
   ExpenseDayGroup,
-  ExpensesSnapshot,
   ExpenseItem,
+  ExpensesSnapshot,
   LogExpenseInput,
 } from "@/lib/types";
-import {
-  appendMockExpense,
-  listMockExpenses,
-  removeMockExpense,
-} from "@/lib/mock/expenses";
-import { withMockLatency } from "@/lib/api/_mock";
+
+type ExpenseResponse = {
+  expense: ExpenseRecord | null;
+};
 
 const categoryOrder: ExpenseCategory[] = [
   "food",
@@ -56,11 +70,16 @@ const categoryMeta: Record<
   },
 };
 
-function formatAmount(amount: number) {
-  return `₱ ${amount.toLocaleString("en-PH", {
-    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`;
+function fallbackExpenseLabel(category: ExpenseCategory) {
+  return category === "food"
+    ? "Food expense"
+    : category === "school"
+      ? "School expense"
+      : category === "transportation"
+        ? "Transport expense"
+        : category === "entertainment"
+          ? "Entertainment expense"
+          : "Misc expense";
 }
 
 function sortByNewest(items: ExpenseItem[]) {
@@ -115,7 +134,30 @@ function buildCategoryTotals(items: ExpenseItem[]) {
   });
 }
 
-export function buildExpensesSnapshot(items = listMockExpenses()): ExpensesSnapshot {
+export function normalizeExpenseRecord(record: ExpenseRecord): ExpenseItem {
+  const label = record.description?.trim()
+    ? titleCase(record.description.trim())
+    : fallbackExpenseLabel(record.category);
+
+  return {
+    id: record.id,
+    label,
+    category: record.category,
+    categoryLabel: getExpenseCategoryLabel(record.category),
+    spentAt: record.spent_at,
+    dayLabel: formatExpenseDayLabel(record.spent_at),
+    timeLabel: formatTimeLabel(record.spent_at),
+    amount: record.amount,
+    amountLabel: formatAmount(record.amount),
+    icon: getExpenseCategoryIcon(record.category),
+    description: record.description,
+    budgetId: record.budget_id,
+  };
+}
+
+export function buildExpensesSnapshot(records: ExpenseRecord[]): ExpensesSnapshot {
+  const items = records.map(normalizeExpenseRecord);
+
   return {
     items: sortByNewest(items),
     groups: buildRecentGroups(items),
@@ -123,17 +165,53 @@ export function buildExpensesSnapshot(items = listMockExpenses()): ExpensesSnaps
   };
 }
 
-export async function getExpenses(options?: ApiRequestOptions) {
-  return withMockLatency(() => buildExpensesSnapshot(), options);
+export async function getExpenses() {
+  const budgets = await listBudgetRecords();
+  const activeBudget = findActiveBudget(budgets);
+  const expenses = await listExpenseRecords(
+    activeBudget
+      ? {
+          from: activeBudget.start_date,
+          to: activeBudget.end_date,
+        }
+      : undefined,
+  );
+
+  return buildExpensesSnapshot(expenses);
 }
 
 export async function logExpense(
   input: LogExpenseInput,
-  options?: ApiRequestOptions,
 ) {
-  return withMockLatency(() => appendMockExpense(input), options);
+  const budgets = await listBudgetRecords();
+  const activeBudget = findActiveBudget(budgets);
+  const category = input.category ?? inferExpenseCategory(input.label);
+  const timestamp = new Date().toISOString();
+  const response = await requestBackend<ExpenseResponse>("/api/expenses", {
+    method: "POST",
+    body: {
+      id: crypto.randomUUID(),
+      budget_id: activeBudget?.id ?? null,
+      amount: input.amount,
+      category,
+      description: input.label.trim(),
+      spent_at: input.spentAt ?? timestamp,
+      created_at: timestamp,
+      updated_at: timestamp,
+    },
+  });
+
+  if (!response.expense) {
+    throw new Error("The backend did not return the created expense.");
+  }
+
+  return normalizeExpenseRecord(response.expense);
 }
 
-export async function deleteExpense(id: string, options?: ApiRequestOptions) {
-  return withMockLatency(() => removeMockExpense(id), options);
+export async function deleteExpense(id: string) {
+  const response = await requestBackend<{ ok: boolean }>(`/api/expenses/${id}`, {
+    method: "DELETE",
+  });
+
+  return response.ok;
 }

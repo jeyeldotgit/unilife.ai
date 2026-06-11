@@ -1,8 +1,15 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-import type { GeminiCallRequest, GeminiChatResponse } from "./parsers/response-parser.js";
+import type {
+  GeminiCallRequest,
+  GeminiChatResponse,
+} from "./parsers/response-parser.js";
 import { parseGeminiResponse } from "./parsers/response-parser.js";
 import { buildAiChatSystemPrompt } from "./prompts/system-prompt.js";
+
+function getGeminiModel() {
+  return process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash-lite";
+}
 
 function createPrompt(request: GeminiCallRequest) {
   const contextJson = JSON.stringify(request.context ?? {}, null, 2);
@@ -17,7 +24,9 @@ function createPrompt(request: GeminiCallRequest) {
   ].join("\n\n");
 }
 
-export async function callGemini(request: GeminiCallRequest): Promise<GeminiChatResponse> {
+export async function callGemini(
+  request: GeminiCallRequest,
+): Promise<GeminiChatResponse> {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -26,7 +35,7 @@ export async function callGemini(request: GeminiCallRequest): Promise<GeminiChat
 
   const client = new GoogleGenerativeAI(apiKey);
   const model = client.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: getGeminiModel(),
     generationConfig: {
       temperature: 0.2,
       maxOutputTokens: 1024,

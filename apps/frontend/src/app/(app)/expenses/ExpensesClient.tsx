@@ -50,6 +50,35 @@ function BudgetFallbackCard() {
   );
 }
 
+function NoBudgetCard() {
+  return (
+    <section
+      className="rounded-xl p-5 shadow-sm"
+      style={{
+        background: "rgba(255,255,255,0.7)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        border: "1px solid rgba(229,231,235,0.5)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-[#d8e2ff] text-[#0058be]">
+          <Icon name="account_balance_wallet" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-[#191c1d]">
+            No budget set yet
+          </h2>
+          <p className="mt-1 text-sm font-medium text-[#424754]">
+            You can still browse expenses now. Your allowance summary will appear
+            after you create an active budget cycle.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function ExpensesClient({
   groups: initialGroups,
   categoryTotals,
@@ -196,6 +225,8 @@ export default function ExpensesClient({
       <main className="mx-auto max-w-2xl space-y-6 px-4 pt-4">
         {budgetAvailable && budget ? (
           <BudgetProgressCard variant="expenses" budget={budget} />
+        ) : budgetAvailable ? (
+          <NoBudgetCard />
         ) : (
           <BudgetFallbackCard />
         )}

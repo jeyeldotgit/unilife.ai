@@ -15,6 +15,13 @@
       "when": 1780471129861,
       "tag": "0001_nebulous_mad_thinker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781100000000,
+      "tag": "0002_auth_user_profile_sync",
+      "breakpoints": true
     }
   ]
 }

@@ -1,57 +1,108 @@
+import { createAssignment, getAssignments } from "@/lib/api/assignments";
+import { getBudgetChatContext, getBudgetStatus } from "@/lib/api/budget";
+import { requestBackend } from "@/lib/api/client";
+import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
+import { logExpense } from "@/lib/api/expenses";
+import { getExams } from "@/lib/api/exams";
+import { getClasses } from "@/lib/api/schedule";
+import {
+  formatDueDateTimeLabel,
+  formatTimeLabel,
+  titleCase,
+} from "@/lib/api/utils";
 import type {
-  ApiRequestOptions,
   ChatAssignmentConfirmationMessage,
   ChatExpenseConfirmationMessage,
   ChatFreeTimeRecommendationMessage,
-  ChatMessage,
+  ChatQuickAction,
   ChatSendResult,
+  ChatState,
   ChatTextMessage,
-  CreateAssignmentInput,
-  LogExpenseInput,
+  ExpenseCategory,
   SendChatMessageInput,
 } from "@/lib/types";
-import { buildBudgetStatusSnapshot } from "@/lib/api/budget";
-import { withMockLatency } from "@/lib/api/_mock";
-import { appendMockAssignment, listMockAssignments } from "@/lib/mock/assignments";
-import {
-  appendMockChatMessages,
-  listMockChatMessages,
-  listMockQuickActions,
-} from "@/lib/mock/chat";
-import { appendMockExpense } from "@/lib/mock/expenses";
-import { getMockScheduleWeek } from "@/lib/mock/schedule";
 
-const weekdayMap = new Map<string, number>([
-  ["sunday", 0],
-  ["monday", 1],
-  ["tuesday", 2],
-  ["wednesday", 3],
-  ["thursday", 4],
-  ["friday", 5],
-  ["saturday", 6],
-]);
+type AiChatIntent =
+  | "create_assignment"
+  | "create_class"
+  | "create_exam"
+  | "log_expense"
+  | "query_schedule"
+  | "query_deadlines"
+  | "query_budget"
+  | "free_time_finder"
+  | "allowance_forecast"
+  | "general_question"
+  | "unknown";
 
-function formatTimeLabel(isoDate: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(isoDate));
-}
+type AiChatResponse = {
+  intent: AiChatIntent;
+  action: Record<string, unknown> | null;
+  message: string;
+  forecast?: {
+    remaining: number;
+    days_left_in_cycle: number;
+    avg_daily_spend: number;
+    projected_runout_days: number;
+    recommended_daily_limit: number;
+  };
+  free_time?: {
+    window_minutes: number;
+    next_class_subject: string | null;
+    next_class_time: string | null;
+    suggested_tasks: Array<{
+      title: string;
+      due_date: string;
+      type: "assignment" | "exam";
+      urgency_days: number;
+    }>;
+  };
+  requires_confirmation: boolean;
+};
 
-function formatDueLabel(isoDate: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  })
-    .format(new Date(isoDate))
-    .replace(",", " •");
-}
+const quickActions: ChatQuickAction[] = [
+  {
+    id: "quick-task",
+    label: "+ Task",
+    icon: "assignment_add",
+    prompt: "book report next friday 11:59pm",
+    kind: "create_assignment",
+  },
+  {
+    id: "quick-expense",
+    label: "+ Expense",
+    icon: "payments",
+    prompt: "lunch 85",
+    kind: "log_expense",
+  },
+  {
+    id: "quick-class",
+    label: "+ Class",
+    icon: "calendar_add_on",
+    prompt: "add class",
+    kind: "create_class",
+  },
+  {
+    id: "quick-due",
+    label: "What's due?",
+    icon: "event_upcoming",
+    prompt: "what's due?",
+    kind: "ask_due",
+  },
+  {
+    id: "quick-free-time",
+    label: "What next?",
+    icon: "bolt",
+    prompt: "what should I do right now?",
+    kind: "free_time",
+  },
+];
 
-function toTitleCase(value: string) {
-  return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
+function getCurrentTimeString() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes(),
+  ).padStart(2, "0")}`;
 }
 
 function buildUserMessage(input: SendChatMessageInput) {
@@ -67,85 +118,18 @@ function buildUserMessage(input: SendChatMessageInput) {
   } satisfies ChatTextMessage;
 }
 
-function parseExpenseInput(text: string): LogExpenseInput | null {
-  const match = text.trim().match(/^(.+?)\s+(\d+(?:\.\d{1,2})?)$/);
-
-  if (!match) {
-    return null;
-  }
-
+function buildTextMessage(text: string) {
   return {
-    label: toTitleCase(match[1].trim()),
-    amount: Number.parseFloat(match[2]),
-  };
-}
-
-function getNextWeekday(baseDate: Date, weekday: string) {
-  const target = weekdayMap.get(weekday);
-
-  if (target === undefined) {
-    return null;
-  }
-
-  const next = new Date(baseDate);
-  const current = next.getDay();
-  const diff = (target - current + 7) % 7 || 7;
-
-  next.setDate(next.getDate() + diff);
-
-  return next;
-}
-
-function parseAssignmentInput(input: SendChatMessageInput): CreateAssignmentInput | null {
-  const match = input.text
-    .trim()
-    .match(
-      /^(.+?)\s+(?:next\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+(\d{1,2}:\d{2}\s?(?:am|pm)))?$/i,
-    );
-
-  if (!match) {
-    return null;
-  }
-
-  const baseDate = new Date(input.createdAt ?? new Date().toISOString());
-  const title = match[1];
-  const weekday = match[2];
-  const time = match[3];
-  const nextWeekday = getNextWeekday(baseDate, weekday.toLowerCase());
-
-  if (!nextWeekday) {
-    return null;
-  }
-
-  const timePart = time ?? "11:59 PM";
-  const [rawTime, meridiem] = timePart.toUpperCase().split(/\s+/);
-  const [rawHour, rawMinute] = rawTime.split(":");
-  let hour = Number.parseInt(rawHour, 10);
-  const minute = Number.parseInt(rawMinute, 10);
-
-  if (meridiem === "PM" && hour < 12) {
-    hour += 12;
-  }
-
-  if (meridiem === "AM" && hour === 12) {
-    hour = 0;
-  }
-
-  nextWeekday.setHours(hour, minute, 0, 0);
-
-  return {
-    title: toTitleCase(title.trim()),
-    dueAt: nextWeekday.toISOString(),
-    subject: "No class",
-    classId: null,
-  };
+    id: crypto.randomUUID(),
+    role: "ai",
+    kind: "text",
+    text,
+    createdAt: new Date().toISOString(),
+  } satisfies ChatTextMessage;
 }
 
 function buildAssignmentConfirmation(
-  assignmentId: string,
-  title: string,
-  dueAt: string,
-  subject: string,
+  assignment: Awaited<ReturnType<typeof createAssignment>>,
 ): ChatAssignmentConfirmationMessage {
   return {
     id: crypto.randomUUID(),
@@ -153,11 +137,12 @@ function buildAssignmentConfirmation(
     kind: "assignment_confirmation",
     createdAt: new Date().toISOString(),
     payload: {
-      assignmentId,
-      title,
-      dueLabel: formatDueLabel(dueAt),
-      subjectLabel: subject,
-      classLinkLabel: subject === "No class" ? "No class linked" : subject,
+      assignmentId: assignment.id,
+      title: assignment.title,
+      dueLabel: formatDueDateTimeLabel(assignment.dueAt),
+      subjectLabel: assignment.subject,
+      classLinkLabel:
+        assignment.subject === "No class" ? "No class linked" : assignment.subject,
       ctaLabel: "View Assignment",
       icon: "assignment",
     },
@@ -165,75 +150,35 @@ function buildAssignmentConfirmation(
 }
 
 function buildExpenseConfirmation(
-  expenseId: string,
-  label: string,
-  amountLabel: string,
-  categoryLabel: string,
-  spentAtLabel: string,
+  expense: Awaited<ReturnType<typeof logExpense>>,
+  budgetStatus: Awaited<ReturnType<typeof getBudgetStatus>>,
 ): ChatExpenseConfirmationMessage {
-  const budget = buildBudgetStatusSnapshot();
-
   return {
     id: crypto.randomUUID(),
     role: "ai",
     kind: "expense_confirmation",
     createdAt: new Date().toISOString(),
     payload: {
-      expenseId,
-      label,
-      amountLabel,
-      categoryLabel,
-      spentAtLabel,
-      budgetRemainingLabel: budget.remainingLabel,
-      budgetTotalLabel: budget.totalLabel,
-      progressPercent: budget.progressPercent,
+      expenseId: expense.id,
+      label: expense.label,
+      amountLabel: expense.amountLabel,
+      categoryLabel: expense.categoryLabel,
+      spentAtLabel: `${expense.dayLabel}, ${expense.timeLabel}`,
+      budgetRemainingLabel: budgetStatus?.remainingLabel ?? "No active budget",
+      budgetTotalLabel: budgetStatus?.totalLabel ?? "No active budget",
+      progressPercent: budgetStatus?.progressPercent ?? 0,
       ctaLabel: "View Expenses",
       icon: "payments",
     },
   };
 }
 
-function buildDueTextResponse(): ChatTextMessage {
-  const assignments = listMockAssignments()
-    .filter((assignment) => assignment.status !== "completed")
-    .slice(0, 3)
-    .map((assignment, index) => {
-      return `${index + 1}. ${assignment.title} — ${assignment.urgency.label.toLowerCase()}`;
-    })
-    .join("\n");
-
-  return {
-    id: crypto.randomUUID(),
-    role: "ai",
-    kind: "text",
-    text:
-      assignments.length > 0
-        ? `Here’s what’s due next:\n${assignments}`
-        : "You’re all caught up right now.",
-    createdAt: new Date().toISOString(),
-  };
-}
-
-function buildFreeTimeRecommendation(): ChatFreeTimeRecommendationMessage {
-  const week = getMockScheduleWeek();
-  const freeWindow = week.freeWindows[0];
-  const nextClass = week.todayClasses[2];
-  const recommendations = listMockAssignments()
-    .filter((assignment) => assignment.status !== "completed")
-    .slice(0, 3)
-    .map((assignment) => ({
-      assignmentId: assignment.id,
-      title: assignment.title,
-      dueLabel: assignment.urgency.label,
-      subjectLabel: assignment.subject,
-      priorityLabel:
-        assignment.priority === 3
-          ? "High priority"
-          : assignment.priority === 2
-            ? "Medium priority"
-            : "Low priority",
-      icon: assignment.icon,
-    }));
+function buildFreeTimeRecommendation(
+  response: AiChatResponse,
+): ChatFreeTimeRecommendationMessage | null {
+  if (!response.free_time) {
+    return null;
+  }
 
   return {
     id: crypto.randomUUID(),
@@ -241,89 +186,177 @@ function buildFreeTimeRecommendation(): ChatFreeTimeRecommendationMessage {
     kind: "free_time_recommendation",
     createdAt: new Date().toISOString(),
     payload: {
-      freeWindowLabel: `You have ${freeWindow.durationMinutes / 60} hours free`,
-      nextClassLabel: `${nextClass.subject} starts at ${nextClass.startTime}`,
-      recommendations,
-      closingText: "Start with the most urgent task while you have the gap.",
+      freeWindowLabel: `You have ${Math.max(
+        1,
+        Math.round(response.free_time.window_minutes / 60),
+      )} hour${response.free_time.window_minutes >= 120 ? "s" : ""} free`,
+      nextClassLabel: response.free_time.next_class_subject
+        ? `${response.free_time.next_class_subject} starts at ${response.free_time.next_class_time}`
+        : "No more classes are scheduled after this window.",
+      recommendations: response.free_time.suggested_tasks.map((task) => ({
+        assignmentId: task.type === "assignment" ? task.title : null,
+        title: task.title,
+        dueLabel:
+          task.urgency_days <= 1
+            ? "Due within 1 day"
+            : `Due in ${task.urgency_days} days`,
+        subjectLabel: task.type === "exam" ? "Exam" : "Assignment",
+        priorityLabel:
+          task.urgency_days <= 2
+            ? "High priority"
+            : task.urgency_days <= 5
+              ? "Medium priority"
+              : "Low priority",
+        icon: task.type === "exam" ? "quiz" : "assignment",
+      })),
+      closingText: response.message,
     },
   };
 }
 
-function buildFallbackResponse(): ChatTextMessage {
+function normalizeExpenseLabelFromMessage(text: string) {
+  const match = text.trim().match(/^(.+?)\s+(\d+(?:\.\d{1,2})?)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return titleCase(match[1].trim());
+}
+
+function getAssignmentAction(action: Record<string, unknown> | null) {
+  if (
+    !action ||
+    typeof action.title !== "string" ||
+    typeof action.due_date !== "string"
+  ) {
+    return null;
+  }
+
   return {
-    id: crypto.randomUUID(),
-    role: "ai",
-    kind: "text",
-    text:
-      "I can help log an expense, create an assignment, or suggest what to work on next.",
-    createdAt: new Date().toISOString(),
+    title: action.title,
+    dueAt: action.due_date,
+    classId:
+      typeof action.class_id === "string" || action.class_id === null
+        ? action.class_id
+        : null,
   };
 }
 
-export async function getChatState(options?: ApiRequestOptions) {
-  return withMockLatency(
-    () => ({
-      messages: listMockChatMessages(),
-      quickActions: listMockQuickActions(),
-    }),
-    options,
-  );
+function getExpenseAction(action: Record<string, unknown> | null) {
+  let category: ExpenseCategory | undefined;
+
+  if (
+    action?.category === "food" ||
+    action?.category === "transportation" ||
+    action?.category === "school" ||
+    action?.category === "entertainment" ||
+    action?.category === "miscellaneous"
+  ) {
+    category = action.category;
+  }
+
+  if (!action || typeof action.amount !== "number") {
+    return null;
+  }
+
+  return {
+    amount: action.amount,
+    category,
+  };
+}
+
+export async function getChatState(): Promise<ChatState> {
+  return {
+    messages: [],
+    quickActions,
+  };
 }
 
 export async function sendMessage(
   input: SendChatMessageInput,
-  options?: ApiRequestOptions,
-) {
-  return withMockLatency(() => {
-    const userMessage = buildUserMessage(input);
-    const normalized = input.text.trim().toLowerCase();
+): Promise<ChatSendResult> {
+  const userMessage = buildUserMessage(input);
+  const [scheduleWeek, assignments, exams, budgetContext] = await Promise.all([
+    getClasses(),
+    getAssignments(),
+    getExams(),
+    getBudgetChatContext(),
+  ]);
 
-    let responseMessage: ChatMessage;
+  const response = await requestBackend<AiChatResponse>("/api/ai/chat", {
+    method: "POST",
+    body: {
+      message: input.text.trim(),
+      context: {
+        today: new Date().toISOString().slice(0, 10),
+        current_time: getCurrentTimeString(),
+        todays_classes: scheduleWeek.todayClasses.map((classItem) => ({
+          subject: classItem.subject,
+          start_time: classItem.startTime,
+          end_time: classItem.endTime,
+        })),
+        upcoming_deadlines: getChatUpcomingDeadlines(assignments, exams),
+        budget_remaining: budgetContext.budgetRemaining,
+        budget_period_end_date: budgetContext.budgetPeriodEndDate,
+        avg_daily_spend: budgetContext.avgDailySpend,
+      },
+    },
+  });
 
-    const expenseInput = parseExpenseInput(input.text);
-    const assignmentInput = parseAssignmentInput({
-      ...input,
-      createdAt: userMessage.createdAt,
-    });
+  if (
+    response.intent === "create_assignment" &&
+    !response.requires_confirmation
+  ) {
+    const action = getAssignmentAction(response.action);
 
-    if (expenseInput) {
-      const createdExpense = appendMockExpense(expenseInput);
+    if (action) {
+      const createdAssignment = await createAssignment({
+        title: action.title,
+        dueAt: action.dueAt,
+        classId: action.classId,
+      });
 
-      responseMessage = buildExpenseConfirmation(
-        createdExpense.id,
-        createdExpense.label,
-        createdExpense.amountLabel,
-        createdExpense.categoryLabel,
-        `${createdExpense.dayLabel}, ${createdExpense.timeLabel}`,
-      );
-    } else if (assignmentInput) {
-      const createdAssignment = appendMockAssignment(assignmentInput);
-
-      responseMessage = buildAssignmentConfirmation(
-        createdAssignment.id,
-        createdAssignment.title,
-        createdAssignment.dueAt,
-        createdAssignment.subject,
-      );
-    } else if (
-      normalized.includes("what should i do right now") ||
-      normalized.includes("what should i do next")
-    ) {
-      responseMessage = buildFreeTimeRecommendation();
-    } else if (
-      normalized.includes("what's due") ||
-      normalized.includes("whats due")
-    ) {
-      responseMessage = buildDueTextResponse();
-    } else {
-      responseMessage = buildFallbackResponse();
+      return {
+        userMessage,
+        responseMessage: buildAssignmentConfirmation(createdAssignment),
+      };
     }
+  }
 
-    appendMockChatMessages([userMessage, responseMessage]);
+  if (response.intent === "log_expense" && !response.requires_confirmation) {
+    const action = getExpenseAction(response.action);
 
-    return {
-      userMessage,
-      responseMessage,
-    } satisfies ChatSendResult;
-  }, options);
+    if (action) {
+      const createdExpense = await logExpense({
+        label:
+          normalizeExpenseLabelFromMessage(input.text) ??
+          (action.category ? `${titleCase(action.category)} expense` : "Expense"),
+        amount: action.amount,
+        category: action.category,
+      });
+      const budgetStatus = await getBudgetStatus();
+
+      return {
+        userMessage,
+        responseMessage: buildExpenseConfirmation(createdExpense, budgetStatus),
+      };
+    }
+  }
+
+  if (response.intent === "free_time_finder") {
+    const recommendation = buildFreeTimeRecommendation(response);
+
+    if (recommendation) {
+      return {
+        userMessage,
+        responseMessage: recommendation,
+      };
+    }
+  }
+
+  return {
+    userMessage,
+    responseMessage: buildTextMessage(response.message),
+  };
 }

@@ -134,6 +134,63 @@ export type CreateAssignmentInput = {
   iconColor?: string;
 };
 
+export type ExamUrgencyTone = "danger" | "warning" | "neutral";
+
+export type ExamUrgency = {
+  label: string;
+  icon: string;
+  bgColor: string;
+  textColor: string;
+  tone: ExamUrgencyTone;
+};
+
+export type Exam = {
+  id: string;
+  title: string;
+  subject: string;
+  classId: string | null;
+  examAt: string;
+  examDateLabel: string;
+  examTimeLabel: string;
+  examDateTimeLabel: string;
+  countdownLabel: string;
+  location: string | null;
+  description: string | null;
+  urgency: ExamUrgency;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateExamInput = {
+  title: string;
+  examAt: string;
+  classId?: string | null;
+  location?: string | null;
+  description?: string | null;
+};
+
+export type UpdateExamInput = {
+  title?: string;
+  examAt?: string;
+  classId?: string | null;
+  location?: string | null;
+  description?: string | null;
+};
+
+export type ClassOption = {
+  id: string;
+  label: string;
+};
+
+export type DashboardDeadlinePreview = {
+  id: string;
+  title: string;
+  dueLabel: string;
+  tone: "danger" | "neutral";
+  kind: "assignment" | "exam";
+  href: "/assignments" | "/exams";
+};
+
 export type ExpenseItem = {
   id: string;
   label: string;
