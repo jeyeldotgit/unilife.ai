@@ -91,6 +91,17 @@ export function formatTimeLabel(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
+export function formatMonthDayTime(isoDate: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+    .format(new Date(isoDate))
+    .replace(",", " •");
+}
+
 export function formatDueDateTimeLabel(isoDate: string) {
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
@@ -205,6 +216,18 @@ export function startOfWeekMonday(date = new Date()) {
 
 export function formatDateKey(date: Date) {
   return getLocalDateKey(date);
+}
+
+export function toDateTimeLocalValue(isoDate: string) {
+  const date = new Date(isoDate);
+
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 export function getBudgetCycleLabel(period: BudgetPeriod) {

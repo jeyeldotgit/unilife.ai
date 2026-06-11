@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   createAssignment: vi.fn(),
   getAssignments: vi.fn(),
+  getExams: vi.fn(),
   getBudgetChatContext: vi.fn(),
   getBudgetStatus: vi.fn(),
   logExpense: vi.fn(),
@@ -13,6 +14,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/api/assignments", () => ({
   createAssignment: mocks.createAssignment,
   getAssignments: mocks.getAssignments,
+}));
+
+vi.mock("@/lib/api/exams", () => ({
+  getExams: mocks.getExams,
 }));
 
 vi.mock("@/lib/api/budget", () => ({
@@ -36,6 +41,7 @@ describe("chat adapter", () => {
   beforeEach(() => {
     mocks.getClasses.mockReset();
     mocks.getAssignments.mockReset();
+    mocks.getExams.mockReset();
     mocks.getBudgetChatContext.mockReset();
     mocks.getBudgetStatus.mockReset();
     mocks.logExpense.mockReset();
@@ -46,6 +52,7 @@ describe("chat adapter", () => {
       todayClasses: [],
     });
     mocks.getAssignments.mockResolvedValue([]);
+    mocks.getExams.mockResolvedValue([]);
     mocks.getBudgetChatContext.mockResolvedValue({
       avgDailySpend: null,
       budgetPeriodEndDate: null,
@@ -169,5 +176,56 @@ describe("chat adapter", () => {
         amountLabel: "PHP 85",
       }),
     });
+  });
+
+  it("includes exams alongside assignments in the chat deadline context", async () => {
+    mocks.getAssignments.mockResolvedValue([
+      {
+        id: "assignment-1",
+        title: "Essay Draft",
+        dueAt: "2026-06-12T12:00:00.000Z",
+        status: "pending",
+      },
+    ]);
+    mocks.getExams.mockResolvedValue([
+      {
+        id: "exam-1",
+        title: "Biology Midterm",
+        examAt: "2099-06-11T09:00:00.000Z",
+      },
+    ]);
+    mocks.requestBackend.mockResolvedValue({
+      intent: "general_question",
+      action: null,
+      message: "Here is your workload.",
+      requires_confirmation: false,
+    });
+
+    const { sendMessage } = await import("@/lib/api/chat");
+    await sendMessage({ text: "what's due?" });
+
+    expect(mocks.requestBackend).toHaveBeenCalledWith(
+      "/api/ai/chat",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          context: expect.objectContaining({
+            upcoming_deadlines: [
+              {
+                title: "Essay Draft",
+                due_date: "2026-06-12T12:00:00.000Z",
+                type: "assignment",
+                status: "pending",
+              },
+              {
+                title: "Biology Midterm",
+                due_date: "2099-06-11T09:00:00.000Z",
+                type: "exam",
+                status: "pending",
+              },
+            ],
+          }),
+        }),
+      }),
+    );
   });
 });

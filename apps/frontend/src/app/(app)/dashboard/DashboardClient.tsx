@@ -5,21 +5,19 @@ import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { Icon } from "@/components/ui/Icon";
-import type { BudgetStatus, ScheduleAgendaItem } from "@/lib/types";
-
-type DashboardDeadlinePreview = {
-  id: string;
-  title: string;
-  dueLabel: string;
-  tone: "danger" | "neutral";
-};
+import type {
+  BudgetStatus,
+  DashboardDeadlinePreview,
+  ScheduleAgendaItem,
+} from "@/lib/types";
 
 export interface DashboardClientProps {
   todayClasses: ScheduleAgendaItem[];
   upcomingDeadlines: DashboardDeadlinePreview[];
   budget: BudgetStatus | null;
   scheduleAvailable: boolean;
-  assignmentsAvailable: boolean;
+  deadlinesAvailable: boolean;
+  deadlinesPartiallyAvailable: boolean;
   budgetAvailable: boolean;
 }
 
@@ -89,7 +87,8 @@ export default function DashboardClient({
   upcomingDeadlines,
   budget,
   scheduleAvailable,
-  assignmentsAvailable,
+  deadlinesAvailable,
+  deadlinesPartiallyAvailable,
   budgetAvailable,
 }: DashboardClientProps) {
   const router = useRouter();
@@ -128,7 +127,7 @@ export default function DashboardClient({
 
   const handleNavigate = (
     targetId: string,
-    route: "/schedule" | "/assignments",
+    route: "/schedule" | "/assignments" | "/exams",
     setPressedId: (value: string | null) => void,
   ) => {
     setPressedId(targetId);
@@ -474,11 +473,11 @@ export default function DashboardClient({
                 <Icon name="assignment_late" style={{ color: "#ba1a1a" }} />
                 UPCOMING DEADLINES
               </h3>
-              {!assignmentsAvailable ? (
+              {!deadlinesAvailable ? (
                 <DashboardSectionFallback
                   icon="assignment_late"
                   title="Deadlines are unavailable"
-                  message="We could not load your assignments right now, but the rest of the dashboard is still ready."
+                  message="We could not load your deadlines right now, but the rest of the dashboard is still ready."
                 />
               ) : upcomingDeadlines.length > 0 ? (
                 <div
@@ -488,6 +487,12 @@ export default function DashboardClient({
                     gap: "12px",
                   }}
                 >
+                  {deadlinesPartiallyAvailable ? (
+                    <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-left text-sm font-medium text-[#825100] shadow-sm">
+                      Some deadlines may be missing right now, but available items
+                      are still shown below.
+                    </div>
+                  ) : null}
                   {upcomingDeadlines.map((deadline) => (
                     <button
                       key={deadline.id}
@@ -495,7 +500,7 @@ export default function DashboardClient({
                       onClick={() => {
                         handleNavigate(
                           deadline.id,
-                          "/assignments",
+                          deadline.href,
                           setPressedDeadlineId,
                         );
                       }}
@@ -524,9 +529,15 @@ export default function DashboardClient({
                             : "scale(1)",
                         transition: "transform 0.1s",
                       }}
-                    >
+                      >
                       <Icon
-                        name={deadline.tone === "danger" ? "warning" : "quiz"}
+                        name={
+                          deadline.tone === "danger"
+                            ? "warning"
+                            : deadline.kind === "exam"
+                              ? "quiz"
+                              : "assignment"
+                        }
                         filled={deadline.tone === "danger"}
                         style={{
                           color:
@@ -585,11 +596,19 @@ export default function DashboardClient({
                   </div>
                 </div>
               ) : (
-                <DashboardSectionFallback
-                  icon="task_alt"
-                  title="No deadlines in the next 7 days"
-                  message="You're clear for now. New upcoming work will appear here automatically."
-                />
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {deadlinesPartiallyAvailable ? (
+                    <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-left text-sm font-medium text-[#825100] shadow-sm">
+                      Some deadlines may be missing right now, but no upcoming items
+                      are available from the data we could load.
+                    </div>
+                  ) : null}
+                  <DashboardSectionFallback
+                    icon="task_alt"
+                    title="No deadlines in the next 7 days"
+                    message="You're clear for now. New upcoming work will appear here automatically."
+                  />
+                </div>
               )}
             </section>
 

@@ -1,7 +1,9 @@
 import { createAssignment, getAssignments } from "@/lib/api/assignments";
 import { getBudgetChatContext, getBudgetStatus } from "@/lib/api/budget";
 import { requestBackend } from "@/lib/api/client";
+import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
 import { logExpense } from "@/lib/api/expenses";
+import { getExams } from "@/lib/api/exams";
 import { getClasses } from "@/lib/api/schedule";
 import {
   formatDueDateTimeLabel,
@@ -275,9 +277,10 @@ export async function sendMessage(
   input: SendChatMessageInput,
 ): Promise<ChatSendResult> {
   const userMessage = buildUserMessage(input);
-  const [scheduleWeek, assignments, budgetContext] = await Promise.all([
+  const [scheduleWeek, assignments, exams, budgetContext] = await Promise.all([
     getClasses(),
     getAssignments(),
+    getExams(),
     getBudgetChatContext(),
   ]);
 
@@ -293,19 +296,7 @@ export async function sendMessage(
           start_time: classItem.startTime,
           end_time: classItem.endTime,
         })),
-        upcoming_deadlines: assignments
-          .filter((assignment) => assignment.status !== "completed")
-          .map((assignment) => ({
-            title: assignment.title,
-            due_date: assignment.dueAt,
-            type: "assignment" as const,
-            status:
-              assignment.status === "completed"
-                ? "pending"
-                : assignment.status === "in_progress"
-                  ? "in_progress"
-                  : "pending",
-          })),
+        upcoming_deadlines: getChatUpcomingDeadlines(assignments, exams),
         budget_remaining: budgetContext.budgetRemaining,
         budget_period_end_date: budgetContext.budgetPeriodEndDate,
         avg_daily_spend: budgetContext.avgDailySpend,

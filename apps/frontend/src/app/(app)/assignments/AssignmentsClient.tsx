@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { AssignmentCard } from "@/components/ui/AssignmentCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
+import { TasksRouteSwitcher } from "@/components/ui/TasksRouteSwitcher";
 import type { Assignment } from "@/lib/types";
 
 type FilterTab = "All" | "Pending" | "Done";
@@ -217,11 +218,21 @@ export default function AssignmentsClient({
               className="filter-tabs"
               style={{
                 display: "flex",
+                flexDirection: "column",
                 gap: "8px",
                 overflowX: "auto",
                 paddingBottom: "8px",
               }}
             >
+              <TasksRouteSwitcher activeRoute="/assignments" />
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  overflowX: "auto",
+                }}
+              >
               {(["All", "Pending", "Done"] as FilterTab[]).map((tab) => {
                 const isActive = activeFilter === tab;
 
@@ -244,11 +255,12 @@ export default function AssignmentsClient({
                       transition: "all 0.2s",
                       fontFamily: "'Inter', sans-serif",
                     }}
-                  >
-                    {tab}
-                  </button>
+                    >
+                      {tab}
+                    </button>
                 );
               })}
+              </div>
             </div>
           </section>
 
