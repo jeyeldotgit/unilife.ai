@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   logExpenseLocal: vi.fn(),
   assignments: [] as Array<Record<string, unknown>>,
   exams: [] as Array<Record<string, unknown>>,
+  planningContext: null as Record<string, unknown> | null,
 }));
 
 vi.mock("@unilife-ai/parser", () => ({
@@ -50,6 +51,10 @@ vi.mock("@/lib/session/current-user", () => ({
   getCurrentUserId: vi.fn(() => "user-1"),
 }));
 
+vi.mock("@/lib/planning/local-context", () => ({
+  getLocalPlanningContext: vi.fn(async () => mocks.planningContext),
+}));
+
 import { resolveLocalChat } from "@/lib/chat/local-executor";
 
 describe("local chat executor", () => {
@@ -57,6 +62,7 @@ describe("local chat executor", () => {
     vi.clearAllMocks();
     mocks.assignments.length = 0;
     mocks.exams.length = 0;
+    mocks.planningContext = null;
   });
 
   it("executes a locally parsed assignment through the Dexie mutation helper", async () => {
@@ -144,5 +150,35 @@ describe("local chat executor", () => {
       expect(result.message.text).toContain("5. Assignment 5");
       expect(result.message.text).not.toContain("Assignment 6");
     }
+  });
+
+  it("builds a structured offline allowance forecast while deferring online", async () => {
+    mocks.routeIntent.mockReturnValue({
+      intent: "query_allowance_forecast",
+      confidence: 0.95,
+      data: {},
+    });
+    mocks.planningContext = {
+      today: "2026-06-12",
+      current_time: "10:00",
+      todays_classes: [],
+      upcoming_deadlines: [],
+      budget_remaining: 420,
+      budget_period_end_date: "2026-06-16",
+      avg_daily_spend: 210,
+    };
+
+    const result = await resolveLocalChat("will my allowance last?");
+
+    expect(result).toMatchObject({
+      handled: false,
+      offlineMessage: {
+        kind: "allowance_forecast",
+        payload: {
+          remaining: 420,
+          will_last_cycle: false,
+        },
+      },
+    });
   });
 });

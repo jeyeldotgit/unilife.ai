@@ -79,20 +79,27 @@ export function getChatUpcomingDeadlines(
   const assignmentDeadlines = assignments
     .filter((assignment) => assignment.status !== "completed")
     .map((assignment) => ({
+      id: assignment.id,
       title: assignment.title,
       due_date: assignment.dueAt,
       type: "assignment" as const,
       status:
-        assignment.status === "in_progress" ? "in_progress" : "pending",
+        assignment.status === "in_progress"
+          ? ("in_progress" as const)
+          : ("pending" as const),
+      ...(assignment.subject ? { subject: assignment.subject } : {}),
+      ...(assignment.priority ? { priority: assignment.priority } : {}),
     }));
 
   const examDeadlines = exams
     .filter((exam) => new Date(exam.examAt).getTime() >= now)
     .map((exam) => ({
+      id: exam.id,
       title: exam.title,
       due_date: exam.examAt,
       type: "exam" as const,
       status: "pending" as const,
+      ...(exam.subject ? { subject: exam.subject } : {}),
     }));
 
   return [...assignmentDeadlines, ...examDeadlines].sort((left, right) => {

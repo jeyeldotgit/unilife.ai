@@ -61,6 +61,41 @@ export function tryQueryDeadlines(input: NormalizedInput): IntentResult {
   };
 }
 
+export function tryQueryFreeTime(input: NormalizedInput): IntentResult {
+  if (
+    !/\b(what should i do|what next|free time|available time|do right now|gagawin ko|anong gagawin)\b/i.test(
+      input.normalized,
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    intent: "query_free_time",
+    confidence: 0.95,
+    data: {},
+  };
+}
+
+export function tryQueryAllowanceForecast(input: NormalizedInput): IntentResult {
+  const hasBudgetCue = /\b(allowance|budget|money|spending|gastos|pera)\b/i.test(
+    input.normalized,
+  );
+  const hasForecastCue = /\b(last|forecast|run out|survive|enough|abot|kasya)\b/i.test(
+    input.normalized,
+  );
+
+  if (!hasBudgetCue || !hasForecastCue) {
+    return null;
+  }
+
+  return {
+    intent: "query_allowance_forecast",
+    confidence: 0.95,
+    data: {},
+  };
+}
+
 export function tryCreateAssignment(
   input: NormalizedInput,
   referenceDate: Date,

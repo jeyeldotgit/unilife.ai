@@ -5,6 +5,7 @@ import type {
   ExpenseCategory as DomainExpenseCategory,
   NotificationStatus,
 } from "@unilife-ai/types";
+import type { AllowanceForecast, DailyBriefing } from "@unilife-ai/types";
 
 export type DayOfWeek = DomainDayOfWeek;
 export type BudgetPeriod = DomainBudgetPeriod;
@@ -383,13 +384,25 @@ export type ChatFreeTimeRecommendationMessage = ChatMessageBase & {
   payload: ChatFreeTimeRecommendationPayload;
 };
 
+export type ChatAllowanceForecastPayload = AllowanceForecast & {
+  closingText: string;
+};
+
+export type ChatAllowanceForecastMessage = ChatMessageBase & {
+  kind: "allowance_forecast";
+  payload: ChatAllowanceForecastPayload;
+};
+
 export type ChatMessage =
   | ChatTextMessage
   | ChatAssignmentConfirmationMessage
   | ChatClassConfirmationMessage
   | ChatExamConfirmationMessage
   | ChatExpenseConfirmationMessage
-  | ChatFreeTimeRecommendationMessage;
+  | ChatFreeTimeRecommendationMessage
+  | ChatAllowanceForecastMessage;
+
+export type DashboardBriefing = DailyBriefing;
 
 export type ChatState = {
   messages: ChatMessage[];

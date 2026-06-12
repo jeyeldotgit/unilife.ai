@@ -170,7 +170,9 @@ describe("AIService", () => {
         days_left_in_cycle: 3,
         avg_daily_spend: 125,
         projected_runout_days: 4,
+        projected_runout_date: "2026-06-12",
         recommended_daily_limit: 500 / 3,
+        will_last_cycle: true,
       },
       requires_confirmation: false,
     });
@@ -228,6 +230,7 @@ describe("AIService", () => {
       message: "You have time for your research paper before class.",
       free_time: {
         window_minutes: 120,
+        current_class_subject: null,
         next_class_subject: "History",
         next_class_time: "15:00",
         suggested_tasks: [
@@ -235,12 +238,14 @@ describe("AIService", () => {
             title: "Research Paper",
             due_date: "2026-06-10T12:00:00.000Z",
             type: "assignment",
+            status: "pending",
             urgency_days: 2,
           },
           {
             title: "Physics Quiz",
             due_date: "2026-06-12T08:00:00.000Z",
             type: "exam",
+            status: "in_progress",
             urgency_days: 4,
           },
         ],
@@ -275,6 +280,7 @@ describe("AIService", () => {
       message: "You are free for the rest of the day.",
       free_time: {
         window_minutes: 150,
+        current_class_subject: null,
         next_class_subject: null,
         next_class_time: null,
         suggested_tasks: [
@@ -282,12 +288,14 @@ describe("AIService", () => {
             title: "Research Paper",
             due_date: "2026-06-10T12:00:00.000Z",
             type: "assignment",
+            status: "pending",
             urgency_days: 2,
           },
           {
             title: "Physics Quiz",
             due_date: "2026-06-12T08:00:00.000Z",
             type: "exam",
+            status: "in_progress",
             urgency_days: 4,
           },
         ],
@@ -314,6 +322,33 @@ describe("AIService", () => {
     expect(result.response.intent).toBe("unknown");
     expect(result.response.action).toBeNull();
     expect(result.response.requires_confirmation).toBe(false);
+    expect(result.log.error).toBe("timeout");
+  });
+
+  it("returns a deterministic free-time plan when Gemini fails", async () => {
+    const service = new AIService(
+      {} as never,
+      "user-1",
+      { create: vi.fn() } as never,
+      vi.fn(async () => {
+        throw new Error("timeout");
+      }),
+    );
+
+    const result = await service.processChat({
+      message: "What should I do right now?",
+      context: createContext(),
+    });
+
+    expect(result.response).toMatchObject({
+      intent: "free_time_finder",
+      free_time: {
+        next_class_subject: "History",
+        suggested_tasks: expect.arrayContaining([
+          expect.objectContaining({ title: "Research Paper" }),
+        ]),
+      },
+    });
     expect(result.log.error).toBe("timeout");
   });
 

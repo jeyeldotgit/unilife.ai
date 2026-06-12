@@ -1,4 +1,5 @@
 import type {
+  ChatAllowanceForecastPayload,
   ChatClassConfirmationPayload,
   ChatExamConfirmationPayload,
   ChatExpenseConfirmationPayload,
@@ -381,7 +382,11 @@ function FreeTimeRecommendationCard({
           Here&apos;s what I suggest:
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {payload.recommendations.map((recommendation, index) => (
+          {payload.recommendations.length === 0 ? (
+            <p style={{ fontSize: "14px", color: "#424754", margin: 0 }}>
+              You have no pending assignments or upcoming exams to prioritize.
+            </p>
+          ) : payload.recommendations.map((recommendation, index) => (
             <div
               key={`${recommendation.entityId ?? recommendation.title}-${index}`}
               style={{
@@ -454,6 +459,66 @@ function FreeTimeRecommendationCard({
           margin: 0,
         }}
       >
+        {payload.closingText}
+      </p>
+    </div>
+  );
+}
+
+function formatForecastAmount(amount: number) {
+  return `PHP ${amount.toLocaleString("en-PH", {
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function AllowanceForecastCard({
+  payload,
+}: {
+  payload: ChatAllowanceForecastPayload;
+}) {
+  const runoutLabel =
+    payload.projected_runout_days === null
+      ? "No runout projected at your current spending rate."
+      : payload.will_last_cycle
+        ? `Your allowance is projected to last about ${payload.projected_runout_days} days.`
+        : `At this rate, your allowance may run out in about ${payload.projected_runout_days} days.`;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <p style={{ fontSize: "18px", fontWeight: 700, margin: 0 }}>
+        Allowance Forecast
+      </p>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gap: "12px",
+        }}
+      >
+        {[
+          ["Remaining", formatForecastAmount(payload.remaining)],
+          ["Days left", String(payload.days_left_in_cycle)],
+          ["Average/day", formatForecastAmount(payload.avg_daily_spend)],
+          ["Safe daily limit", formatForecastAmount(payload.recommended_daily_limit)],
+        ].map(([label, value]) => (
+          <div key={label} style={{ padding: "12px", borderRadius: "10px", background: "#f3f4f5" }}>
+            <p style={{ fontSize: "11px", color: "#424754", margin: 0 }}>{label}</p>
+            <p style={{ fontSize: "14px", fontWeight: 700, margin: "4px 0 0" }}>{value}</p>
+          </div>
+        ))}
+      </div>
+      <p
+        style={{
+          fontSize: "14px",
+          lineHeight: "20px",
+          color: payload.will_last_cycle ? "#00714d" : "#ba1a1a",
+          fontWeight: 600,
+          margin: 0,
+        }}
+      >
+        {runoutLabel}
+      </p>
+      <p style={{ fontSize: "14px", lineHeight: "20px", color: "#424754", margin: 0 }}>
         {payload.closingText}
       </p>
     </div>
@@ -602,6 +667,9 @@ export function ChatBubble({
         ) : null}
         {message.kind === "free_time_recommendation" ? (
           <FreeTimeRecommendationCard payload={message.payload} />
+        ) : null}
+        {message.kind === "allowance_forecast" ? (
+          <AllowanceForecastCard payload={message.payload} />
         ) : null}
       </div>
     </div>

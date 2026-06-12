@@ -71,6 +71,16 @@ export const ParsedActionSchema = z.discriminatedUnion("intent", [
     }),
   }),
   z.object({
+    intent: z.literal("query_free_time"),
+    confidence: ConfidenceSchema,
+    data: z.object({}),
+  }),
+  z.object({
+    intent: z.literal("query_allowance_forecast"),
+    confidence: ConfidenceSchema,
+    data: z.object({}),
+  }),
+  z.object({
     intent: z.literal("unknown"),
     confidence: ConfidenceSchema,
     data: z.object({
@@ -81,6 +91,8 @@ export const ParsedActionSchema = z.discriminatedUnion("intent", [
           "create_exam",
           "log_expense",
           "query_deadlines",
+          "query_free_time",
+          "query_allowance_forecast",
         ])
         .optional(),
       reason: z.string().optional(),

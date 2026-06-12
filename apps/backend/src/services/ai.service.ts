@@ -1,15 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  buildDailyBriefingPrompt,
   callGemini,
   type GeminiChatResponse,
   type GeminiIntent,
 } from "@unilife-ai/ai-core";
+import type { DailyBriefing, PlanningContext } from "@unilife-ai/types";
 import { z } from "zod";
 
 import {
   AILogsRepository,
   type CreateAILogInput,
 } from "../repositories/ai-logs.repository.js";
+import {
+  buildAllowanceForecast,
+  buildDeterministicBriefing,
+  buildFreeTimePlan,
+  detectPlanningIntent,
+} from "./planning.service.js";
 
 const AI_CONFIDENCE_THRESHOLD = 0.7;
 const AI_CHAT_SYSTEM_PROMPT = [
@@ -49,20 +57,27 @@ const aiChatIntentSchema = z.enum([
   "unknown",
 ]);
 const freeTimeTaskSchema = z.object({
+  id: z.string().optional(),
   title: z.string(),
   due_date: z.string(),
   type: z.enum(["assignment", "exam"]),
+  status: z.enum(["pending", "in_progress"]),
+  subject: z.string().optional(),
+  priority: z.number().optional(),
   urgency_days: z.number().int(),
 });
 const aiForecastSchema = z.object({
   remaining: z.number(),
   days_left_in_cycle: z.number().int(),
   avg_daily_spend: z.number(),
-  projected_runout_days: z.number().int(),
+  projected_runout_days: z.number().int().nullable(),
+  projected_runout_date: z.string().nullable(),
   recommended_daily_limit: z.number(),
+  will_last_cycle: z.boolean(),
 });
 const aiFreeTimeSchema = z.object({
   window_minutes: z.number().int(),
+  current_class_subject: z.string().nullable(),
   next_class_subject: z.string().nullable(),
   next_class_time: z.string().nullable(),
   suggested_tasks: z.array(freeTimeTaskSchema),
@@ -76,24 +91,7 @@ const aiChatResponseSchema = z.object({
   requires_confirmation: z.boolean(),
 });
 
-export type AIChatContext = {
-  today: string;
-  current_time: string;
-  todays_classes: Array<{
-    subject: string;
-    start_time: string;
-    end_time: string;
-  }>;
-  upcoming_deadlines: Array<{
-    title: string;
-    due_date: string;
-    type: "assignment" | "exam";
-    status: "pending" | "in_progress";
-  }>;
-  budget_remaining: number | null;
-  budget_period_end_date: string | null;
-  avg_daily_spend: number | null;
-};
+export type AIChatContext = PlanningContext;
 
 export type AIChatInput = {
   message: string;
@@ -123,23 +121,6 @@ function isStructuredIntent(intent: GeminiIntent) {
   );
 }
 
-function toMinutes(value: string) {
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
-
-  if (!match) {
-    return null;
-  }
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-
-  if (hours > 23 || minutes > 59) {
-    return null;
-  }
-
-  return hours * 60 + minutes;
-}
-
 function toUtcMidnight(dateString: string) {
   const date = new Date(`${dateString}T00:00:00.000Z`);
 
@@ -148,40 +129,6 @@ function toUtcMidnight(dateString: string) {
   }
 
   return date;
-}
-
-function diffCalendarDaysInclusive(startDate: string, endDate: string) {
-  const start = toUtcMidnight(startDate);
-  const end = toUtcMidnight(endDate);
-
-  if (!start || !end) {
-    return null;
-  }
-
-  const dayMs = 24 * 60 * 60 * 1000;
-  const difference = Math.floor((end.getTime() - start.getTime()) / dayMs) + 1;
-
-  return Math.max(1, difference);
-}
-
-function diffCalendarDays(startDate: string, endDateTime: string) {
-  const start = toUtcMidnight(startDate);
-  const endDate = new Date(endDateTime);
-
-  if (!start || Number.isNaN(endDate.getTime())) {
-    return null;
-  }
-
-  const end = new Date(
-    Date.UTC(
-      endDate.getUTCFullYear(),
-      endDate.getUTCMonth(),
-      endDate.getUTCDate(),
-    ),
-  );
-  const dayMs = 24 * 60 * 60 * 1000;
-
-  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / dayMs));
 }
 
 function resolveRelativeDay(
@@ -345,98 +292,6 @@ function normalizeAction(
   }
 }
 
-function buildForecast(context: AIChatContext) {
-  if (
-    context.budget_remaining === null ||
-    context.budget_period_end_date === null ||
-    context.avg_daily_spend === null
-  ) {
-    return undefined;
-  }
-
-  const daysLeftInCycle = diffCalendarDaysInclusive(
-    context.today,
-    context.budget_period_end_date,
-  );
-
-  if (!daysLeftInCycle) {
-    return undefined;
-  }
-
-  const projectedRunoutDays =
-    context.avg_daily_spend > 0
-      ? Math.floor(context.budget_remaining / context.avg_daily_spend)
-      : daysLeftInCycle;
-
-  return {
-    remaining: context.budget_remaining,
-    days_left_in_cycle: daysLeftInCycle,
-    avg_daily_spend: context.avg_daily_spend,
-    projected_runout_days: projectedRunoutDays,
-    recommended_daily_limit: context.budget_remaining / daysLeftInCycle,
-  };
-}
-
-function buildFreeTime(context: AIChatContext) {
-  const currentMinutes = toMinutes(context.current_time);
-
-  if (currentMinutes === null) {
-    return undefined;
-  }
-
-  const sortedClasses = [...context.todays_classes].sort((left, right) => {
-    const leftMinutes = toMinutes(left.start_time) ?? Number.MAX_SAFE_INTEGER;
-    const rightMinutes = toMinutes(right.start_time) ?? Number.MAX_SAFE_INTEGER;
-
-    return leftMinutes - rightMinutes;
-  });
-  const nextClass =
-    sortedClasses.find((classItem) => {
-      const startMinutes = toMinutes(classItem.start_time);
-
-      return startMinutes !== null && startMinutes > currentMinutes;
-    }) ?? null;
-  const nextClassMinutes = nextClass
-    ? toMinutes(nextClass.start_time)
-    : 24 * 60;
-  const windowMinutes = Math.max(
-    0,
-    (nextClassMinutes ?? 24 * 60) - currentMinutes,
-  );
-  const suggestedTasks = [...context.upcoming_deadlines]
-    .sort((left, right) => {
-      const leftTime = Date.parse(left.due_date);
-      const rightTime = Date.parse(right.due_date);
-
-      if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) {
-        return 0;
-      }
-
-      if (Number.isNaN(leftTime)) {
-        return 1;
-      }
-
-      if (Number.isNaN(rightTime)) {
-        return -1;
-      }
-
-      return leftTime - rightTime;
-    })
-    .map((deadline) => ({
-      title: deadline.title,
-      due_date: deadline.due_date,
-      type: deadline.type,
-      urgency_days: diffCalendarDays(context.today, deadline.due_date) ?? 0,
-    }));
-
-  return {
-    window_minutes: windowMinutes,
-    next_class_subject: nextClass?.subject ?? null,
-    next_class_time: nextClass?.start_time ?? null,
-    suggested_tasks: suggestedTasks,
-  };
-}
-
 function createFallbackResponse(): AIChatResponse {
   return {
     intent: "unknown",
@@ -444,6 +299,35 @@ function createFallbackResponse(): AIChatResponse {
     message: "I couldn't understand that. Try rephrasing.",
     requires_confirmation: false,
   };
+}
+
+function createPlanningFallbackResponse(
+  message: string,
+  context: AIChatContext,
+): AIChatResponse | null {
+  const intent = detectPlanningIntent(message);
+
+  if (intent === "free_time_finder") {
+    return {
+      intent,
+      action: null,
+      message: "Here is a recommendation based on your saved schedule and deadlines.",
+      free_time: buildFreeTimePlan(context),
+      requires_confirmation: false,
+    };
+  }
+
+  if (intent === "allowance_forecast") {
+    return {
+      intent,
+      action: null,
+      message: "Here is a forecast based on your current budget cycle and spending.",
+      forecast: buildAllowanceForecast(context),
+      requires_confirmation: false,
+    };
+  }
+
+  return null;
 }
 
 function toStructuredOutput(raw: GeminiChatResponse) {
@@ -484,19 +368,22 @@ export class AIService {
       });
       const action = sanitizeActionRecord(raw.action);
       const normalizedAction = normalizeAction(raw.intent, action, input.context);
+      const forecast =
+        raw.intent === "allowance_forecast"
+          ? buildAllowanceForecast(input.context)
+          : undefined;
+      const freeTime =
+        raw.intent === "free_time_finder"
+          ? buildFreeTimePlan(input.context)
+          : undefined;
       const response = aiChatResponseSchema.parse({
         intent: raw.intent,
         action: isStructuredIntent(raw.intent) ? normalizedAction : null,
         message: raw.message,
-        forecast:
-          raw.intent === "allowance_forecast"
-            ? buildForecast(input.context)
-            : undefined,
-        free_time:
-          raw.intent === "free_time_finder"
-            ? buildFreeTime(input.context)
-            : undefined,
+        ...(forecast ? { forecast } : {}),
+        ...(freeTime ? { free_time: freeTime } : {}),
         requires_confirmation:
+          raw.intent === "create_class" ||
           (isStructuredIntent(raw.intent) && normalizedAction === null) ||
           (isStructuredIntent(raw.intent) &&
             raw.confidence < AI_CONFIDENCE_THRESHOLD),
@@ -517,7 +404,9 @@ export class AIService {
         error instanceof Error ? error.message : "Unknown Gemini error.";
 
       return {
-        response: createFallbackResponse(),
+        response:
+          createPlanningFallbackResponse(input.message, input.context) ??
+          createFallbackResponse(),
         log: {
           raw_input: input.message,
           detected_intent: null,
@@ -526,6 +415,29 @@ export class AIService {
           error: message,
         },
       };
+    }
+  }
+
+  async createBriefing(context: AIChatContext): Promise<DailyBriefing> {
+    const deterministic = buildDeterministicBriefing(context);
+
+    try {
+      const raw = await this.geminiCaller({
+        message: "Create my daily briefing.",
+        systemPrompt: buildDailyBriefingPrompt(),
+        context: {
+          ...context,
+          deterministic_briefing: deterministic,
+        },
+      });
+
+      return {
+        ...deterministic,
+        message: raw.message,
+        source: "ai",
+      };
+    } catch {
+      return deterministic;
     }
   }
 

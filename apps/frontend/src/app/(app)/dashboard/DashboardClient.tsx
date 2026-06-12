@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { PlanningContext } from "@unilife-ai/types";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
@@ -10,7 +11,11 @@ import { useAssignments } from "@/hooks/use-assignments";
 import { useClasses } from "@/hooks/use-classes";
 import { useExams } from "@/hooks/use-exams";
 import { useExpenses } from "@/hooks/use-expenses";
+import { requestDailyBriefing } from "@/lib/api/briefing";
 import { getUpcomingDashboardDeadlines } from "@/lib/api/deadlines";
+import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
+import { formatAmount, getLocalDateKey } from "@/lib/api/utils";
+import { buildDailyBriefing } from "@/lib/planning/deterministic";
 import type {
   BudgetStatus,
   DashboardDeadlinePreview,
@@ -132,6 +137,77 @@ export default function DashboardClient({
   });
   const [pressedClassId, setPressedClassId] = useState<string | null>(null);
   const [pressedDeadlineId, setPressedDeadlineId] = useState<string | null>(null);
+  const [aiBriefingMessage, setAiBriefingMessage] = useState<string | null>(null);
+  const now = new Date();
+  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes(),
+  ).padStart(2, "0")}`;
+  const planningContext = useMemo(
+    () => {
+      const activeBudget = expensesState.activeBudget;
+      const cycleExpenses = activeBudget
+        ? expensesState.expenses.filter(
+            (expense) =>
+              expense.deleted_at === null &&
+              expense.spent_at >= `${activeBudget.start_date}T00:00:00` &&
+              expense.spent_at <= `${activeBudget.end_date}T23:59:59.999`,
+          )
+        : [];
+      const elapsedDays = activeBudget
+        ? Math.max(
+            1,
+            Math.floor(
+              (new Date(`${getLocalDateKey()}T00:00:00`).getTime() -
+                new Date(`${activeBudget.start_date}T00:00:00`).getTime()) /
+                86_400_000,
+            ) + 1,
+          )
+        : 0;
+
+      return {
+        today: getLocalDateKey(),
+        current_time: currentTime,
+        todays_classes: todayClasses.map((classItem) => ({
+          subject: classItem.subject,
+          start_time: classItem.startTime,
+          end_time: classItem.endTime,
+        })),
+        upcoming_deadlines: getChatUpcomingDeadlines(
+          assignmentsState.assignments,
+          examsState.exams,
+        ),
+        budget_remaining: resolvedBudget?.remainingAmount ?? null,
+        budget_period_end_date: activeBudget?.end_date ?? null,
+        avg_daily_spend:
+          activeBudget && elapsedDays > 0
+            ? cycleExpenses.reduce((sum, expense) => sum + expense.amount, 0) /
+              elapsedDays
+            : null,
+      } satisfies PlanningContext;
+    },
+    [
+      assignmentsState.assignments,
+      currentTime,
+      examsState.exams,
+      expensesState.activeBudget,
+      expensesState.expenses,
+      resolvedBudget?.remainingAmount,
+      todayClasses,
+    ],
+  );
+  const deterministicBriefing = useMemo(
+    () => buildDailyBriefing(planningContext),
+    [planningContext],
+  );
+  const planningContextKey = JSON.stringify(planningContext);
+  const briefingMessage = aiBriefingMessage ?? deterministicBriefing.message;
+  const formattedDate = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(now);
+  const greeting =
+    now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -154,6 +230,33 @@ export default function DashboardClient({
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOnline || !classesState.loaded || !assignmentsState.loaded || !examsState.loaded || !expensesState.loaded) {
+      setAiBriefingMessage(null);
+      return;
+    }
+
+    let active = true;
+    void requestDailyBriefing(planningContext)
+      .then((briefing) => {
+        if (active && briefing.source === "ai") setAiBriefingMessage(briefing.message);
+      })
+      .catch(() => {
+        if (active) setAiBriefingMessage(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    assignmentsState.loaded,
+    classesState.loaded,
+    examsState.loaded,
+    expensesState.loaded,
+    isOnline,
+    planningContextKey,
+  ]);
 
   const handleNavigate = (
     targetId: string,
@@ -192,8 +295,8 @@ export default function DashboardClient({
         <PageHeader
           className="sticky top-0 z-50 bg-[#f8f9fa]"
           contentClassName="flex justify-between items-center px-4 py-4 w-full"
-          title="Hi, Juan"
-          subtitle="Wednesday, June 3"
+          title={greeting}
+          subtitle={formattedDate}
           leading={
             <div
               style={{
@@ -207,7 +310,7 @@ export default function DashboardClient({
               }}
             >
               <img
-                alt="Juan's Avatar"
+                alt="User avatar"
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuBi6bUWVAa9B1N0mhWR0j7Pjd27lA5Kd1VOymbLeUpxWqzX59u-1oHMevqXkmOFnfrLItuF9Jg5D_GXg3pbLsYrg2DUS0pcA7eJVGZ9kddm7vFvjDGD41Aeqh-yUQcs244nEB6HpPJ2Mwm2AIJaVTJZUOwgbS-qKfqknRKyJKEurmqaHhqPiXCChlLB5jcXDN0w_cx6lVMlNxeCQIK_9Udb6mkj-0jbvZH26JM1bHhM_aQW6vPLntdZNcCBPIVRADtndQmvrtLl3Wg"
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
@@ -285,7 +388,7 @@ export default function DashboardClient({
                     margin: 0,
                   }}
                 >
-                  {isOnline ? "AI Suggests" : "Offline AI"}
+                  {aiBriefingMessage ? "AI Briefing" : "Daily Briefing"}
                 </h2>
               </div>
               <p
@@ -297,18 +400,24 @@ export default function DashboardClient({
                   margin: 0,
                 }}
               >
-                {isOnline ? (
-                  <>
-                    Start{" "}
-                    <span style={{ color: "#3B82F6" }}>Research Paper</span>{" "}
-                    today - due in 2 days.
-                  </>
-                ) : (
-                  <>
-                    Offline - <span style={{ color: "#424754" }}>AI features</span>{" "}
-                    need internet.
-                  </>
-                )}
+                {briefingMessage}
+              </p>
+              <p
+                style={{
+                  fontSize: "13px",
+                  lineHeight: "20px",
+                  color: "#424754",
+                  margin: "10px 0 0",
+                }}
+              >
+                {deterministicBriefing.class_count} class
+                {deterministicBriefing.class_count === 1 ? "" : "es"} today,{" "}
+                {deterministicBriefing.deadline_count} upcoming deadline
+                {deterministicBriefing.deadline_count === 1 ? "" : "s"}
+                {deterministicBriefing.budget_remaining === null
+                  ? ", no active budget"
+                  : `, ${formatAmount(deterministicBriefing.budget_remaining)} remaining`}
+                .
               </p>
             </div>
           </section>
@@ -707,7 +816,7 @@ export default function DashboardClient({
                       margin: 0,
                     }}
                   >
-                    Attendance Rate
+                    Today&apos;s Load
                   </p>
                   <h4
                     style={{
@@ -716,7 +825,7 @@ export default function DashboardClient({
                       margin: 0,
                     }}
                   >
-                    94%
+                    {todayClasses.length} classes
                   </h4>
                 </div>
               </div>
@@ -750,7 +859,7 @@ export default function DashboardClient({
                       margin: 0,
                     }}
                   >
-                    Study Goal
+                    Planning Focus
                   </p>
                   <h4
                     style={{
@@ -759,7 +868,9 @@ export default function DashboardClient({
                       margin: 0,
                     }}
                   >
-                    12h / 20h
+                    {deterministicBriefing.focus_task
+                      ? deterministicBriefing.focus_task.title
+                      : "Clear"}
                   </h4>
                 </div>
               </div>

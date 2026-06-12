@@ -302,12 +302,14 @@ describe("chat adapter", () => {
           context: expect.objectContaining({
             upcoming_deadlines: [
               {
+                id: "assignment-1",
                 title: "Essay Draft",
                 due_date: "2026-06-12T12:00:00.000Z",
                 type: "assignment",
                 status: "pending",
               },
               {
+                id: "exam-1",
                 title: "Biology Midterm",
                 due_date: "2099-06-11T09:00:00.000Z",
                 type: "exam",
@@ -356,6 +358,36 @@ describe("chat adapter", () => {
           }),
         ],
       }),
+    });
+  });
+
+  it("maps allowance forecasts into a structured forecast card", async () => {
+    mocks.requestBackend.mockResolvedValue({
+      intent: "allowance_forecast",
+      action: null,
+      message: "Keep spending under the safe daily limit.",
+      requires_confirmation: false,
+      forecast: {
+        remaining: 420,
+        days_left_in_cycle: 5,
+        avg_daily_spend: 210,
+        projected_runout_days: 2,
+        projected_runout_date: "2026-06-14",
+        recommended_daily_limit: 84,
+        will_last_cycle: false,
+      },
+    });
+
+    const { sendMessage } = await import("@/lib/api/chat");
+    const result = await sendMessage({ text: "will my allowance last?" });
+
+    expect(result.responseMessage).toMatchObject({
+      kind: "allowance_forecast",
+      payload: {
+        remaining: 420,
+        will_last_cycle: false,
+        closingText: "Keep spending under the safe daily limit.",
+      },
     });
   });
 });

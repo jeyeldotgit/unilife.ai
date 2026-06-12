@@ -4,7 +4,9 @@ import {
   tryCreateClass,
   tryCreateExam,
   tryLogExpense,
+  tryQueryAllowanceForecast,
   tryQueryDeadlines,
+  tryQueryFreeTime,
 } from "./intents/index.js";
 import { ParsedActionSchema, type ParsedAction } from "./schemas/parsed-action.js";
 
@@ -18,6 +20,8 @@ export function routeIntent(input: string, options: RouteIntentOptions = {}): Pa
   const normalizedInput = normalizeInput(input);
   const referenceDate = options.referenceDate ?? new Date();
   const handlers = [
+    () => tryQueryAllowanceForecast(normalizedInput),
+    () => tryQueryFreeTime(normalizedInput),
     () => tryQueryDeadlines(normalizedInput),
     () => tryCreateClass(normalizedInput),
     () => tryCreateExam(normalizedInput, referenceDate),
