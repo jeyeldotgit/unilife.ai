@@ -131,6 +131,7 @@ export function normalizeExamRecord(
     location: record.location,
     description: record.description,
     urgency: buildExamUrgency(record.exam_date),
+    reminders: [],
     createdAt: record.created_at,
     updatedAt: record.updated_at,
   };

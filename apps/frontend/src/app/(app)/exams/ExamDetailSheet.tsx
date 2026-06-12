@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Icon } from "@/components/ui/Icon";
+import { ReminderStatusList } from "@/components/ui/ReminderStatusList";
 import type { Exam } from "@/lib/types";
 
 export function ExamDetailSheet({
@@ -96,6 +97,8 @@ export function ExamDetailSheet({
             <span>{exam.description ?? "No description added"}</span>
           </div>
         </div>
+
+        <ReminderStatusList reminders={exam.reminders} />
 
         <div className="mt-6 flex gap-3">
           <button

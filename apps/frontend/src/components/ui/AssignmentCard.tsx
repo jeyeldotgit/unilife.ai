@@ -6,6 +6,7 @@ type AssignmentCardListProps = {
   assignment: Assignment;
   checked?: boolean;
   onToggleChecked?: (assignmentId: string) => void;
+  onSelect?: (assignment: Assignment) => void;
 };
 
 type AssignmentCardChatConfirmationProps = {
@@ -127,11 +128,19 @@ export function AssignmentCard(props: AssignmentCardProps) {
     );
   }
 
-  const { assignment, checked = false, onToggleChecked } = props;
+  const { assignment, checked = false, onSelect, onToggleChecked } = props;
   const isDone = assignment.status === "completed";
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect?.(assignment)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          onSelect?.(assignment);
+        }
+      }}
       style={{
         backgroundColor: isDone ? "#f3f4f5" : "#ffffff",
         border: `1px solid ${isDone ? "rgba(194,198,214,0.3)" : "#c2c6d6"}`,
@@ -258,7 +267,10 @@ export function AssignmentCard(props: AssignmentCardProps) {
           <button
             type="button"
             aria-label={`Toggle ${assignment.title}`}
-            onClick={() => onToggleChecked?.(assignment.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleChecked?.(assignment.id);
+            }}
             style={{
               width: "24px",
               height: "24px",
@@ -309,4 +321,3 @@ export function AssignmentCard(props: AssignmentCardProps) {
     </div>
   );
 }
-

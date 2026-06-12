@@ -39,6 +39,14 @@ export function useAssignments() {
     [],
     [userId],
   );
+  const notificationsQuery = useLiveQueryValue(
+    async () => {
+      if (!userId) return [];
+      return db.notifications.where("user_id").equals(userId).toArray();
+    },
+    [],
+    [userId],
+  );
   const classSubjectById = new Map(
     classesQuery.value.map((record) => [record.id, record.subject] as const),
   );
@@ -47,9 +55,15 @@ export function useAssignments() {
     assignments: assignmentsQuery.value.map((record) =>
       normalizeAssignmentRecord(record, {
         classSubjectById,
+        notifications: notificationsQuery.value.filter(
+          (notification) =>
+            notification.entity_type === "assignment" &&
+            notification.entity_id === record.id,
+        ),
       }),
     ),
     available: syncStatus.ready || assignmentsQuery.value.length > 0,
-    loaded: assignmentsQuery.loaded && classesQuery.loaded,
+    loaded:
+      assignmentsQuery.loaded && classesQuery.loaded && notificationsQuery.loaded,
   };
 }

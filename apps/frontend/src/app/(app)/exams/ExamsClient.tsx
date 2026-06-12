@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   createEmptyExamFormState,
   createExamFormStateFromExam,
@@ -13,6 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ExamCard } from "@/components/ui/ExamCard";
 import { Icon } from "@/components/ui/Icon";
 import { TasksRouteSwitcher } from "@/components/ui/TasksRouteSwitcher";
+import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { useExams } from "@/hooks/use-exams";
 import {
   createExamLocal,
@@ -20,6 +22,7 @@ import {
   updateExamLocal,
 } from "@/lib/mutations/local-data";
 import type { ClassOption, Exam } from "@/lib/types";
+import { dismissNotification } from "@/lib/notifications/runtime";
 
 type FilterTab = "Upcoming" | "Past";
 
@@ -45,6 +48,8 @@ export default function ExamsClient({
   classesAvailable,
 }: ExamsClientProps) {
   const examsState = useExams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const resolvedExams = initialExams.length > 0 ? initialExams : examsState.exams;
   const resolvedClassOptions =
     classOptions.length > 0 ? classOptions : examsState.classOptions;
@@ -63,6 +68,21 @@ export default function ExamsClient({
   >(null);
   const [isBusy, setIsBusy] = useState(false);
 
+  useEffect(() => {
+    const itemId = searchParams.get("item");
+    if (!itemId) return;
+    const exam = resolvedExams.find((item) => item.id === itemId);
+    if (exam && selectedExam?.id !== itemId) {
+      // The URL is an external navigation source from the service worker.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedExam(exam);
+    }
+    const notificationId = searchParams.get("notification");
+    if (notificationId) {
+      void dismissNotification(notificationId).then(() => router.replace("/exams"));
+    }
+  }, [resolvedExams, router, searchParams, selectedExam?.id]);
+
   const upcomingExams = resolvedExams
     .filter(isUpcomingExam)
     .slice()
@@ -73,6 +93,9 @@ export default function ExamsClient({
     .sort((left, right) => sortExams(right, left));
   const visibleExams =
     activeFilter === "Upcoming" ? upcomingExams : pastExams;
+  const displayedSelectedExam = selectedExam
+    ? resolvedExams.find((exam) => exam.id === selectedExam.id) ?? selectedExam
+    : null;
 
   const resetForm = () => {
     setFormState(createEmptyExamFormState());
@@ -265,12 +288,7 @@ export default function ExamsClient({
         titleClassName="m-0 text-2xl font-bold leading-8 text-[#3B82F6]"
         subtitleClassName="text-xs font-medium text-[#424754]"
         trailing={
-          <button
-            type="button"
-            className="rounded-full p-2 text-[#3B82F6] transition-opacity hover:opacity-80"
-          >
-            <Icon name="notifications" />
-          </button>
+          <NotificationPermissionButton />
         }
       />
 
@@ -343,8 +361,8 @@ export default function ExamsClient({
       </div>
 
       <ExamDetailSheet
-        open={selectedExam !== null && !formOpen}
-        exam={selectedExam}
+        open={displayedSelectedExam !== null && !formOpen}
+        exam={displayedSelectedExam}
         pending={isBusy && pendingAction === "delete"}
         onClose={() => {
           if (!isBusy) {

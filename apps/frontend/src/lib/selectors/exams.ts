@@ -1,4 +1,4 @@
-import type { Exam as ExamRecord } from "@unilife-ai/types";
+import type { Exam as ExamRecord, Notification } from "@unilife-ai/types";
 
 import {
   formatMonthDay,
@@ -6,6 +6,7 @@ import {
   formatTimeLabel,
 } from "@/lib/api/utils";
 import type { Exam, ExamUrgency } from "@/lib/types";
+import { buildReminderStatusItems } from "@/lib/selectors/notifications";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -101,6 +102,7 @@ export function normalizeExamRecord(
   record: ExamRecord,
   options?: {
     classSubjectById?: Map<string, string>;
+    notifications?: Notification[];
   },
 ): Exam {
   const subject =
@@ -121,6 +123,7 @@ export function normalizeExamRecord(
     location: record.location,
     description: record.description,
     urgency: buildExamUrgency(record.exam_date),
+    reminders: buildReminderStatusItems(options?.notifications ?? []),
     createdAt: record.created_at,
     updatedAt: record.updated_at,
   };

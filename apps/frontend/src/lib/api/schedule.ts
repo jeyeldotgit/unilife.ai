@@ -317,6 +317,7 @@ export function buildScheduleWeekSnapshot(
           meetingLabel:
             meetingLabels.get(classItem.id) ?? getDayLabel(classItem.dayOfWeek),
           assignments: linkedAssignments,
+          reminders: [],
         } satisfies ScheduleClassDetail,
       ];
     }),

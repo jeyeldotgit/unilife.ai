@@ -3,6 +3,7 @@ import type {
   BudgetPeriod as DomainBudgetPeriod,
   DayOfWeek as DomainDayOfWeek,
   ExpenseCategory as DomainExpenseCategory,
+  NotificationStatus,
 } from "@unilife-ai/types";
 
 export type DayOfWeek = DomainDayOfWeek;
@@ -72,6 +73,7 @@ export type FreeWindow = {
 export type ScheduleClassDetail = ScheduleClass & {
   meetingLabel: string;
   assignments: LinkedAssignmentSummary[];
+  reminders?: ReminderStatusItem[];
 };
 
 export type ScheduleWeek = {
@@ -87,7 +89,6 @@ export type ScheduleWeek = {
 export type AssignmentPriority = 1 | 2 | 3;
 export type AssignmentReminderOffset = "7d" | "3d" | "1d" | "3h";
 export type AssignmentReminderStatus = "pending" | "sent";
-
 export type AssignmentUrgency = {
   label: string;
   icon: string;
@@ -95,14 +96,18 @@ export type AssignmentUrgency = {
   textColor: string;
 };
 
-export type AssignmentReminder = {
+export type ReminderStatusItem = {
   id: string;
   label: string;
-  offset: AssignmentReminderOffset;
-  status: AssignmentReminderStatus;
+  status: NotificationStatus;
   scheduledFor: string;
   scheduledLabel: string;
+};
+
+export type AssignmentReminder = ReminderStatusItem & {
+  offset: AssignmentReminderOffset;
   sentAt: string | null;
+  status: AssignmentReminderStatus;
 };
 
 export type Assignment = {
@@ -118,7 +123,7 @@ export type Assignment = {
   priority: AssignmentPriority;
   description: string | null;
   urgency: AssignmentUrgency;
-  reminders: AssignmentReminder[];
+  reminders?: ReminderStatusItem[];
   createdAt: string;
   updatedAt: string;
 };
@@ -157,6 +162,7 @@ export type Exam = {
   location: string | null;
   description: string | null;
   urgency: ExamUrgency;
+  reminders?: ReminderStatusItem[];
   createdAt: string;
   updatedAt: string;
 };

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import type { ScheduleClassDetail } from "@/lib/types";
 import { Icon } from "@/components/ui/Icon";
+import { ReminderStatusList } from "@/components/ui/ReminderStatusList";
 
 type ClassDetailSheetProps = {
   open: boolean;
@@ -91,6 +92,8 @@ export function ClassDetailSheet({
           </div>
         </div>
 
+        <ReminderStatusList reminders={detail.reminders} />
+
         <div className="mt-6">
           <h3 className="text-sm font-semibold text-[#424754]">
             Upcoming for this class:
@@ -165,4 +168,3 @@ export function ClassDetailSheet({
     </div>
   );
 }
-

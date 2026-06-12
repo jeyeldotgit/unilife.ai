@@ -7,8 +7,8 @@ import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { QuickActions } from "@/components/chat/QuickActions";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Icon } from "@/components/ui/Icon";
 import {
   executeChatClientEffect,
   resolveLocalChat,
@@ -217,26 +217,7 @@ export default function ChatClient({
           }
           titleClassName="m-0 text-2xl font-bold leading-8 text-[#0058be]"
           trailing={
-            <button
-              type="button"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "#3B82F6",
-                padding: "8px",
-                borderRadius: "9999px",
-                transition: "opacity 0.15s",
-              }}
-              onMouseOver={(event) => {
-                event.currentTarget.style.opacity = "0.8";
-              }}
-              onMouseOut={(event) => {
-                event.currentTarget.style.opacity = "1";
-              }}
-            >
-              <Icon name="notifications" />
-            </button>
+            <NotificationPermissionButton />
           }
         />
 
