@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@unilife-ai/ai-core", () => ({
+  buildDailyBriefingPrompt: () => "daily briefing prompt",
   callGemini: state.callGemini,
 }));
 
@@ -274,5 +275,29 @@ describe("POST /api/ai/chat", () => {
       requires_confirmation: false,
     });
     expect(state.aiLogs).toHaveLength(0);
+  });
+});
+
+describe("POST /api/ai/briefing", () => {
+  it("returns a deterministic briefing when Gemini is unavailable", async () => {
+    state.callGemini.mockRejectedValue(new Error("offline"));
+    const { app } = await import("../src/app.js");
+
+    const response = await app.request("http://localhost/api/ai/briefing", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ context: createRequestBody().context }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      class_count: 0,
+      deadline_count: 0,
+      source: "deterministic",
+    });
   });
 });

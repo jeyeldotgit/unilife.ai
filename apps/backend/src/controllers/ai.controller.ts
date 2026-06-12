@@ -21,4 +21,8 @@ export class AIController {
 
     return result.response;
   }
+
+  async briefing(context: AIChatInput["context"]) {
+    return this.service.createBriefing(context);
+  }
 }
