@@ -16,6 +16,11 @@ import {
   getBudgetStatusLocal,
   logExpenseLocal,
 } from "@/lib/mutations/local-data";
+import {
+  buildAllowanceForecast,
+  buildFreeTimePlan,
+} from "@/lib/planning/deterministic";
+import { getLocalPlanningContext } from "@/lib/planning/local-context";
 import { getCurrentUserId } from "@/lib/session/current-user";
 import type { ChatClientEffect, ChatMessage } from "@/lib/types";
 
@@ -42,7 +47,10 @@ function getClarification(action: Extract<ParsedAction, { intent: "unknown" }>) 
 }
 
 function toClientEffect(
-  action: Exclude<ParsedAction, { intent: "unknown" | "query_deadlines" }>,
+  action: Extract<
+    ParsedAction,
+    { intent: "create_assignment" | "create_class" | "create_exam" | "log_expense" }
+  >,
 ): ChatClientEffect {
   switch (action.intent) {
     case "create_assignment":
@@ -96,6 +104,68 @@ function toClientEffect(
         },
       };
   }
+}
+
+function formatFreeWindow(minutes: number) {
+  if (minutes < 60) return `You have ${minutes} minutes free`;
+  return `You have ${Math.floor(minutes / 60)}h ${minutes % 60}m free`;
+}
+
+async function buildPlanningFallback(
+  intent: "query_free_time" | "query_allowance_forecast",
+): Promise<ChatMessage> {
+  const context = await getLocalPlanningContext();
+
+  if (!context) {
+    return buildTextMessage("I cannot access your saved planning data in this browser session yet.");
+  }
+
+  if (intent === "query_free_time") {
+    const plan = buildFreeTimePlan(context);
+    if (!plan) return buildTextMessage("I could not calculate your free time right now.");
+
+    return {
+      id: crypto.randomUUID(),
+      role: "ai",
+      kind: "free_time_recommendation",
+      createdAt: new Date().toISOString(),
+      payload: {
+        freeWindowLabel: plan.current_class_subject
+          ? `You are currently in ${plan.current_class_subject}`
+          : formatFreeWindow(plan.window_minutes),
+        nextClassLabel: plan.next_class_subject
+          ? `${plan.next_class_subject} starts at ${plan.next_class_time}`
+          : "No more classes are scheduled after this window.",
+        recommendations: plan.suggested_tasks.map((task) => ({
+          entityId: task.id ?? null,
+          kind: task.type,
+          title: task.title,
+          dueLabel: task.urgency_days <= 1 ? "Due within 1 day" : `Due in ${task.urgency_days} days`,
+          subjectLabel: task.subject ?? "No class",
+          typeLabel: task.type === "exam" ? "Exam" : "Assignment",
+          priorityLabel: task.urgency_days <= 2 ? "High priority" : "Upcoming",
+          icon: task.type === "exam" ? "quiz" : "assignment",
+        })),
+        closingText: "This recommendation uses your saved local schedule and deadlines.",
+      },
+    };
+  }
+
+  const forecast = buildAllowanceForecast(context);
+  if (!forecast) {
+    return buildTextMessage("Set an active budget cycle to calculate an allowance forecast.");
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    role: "ai",
+    kind: "allowance_forecast",
+    createdAt: new Date().toISOString(),
+    payload: {
+      ...forecast,
+      closingText: "This forecast uses your saved local budget and expenses.",
+    },
+  };
 }
 
 export async function executeChatClientEffect(
@@ -227,6 +297,16 @@ export async function resolveLocalChat(text: string): Promise<LocalChatResolutio
     return {
       handled: true,
       message: await buildDeadlineMessage(action.data.range),
+    };
+  }
+
+  if (
+    action.intent === "query_free_time" ||
+    action.intent === "query_allowance_forecast"
+  ) {
+    return {
+      handled: false,
+      offlineMessage: await buildPlanningFallback(action.intent),
     };
   }
 

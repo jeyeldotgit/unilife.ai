@@ -11,6 +11,12 @@ import {
   titleCase,
 } from "@/lib/api/utils";
 import type {
+  AllowanceForecast,
+  FreeTimePlan,
+  PlanningContext,
+} from "@unilife-ai/types";
+import type {
+  ChatAllowanceForecastMessage,
   ChatClientEffect,
   ChatFreeTimeRecommendationMessage,
   ChatQuickAction,
@@ -39,24 +45,8 @@ type AiChatResponse = {
   intent: AiChatIntent;
   action: Record<string, unknown> | null;
   message: string;
-  forecast?: {
-    remaining: number;
-    days_left_in_cycle: number;
-    avg_daily_spend: number;
-    projected_runout_days: number;
-    recommended_daily_limit: number;
-  };
-  free_time?: {
-    window_minutes: number;
-    next_class_subject: string | null;
-    next_class_time: string | null;
-    suggested_tasks: Array<{
-      title: string;
-      due_date: string;
-      type: "assignment" | "exam";
-      urgency_days: number;
-    }>;
-  };
+  forecast?: AllowanceForecast;
+  free_time?: FreeTimePlan;
   requires_confirmation: boolean;
 };
 
@@ -141,22 +131,26 @@ function buildFreeTimeRecommendation(
     kind: "free_time_recommendation",
     createdAt: new Date().toISOString(),
     payload: {
-      freeWindowLabel: `You have ${Math.max(
-        1,
-        Math.round(response.free_time.window_minutes / 60),
-      )} hour${response.free_time.window_minutes >= 120 ? "s" : ""} free`,
+      freeWindowLabel:
+        response.free_time.current_class_subject
+          ? `You are currently in ${response.free_time.current_class_subject}`
+          : response.free_time.window_minutes < 60
+            ? `You have ${response.free_time.window_minutes} minutes free`
+            : `You have ${Math.floor(response.free_time.window_minutes / 60)}h ${
+                response.free_time.window_minutes % 60
+              }m free`,
       nextClassLabel: response.free_time.next_class_subject
         ? `${response.free_time.next_class_subject} starts at ${response.free_time.next_class_time}`
         : "No more classes are scheduled after this window.",
       recommendations: response.free_time.suggested_tasks.map((task) => ({
-        entityId: null,
+        entityId: task.id ?? null,
         kind: task.type,
         title: task.title,
         dueLabel:
           task.urgency_days <= 1
             ? "Due within 1 day"
             : `Due in ${task.urgency_days} days`,
-        subjectLabel: task.type === "exam" ? "Exam" : "Assignment",
+        subjectLabel: task.subject ?? "No class",
         typeLabel: task.type === "exam" ? "Exam" : "Assignment",
         priorityLabel:
           task.urgency_days <= 2
@@ -166,6 +160,23 @@ function buildFreeTimeRecommendation(
               : "Low priority",
         icon: task.type === "exam" ? "quiz" : "assignment",
       })),
+      closingText: response.message,
+    },
+  };
+}
+
+function buildAllowanceForecastMessage(
+  response: AiChatResponse,
+): ChatAllowanceForecastMessage | null {
+  if (!response.forecast) return null;
+
+  return {
+    id: crypto.randomUUID(),
+    role: "ai",
+    kind: "allowance_forecast",
+    createdAt: new Date().toISOString(),
+    payload: {
+      ...response.forecast,
       closingText: response.message,
     },
   };
@@ -443,23 +454,24 @@ export async function sendMessage(
     getBudgetChatContext(),
   ]);
 
+  const context = {
+    today: new Date().toISOString().slice(0, 10),
+    current_time: getCurrentTimeString(),
+    todays_classes: scheduleWeek.todayClasses.map((classItem) => ({
+      subject: classItem.subject,
+      start_time: classItem.startTime,
+      end_time: classItem.endTime,
+    })),
+    upcoming_deadlines: getChatUpcomingDeadlines(assignments, exams),
+    budget_remaining: budgetContext.budgetRemaining,
+    budget_period_end_date: budgetContext.budgetPeriodEndDate,
+    avg_daily_spend: budgetContext.avgDailySpend,
+  } satisfies PlanningContext;
   const response = await requestBackend<AiChatResponse>("/api/ai/chat", {
     method: "POST",
     body: {
       message: input.text.trim(),
-      context: {
-        today: new Date().toISOString().slice(0, 10),
-        current_time: getCurrentTimeString(),
-        todays_classes: scheduleWeek.todayClasses.map((classItem) => ({
-          subject: classItem.subject,
-          start_time: classItem.startTime,
-          end_time: classItem.endTime,
-        })),
-        upcoming_deadlines: getChatUpcomingDeadlines(assignments, exams),
-        budget_remaining: budgetContext.budgetRemaining,
-        budget_period_end_date: budgetContext.budgetPeriodEndDate,
-        avg_daily_spend: budgetContext.avgDailySpend,
-      },
+      context,
     },
   });
 
@@ -471,6 +483,13 @@ export async function sendMessage(
         userMessage,
         responseMessage: recommendation,
       };
+    }
+  }
+
+  if (response.intent === "allowance_forecast") {
+    const forecast = buildAllowanceForecastMessage(response);
+    if (forecast) {
+      return { userMessage, responseMessage: forecast };
     }
   }
 
