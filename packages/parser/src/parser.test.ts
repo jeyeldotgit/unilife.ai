@@ -64,6 +64,18 @@ describe("local parser", () => {
     });
   });
 
+  it("detects free-time planning queries", () => {
+    expect(routeIntent("what should I do right now?", { referenceDate })).toMatchObject({
+      intent: "query_free_time",
+    });
+  });
+
+  it("detects allowance forecast queries", () => {
+    expect(routeIntent("will my allowance last until Friday?", { referenceDate })).toMatchObject({
+      intent: "query_allowance_forecast",
+    });
+  });
+
   it("rejects invalid class time ranges at the Zod boundary", () => {
     expect(routeIntent("add class physics monday 10am to 8am", { referenceDate })).toMatchObject({
       intent: "unknown",
