@@ -7,21 +7,12 @@ import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { QuickActions } from "@/components/chat/QuickActions";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Icon } from "@/components/ui/Icon";
 import {
-  buildAssignmentConfirmation,
-  buildClassConfirmation,
-  buildExamConfirmation,
-  buildExpenseConfirmation,
-} from "@/lib/chat/local-confirmations";
-import {
-  createAssignmentLocal,
-  createClassLocal,
-  createExamLocal,
-  getBudgetStatusLocal,
-  logExpenseLocal,
-} from "@/lib/mutations/local-data";
+  executeChatClientEffect,
+  resolveLocalChat,
+} from "@/lib/chat/local-executor";
 import type { ChatMessage, ChatQuickAction, ChatTextMessage } from "@/lib/types";
 
 export type ChatClientProps = {
@@ -129,96 +120,43 @@ export default function ChatClient({
     setInputValue("");
     setIsSubmitting(true);
 
-    const result = await submitChatMessageAction({
-      text,
-      offline: isOffline,
-    });
+    try {
+      const localResult = await resolveLocalChat(text);
 
-    if (result.ok) {
-      if (result.clientEffect?.kind === "create_assignment") {
-        try {
-          const assignment = await createAssignmentLocal(result.clientEffect.payload);
-          setMessages((current) => [
-            ...current,
-            buildAssignmentConfirmation(assignment),
-          ]);
-        } catch (error) {
-          setMessages((current) => [
-            ...current,
-            buildFailureMessage(
-              error instanceof Error
-                ? error.message
-                : "We couldn't save that assignment right now.",
-            ),
-          ]);
-        }
-      } else if (result.clientEffect?.kind === "create_class") {
-        try {
-          const classRecord = await createClassLocal(result.clientEffect.payload);
-          setMessages((current) => [
-            ...current,
-            buildClassConfirmation({
-              id: classRecord.id,
-              subject: classRecord.subject,
-              dayOfWeek: classRecord.day_of_week,
-              startTime: classRecord.start_time,
-              endTime: classRecord.end_time,
-              room: classRecord.room,
-            }),
-          ]);
-        } catch (error) {
-          setMessages((current) => [
-            ...current,
-            buildFailureMessage(
-              error instanceof Error
-                ? error.message
-                : "We couldn't save that class right now.",
-            ),
-          ]);
-        }
-      } else if (result.clientEffect?.kind === "create_exam") {
-        try {
-          const exam = await createExamLocal(result.clientEffect.payload);
-          setMessages((current) => [...current, buildExamConfirmation(exam)]);
-        } catch (error) {
-          setMessages((current) => [
-            ...current,
-            buildFailureMessage(
-              error instanceof Error
-                ? error.message
-                : "We couldn't save that exam right now.",
-            ),
-          ]);
-        }
-      } else if (result.clientEffect?.kind === "log_expense") {
-        try {
-          const expense = await logExpenseLocal(result.clientEffect.payload);
-          const budgetStatus = await getBudgetStatusLocal();
-          setMessages((current) => [
-            ...current,
-            buildExpenseConfirmation(expense, budgetStatus),
-          ]);
-        } catch (error) {
-          setMessages((current) => [
-            ...current,
-            buildFailureMessage(
-              error instanceof Error
-                ? error.message
-                : "We couldn't log that expense right now.",
-            ),
-          ]);
-        }
-      } else {
-        setMessages((current) => [...current, result.responseMessage]);
+      if (localResult.handled) {
+        setMessages((current) => [...current, localResult.message]);
+        setIsSubmitting(false);
+        return;
       }
-    } else {
-      const responseMessage = result.responseMessage;
 
-      if (responseMessage) {
+      if (isOffline) {
+        setMessages((current) => [...current, localResult.offlineMessage]);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const result = await submitChatMessageAction({ text });
+
+      if (result.ok) {
+        const response = result.clientEffect
+          ? await executeChatClientEffect(result.clientEffect)
+          : result.responseMessage;
+        setMessages((current) => [...current, response]);
+      } else if (result.responseMessage) {
+        const responseMessage = result.responseMessage;
         setMessages((current) => [...current, responseMessage]);
       } else {
         setMessages((current) => [...current, buildFailureMessage(result.error)]);
       }
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        buildFailureMessage(
+          error instanceof Error
+            ? error.message
+            : "We couldn't process that message right now.",
+        ),
+      ]);
     }
 
     setIsSubmitting(false);
@@ -279,26 +217,7 @@ export default function ChatClient({
           }
           titleClassName="m-0 text-2xl font-bold leading-8 text-[#0058be]"
           trailing={
-            <button
-              type="button"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "#3B82F6",
-                padding: "8px",
-                borderRadius: "9999px",
-                transition: "opacity 0.15s",
-              }}
-              onMouseOver={(event) => {
-                event.currentTarget.style.opacity = "0.8";
-              }}
-              onMouseOut={(event) => {
-                event.currentTarget.style.opacity = "1";
-              }}
-            >
-              <Icon name="notifications" />
-            </button>
+            <NotificationPermissionButton />
           }
         />
 

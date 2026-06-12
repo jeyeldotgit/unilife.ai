@@ -65,7 +65,7 @@ const quickActions: ChatQuickAction[] = [
     id: "quick-task",
     label: "+ Task",
     icon: "assignment_add",
-    prompt: "book report next friday 11:59pm",
+    prompt: "assignment book report next friday 11:59pm",
     kind: "create_assignment",
   },
   {
@@ -79,7 +79,7 @@ const quickActions: ChatQuickAction[] = [
     id: "quick-class",
     label: "+ Class",
     icon: "calendar_add_on",
-    prompt: "add class",
+    prompt: "add class Physics monday 8am to 10am",
     kind: "create_class",
   },
   {

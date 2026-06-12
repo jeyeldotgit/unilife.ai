@@ -40,6 +40,14 @@ export function useExams() {
     [],
     [userId],
   );
+  const notificationsQuery = useLiveQueryValue(
+    async () => {
+      if (!userId) return [];
+      return db.notifications.where("user_id").equals(userId).toArray();
+    },
+    [],
+    [userId],
+  );
   const classSubjectById = new Map(
     classesQuery.value.map((record) => [record.id, record.subject] as const),
   );
@@ -51,8 +59,13 @@ export function useExams() {
     exams: examsQuery.value.map((record) =>
       normalizeExamRecord(record, {
         classSubjectById,
+        notifications: notificationsQuery.value.filter(
+          (notification) =>
+            notification.entity_type === "exam" &&
+            notification.entity_id === record.id,
+        ),
       }),
     ),
-    loaded: examsQuery.loaded && classesQuery.loaded,
+    loaded: examsQuery.loaded && classesQuery.loaded && notificationsQuery.loaded,
   };
 }

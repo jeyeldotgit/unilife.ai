@@ -39,15 +39,25 @@ export function useClasses() {
     [],
     [userId],
   );
+  const notificationsQuery = useLiveQueryValue(
+    async () => {
+      if (!userId) return [];
+      return db.notifications.where("user_id").equals(userId).toArray();
+    },
+    [],
+    [userId],
+  );
   const scheduleWeek = buildScheduleWeekSnapshot(
     classQuery.value,
     assignmentQuery.value,
+    notificationsQuery.value,
   );
 
   return {
     available: syncStatus.ready || classQuery.value.length > 0,
     classOptions: buildClassOptions(classQuery.value),
-    loaded: classQuery.loaded && assignmentQuery.loaded,
+    loaded:
+      classQuery.loaded && assignmentQuery.loaded && notificationsQuery.loaded,
     records: classQuery.value,
     scheduleWeek,
   };

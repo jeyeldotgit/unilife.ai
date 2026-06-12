@@ -7,6 +7,18 @@ const { dbMock } = vi.hoisted(() => ({
     classes: { get: vi.fn(), put: vi.fn(), where: vi.fn() },
     exams: { get: vi.fn(), put: vi.fn(), where: vi.fn() },
     expenses: { get: vi.fn(), put: vi.fn(), where: vi.fn() },
+    notifications: {
+      bulkDelete: vi.fn(),
+      bulkPut: vi.fn(),
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          and: vi.fn(() => ({
+            primaryKeys: vi.fn().mockResolvedValue([]),
+            toArray: vi.fn().mockResolvedValue([]),
+          })),
+        })),
+      })),
+    },
     sync_queue: { put: vi.fn() },
     transaction: vi.fn(async (_mode: string, ...args: unknown[]) => {
       const callback = args[args.length - 1] as () => Promise<void>;

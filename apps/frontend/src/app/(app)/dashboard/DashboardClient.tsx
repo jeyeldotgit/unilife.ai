@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { Icon } from "@/components/ui/Icon";
 import { useAssignments } from "@/hooks/use-assignments";
@@ -216,25 +217,7 @@ export default function DashboardClient({
           titleClassName="m-0 text-2xl font-semibold leading-8 text-[#3B82F6]"
           subtitleClassName="text-sm font-semibold leading-5 text-[#424754]"
           trailing={
-            <button
-              type="button"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "8px",
-                borderRadius: "9999px",
-                transition: "opacity 0.15s",
-              }}
-              onMouseOver={(event) => {
-                event.currentTarget.style.opacity = "0.8";
-              }}
-              onMouseOut={(event) => {
-                event.currentTarget.style.opacity = "1";
-              }}
-            >
-              <Icon name="notifications" style={{ color: "#424754" }} />
-            </button>
+            <NotificationPermissionButton className="rounded-full p-2 text-[#424754] transition-opacity hover:opacity-80" />
           }
         />
 

@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AssignmentDetailSheet } from "@/app/(app)/assignments/AssignmentDetailSheet";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { AssignmentCard } from "@/components/ui/AssignmentCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { TasksRouteSwitcher } from "@/components/ui/TasksRouteSwitcher";
+import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { useAssignments } from "@/hooks/use-assignments";
 import type { Assignment } from "@/lib/types";
+import { dismissNotification } from "@/lib/notifications/runtime";
 
 type FilterTab = "All" | "Pending" | "Done";
 
@@ -21,12 +25,34 @@ export default function AssignmentsClient({
   assignmentsAvailable,
 }: AssignmentsClientProps) {
   const assignmentsState = useAssignments();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const assignments =
     initialAssignments.length > 0 ? initialAssignments : assignmentsState.assignments;
   const resolvedAssignmentsAvailable =
     assignmentsAvailable ?? assignmentsState.available;
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(
+    null,
+  );
+  const selectedAssignment =
+    assignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null;
+
+  useEffect(() => {
+    const itemId = searchParams.get("item");
+    if (!itemId) return;
+    const assignment = assignments.find((item) => item.id === itemId);
+    if (assignment && selectedAssignmentId !== itemId) {
+      // The URL is an external navigation source from the service worker.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedAssignmentId(itemId);
+    }
+    const notificationId = searchParams.get("notification");
+    if (notificationId) {
+      void dismissNotification(notificationId).then(() => router.replace("/assignments"));
+    }
+  }, [assignments, router, searchParams, selectedAssignmentId]);
 
   const toggleCheck = (id: string) => {
     setCheckedIds((prev) => {
@@ -87,6 +113,7 @@ export default function AssignmentsClient({
               assignment={assignment}
               checked={checkedIds.has(assignment.id)}
               onToggleChecked={toggleCheck}
+              onSelect={(assignment) => setSelectedAssignmentId(assignment.id)}
             />
           ))}
         </div>
@@ -158,25 +185,7 @@ export default function AssignmentsClient({
           titleClassName="m-0 text-2xl font-bold leading-8 text-[#3B82F6]"
           subtitleClassName="text-xs font-medium text-[#424754]"
           trailing={
-            <button
-              type="button"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "#3B82F6",
-                padding: "4px",
-                transition: "opacity 0.15s",
-              }}
-              onMouseOver={(event) => {
-                event.currentTarget.style.opacity = "0.8";
-              }}
-              onMouseOut={(event) => {
-                event.currentTarget.style.opacity = "1";
-              }}
-            >
-              <Icon name="notifications" />
-            </button>
+            <NotificationPermissionButton className="p-1 text-[#3B82F6] transition-opacity hover:opacity-80" />
           }
         />
 
@@ -482,6 +491,10 @@ export default function AssignmentsClient({
           </button>
         </div>
       </div>
+      <AssignmentDetailSheet
+        assignment={selectedAssignment}
+        onClose={() => setSelectedAssignmentId(null)}
+      />
     </>
   );
 }

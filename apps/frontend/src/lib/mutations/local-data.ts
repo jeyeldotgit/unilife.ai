@@ -12,6 +12,10 @@ import type {
 import { calculateBudgetEndDate, inferExpenseCategory } from "@/lib/api/utils";
 import { db } from "@/lib/db/dexie";
 import {
+  deleteEntityNotifications,
+  replaceEntityNotifications,
+} from "@/lib/notifications/store";
+import {
   getCurrentUserId,
   setCurrentUserId,
 } from "@/lib/session/current-user";
@@ -133,8 +137,9 @@ export async function createClassLocal(input: CreateClassInput) {
     payload.color = record.color;
   }
 
-  await db.transaction("rw", db.classes, db.sync_queue, async () => {
+  await db.transaction("rw", db.classes, db.notifications, db.sync_queue, async () => {
     await db.classes.put(record);
+    await replaceEntityNotifications("class", record);
     await db.sync_queue.put(
       createQueueItem({
         entityId: record.id,
@@ -195,8 +200,9 @@ export async function updateClassLocal(id: string, input: UpdateClassInput) {
   maybeSetNullableString("instructor", input.instructor, payload);
   maybeSetNullableString("color", input.color, payload);
 
-  await db.transaction("rw", db.classes, db.sync_queue, async () => {
+  await db.transaction("rw", db.classes, db.notifications, db.sync_queue, async () => {
     await db.classes.put(updatedRecord);
+    await replaceEntityNotifications("class", updatedRecord);
     await db.sync_queue.put(
       createQueueItem({
         entityId: id,
@@ -221,13 +227,14 @@ export async function deleteClassLocal(id: string) {
 
   const deletedAt = new Date().toISOString();
 
-  await db.transaction("rw", db.classes, db.sync_queue, async () => {
+  await db.transaction("rw", db.classes, db.notifications, db.sync_queue, async () => {
     await db.classes.put({
       ...existingRecord,
       deleted_at: deletedAt,
       is_active: false,
       updated_at: deletedAt,
     });
+    await deleteEntityNotifications("class", id);
     await db.sync_queue.put(
       createQueueItem({
         entityId: id,
@@ -271,8 +278,14 @@ export async function createAssignmentLocal(input: CreateAssignmentInput) {
     payload.description = record.description;
   }
 
-  await db.transaction("rw", db.assignments, db.sync_queue, async () => {
+  await db.transaction(
+    "rw",
+    db.assignments,
+    db.notifications,
+    db.sync_queue,
+    async () => {
     await db.assignments.put(record);
+    await replaceEntityNotifications("assignment", record);
     await db.sync_queue.put(
       createQueueItem({
         entityId: record.id,
@@ -282,7 +295,8 @@ export async function createAssignmentLocal(input: CreateAssignmentInput) {
         userId,
       }),
     );
-  });
+    },
+  );
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeAssignmentRecord(record, {
@@ -338,8 +352,14 @@ export async function updateAssignmentLocal(
   maybeSetNullableString("class_id", input.classId, payload);
   maybeSetNullableString("description", input.description, payload);
 
-  await db.transaction("rw", db.assignments, db.sync_queue, async () => {
+  await db.transaction(
+    "rw",
+    db.assignments,
+    db.notifications,
+    db.sync_queue,
+    async () => {
     await db.assignments.put(updatedRecord);
+    await replaceEntityNotifications("assignment", updatedRecord);
     await db.sync_queue.put(
       createQueueItem({
         entityId: id,
@@ -349,7 +369,8 @@ export async function updateAssignmentLocal(
         userId,
       }),
     );
-  });
+    },
+  );
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeAssignmentRecord(updatedRecord, {
@@ -367,12 +388,18 @@ export async function deleteAssignmentLocal(id: string) {
 
   const deletedAt = new Date().toISOString();
 
-  await db.transaction("rw", db.assignments, db.sync_queue, async () => {
+  await db.transaction(
+    "rw",
+    db.assignments,
+    db.notifications,
+    db.sync_queue,
+    async () => {
     await db.assignments.put({
       ...existingRecord,
       deleted_at: deletedAt,
       updated_at: deletedAt,
     });
+    await deleteEntityNotifications("assignment", id);
     await db.sync_queue.put(
       createQueueItem({
         entityId: id,
@@ -382,7 +409,8 @@ export async function deleteAssignmentLocal(id: string) {
         userId,
       }),
     );
-  });
+    },
+  );
 
   return true;
 }
@@ -416,8 +444,9 @@ export async function createExamLocal(input: CreateExamInput) {
     payload.location = record.location;
   }
 
-  await db.transaction("rw", db.exams, db.sync_queue, async () => {
+  await db.transaction("rw", db.exams, db.notifications, db.sync_queue, async () => {
     await db.exams.put(record);
+    await replaceEntityNotifications("exam", record);
     await db.sync_queue.put(
       createQueueItem({
         entityId: record.id,
@@ -467,8 +496,9 @@ export async function updateExamLocal(id: string, input: UpdateExamInput) {
   maybeSetNullableString("description", input.description, payload);
   maybeSetNullableString("location", input.location, payload);
 
-  await db.transaction("rw", db.exams, db.sync_queue, async () => {
+  await db.transaction("rw", db.exams, db.notifications, db.sync_queue, async () => {
     await db.exams.put(updatedRecord);
+    await replaceEntityNotifications("exam", updatedRecord);
     await db.sync_queue.put(
       createQueueItem({
         entityId: id,
@@ -496,12 +526,13 @@ export async function deleteExamLocal(id: string) {
 
   const deletedAt = new Date().toISOString();
 
-  await db.transaction("rw", db.exams, db.sync_queue, async () => {
+  await db.transaction("rw", db.exams, db.notifications, db.sync_queue, async () => {
     await db.exams.put({
       ...existingRecord,
       deleted_at: deletedAt,
       updated_at: deletedAt,
     });
+    await deleteEntityNotifications("exam", id);
     await db.sync_queue.put(
       createQueueItem({
         entityId: id,

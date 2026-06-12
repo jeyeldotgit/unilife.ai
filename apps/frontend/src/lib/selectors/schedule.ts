@@ -1,6 +1,7 @@
 import type {
   Assignment as AssignmentRecord,
   ClassRecord,
+  Notification,
 } from "@unilife-ai/types";
 
 import {
@@ -13,6 +14,7 @@ import {
   startOfWeekMonday,
 } from "@/lib/api/utils";
 import { normalizeAssignmentRecord } from "@/lib/selectors/assignments";
+import { buildReminderStatusItems } from "@/lib/selectors/notifications";
 import type {
   ClassOption,
   LinkedAssignmentSummary,
@@ -232,6 +234,7 @@ function buildFreeWindows(
 export function buildScheduleWeekSnapshot(
   classRecords: ClassRecord[],
   assignmentRecords: AssignmentRecord[],
+  notifications: Notification[] = [],
 ) {
   const displayedDayOrder = buildDisplayedDayOrder(classRecords);
   const days = buildScheduleDays(displayedDayOrder);
@@ -297,6 +300,13 @@ export function buildScheduleWeekSnapshot(
           meetingLabel:
             meetingLabels.get(classItem.id) ?? getDayLabel(classItem.dayOfWeek),
           assignments: linkedAssignments,
+          reminders: buildReminderStatusItems(
+            notifications.filter(
+              (notification) =>
+                notification.entity_type === "class" &&
+                notification.entity_id === classItem.id,
+            ),
+          ),
         } satisfies ScheduleClassDetail,
       ];
     }),

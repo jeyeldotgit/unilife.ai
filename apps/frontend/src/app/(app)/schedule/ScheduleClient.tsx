@@ -6,12 +6,14 @@ import {
   useTransition,
   type FormEvent,
 } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ClassBlock } from "@/components/ui/ClassBlock";
 import { ClassDetailSheet } from "@/components/ui/ClassDetailSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { useClasses } from "@/hooks/use-classes";
+import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { createClassLocal } from "@/lib/mutations/local-data";
 import type {
   CreateClassInput,
@@ -22,6 +24,7 @@ import type {
   ScheduleDay,
   ScheduleWeek,
 } from "@/lib/types";
+import { dismissNotification } from "@/lib/notifications/runtime";
 
 type DayOption = Pick<ScheduleDay, "dayIndex" | "dayOfWeek" | "shortLabel" | "dateLabel">;
 
@@ -327,6 +330,8 @@ export default function ScheduleClient({
   scheduleAvailable: initialScheduleAvailable,
 }: ScheduleClientProps) {
   const classesState = useClasses();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const scheduleWeek = initialScheduleWeek ?? classesState.scheduleWeek;
   const scheduleAvailable = initialScheduleAvailable ?? classesState.available;
   const dayOptions =
@@ -341,6 +346,23 @@ export default function ScheduleClient({
     getInitialFormState(dayOptions),
   );
   const [isPending, startTransition] = useTransition();
+  const displayedSelectedDetail = selectedDetail
+    ? scheduleWeek?.classDetails[selectedDetail.id] ?? selectedDetail
+    : null;
+
+  useEffect(() => {
+    const itemId = searchParams.get("item");
+    if (!itemId || !scheduleWeek) return;
+    if (selectedDetail?.id !== itemId) {
+      // The URL is an external navigation source from the service worker.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedDetail(scheduleWeek.classDetails[itemId] ?? null);
+    }
+    const notificationId = searchParams.get("notification");
+    if (notificationId) {
+      void dismissNotification(notificationId).then(() => router.replace("/schedule"));
+    }
+  }, [router, scheduleWeek, searchParams, selectedDetail?.id]);
 
   const getClassBlock = (day: number, hour: number) => {
     return scheduleWeek?.classes.find(
@@ -543,12 +565,7 @@ export default function ScheduleClient({
           />
         }
         trailing={
-          <button
-            type="button"
-            className="p-2 text-[#3B82F6] transition-opacity hover:opacity-80"
-          >
-            <Icon name="notifications" />
-          </button>
+          <NotificationPermissionButton className="p-2 text-[#3B82F6] transition-opacity hover:opacity-80" />
         }
       />
 
@@ -625,8 +642,8 @@ export default function ScheduleClient({
       </main>
 
       <ClassDetailSheet
-        open={selectedDetail !== null}
-        detail={selectedDetail}
+        open={displayedSelectedDetail !== null}
+        detail={displayedSelectedDetail}
         onClose={() => setSelectedDetail(null)}
       />
 

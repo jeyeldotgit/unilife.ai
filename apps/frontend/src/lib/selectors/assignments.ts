@@ -1,10 +1,13 @@
-import type { Assignment as AssignmentRecord } from "@unilife-ai/types";
+import type {
+  Assignment as AssignmentRecord,
+  Notification,
+} from "@unilife-ai/types";
 
 import { formatMonthDay } from "@/lib/api/utils";
+import { buildReminderStatusItems } from "@/lib/selectors/notifications";
 import type {
   Assignment,
   AssignmentPriority,
-  AssignmentReminder,
   AssignmentStatus,
   AssignmentUrgency,
 } from "@/lib/types";
@@ -44,31 +47,6 @@ function buildUrgency(
   };
 }
 
-function buildReminders(dueAt: string): AssignmentReminder[] {
-  const dueTime = new Date(dueAt).getTime();
-  const windows = [
-    { offset: "7d", label: "7-day reminder", hours: 24 * 7 },
-    { offset: "3d", label: "3-day reminder", hours: 24 * 3 },
-    { offset: "1d", label: "1-day reminder", hours: 24 },
-    { offset: "3h", label: "3-hour reminder", hours: 3 },
-  ] as const;
-
-  return windows.map(({ offset, label, hours }) => {
-    const scheduledFor = new Date(dueTime - hours * 60 * 60 * 1000).toISOString();
-
-    return {
-      id: `${offset}-${dueTime}`,
-      label,
-      offset,
-      status: new Date(scheduledFor).getTime() <= Date.now() ? "sent" : "pending",
-      scheduledFor,
-      scheduledLabel: formatMonthDay(scheduledFor),
-      sentAt:
-        new Date(scheduledFor).getTime() <= Date.now() ? scheduledFor : null,
-    };
-  });
-}
-
 function inferAssignmentIcon(subject: string) {
   const normalized = subject.toLowerCase();
 
@@ -91,6 +69,7 @@ export function normalizeAssignmentRecord(
   record: AssignmentRecord,
   options?: {
     classSubjectById?: Map<string, string>;
+    notifications?: Notification[];
   },
 ): Assignment {
   const subject =
@@ -114,7 +93,7 @@ export function normalizeAssignmentRecord(
     priority: record.priority as AssignmentPriority,
     description: record.description,
     urgency: buildUrgency(normalizedStatus, dueAt),
-    reminders: buildReminders(dueAt),
+    reminders: buildReminderStatusItems(options?.notifications ?? []),
     createdAt: record.created_at,
     updatedAt: record.updated_at,
   };

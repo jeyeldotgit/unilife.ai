@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
@@ -223,9 +224,7 @@ export default function ExpensesClient({
           </div>
         }
         trailing={
-          <button className="text-[#3B82F6] transition-opacity active:scale-95 hover:opacity-80">
-            <Icon name="notifications" />
-          </button>
+          <NotificationPermissionButton className="text-[#3B82F6] transition-opacity active:scale-95 hover:opacity-80" />
         }
       />
 
