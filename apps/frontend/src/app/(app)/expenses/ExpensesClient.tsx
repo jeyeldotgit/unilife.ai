@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
+import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
@@ -211,22 +210,7 @@ export default function ExpensesClient({
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] pb-32 font-sans text-[#191c1d]">
-      <PageHeader
-        className="sticky top-0 z-40 bg-white shadow-sm"
-        title="Expenses"
-        leading={
-          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#d8e2ff]">
-            <img
-              alt="User Profile Picture"
-              className="h-full w-full object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaRtE81Eze5Ia1an7hTYaHoBMDwwegPdtdcvZ0SiKkAUtFGEetDGDKNgwEV_d6pYVt-rC44qQSRQVMa8Fe3doKp3jyQb8AqzlgvesU7n_YGYlaH5xI1r1Wtmd90Q8TmmkK49MXiQsfCXsF2TwOBX2ocAtTUsGt1TMG7RWuijBaddPRLTCJZTHI5BKELnwhwX3GyKYMfTXspDcyTkaRAnwNVOcGbAiACg9gtn9mSLw8qrmz3mlsINT-DsLPjM7M3OAdNHS4kMqKqzA"
-            />
-          </div>
-        }
-        trailing={
-          <NotificationPermissionButton className="text-[#3B82F6] transition-opacity active:scale-95 hover:opacity-80" />
-        }
-      />
+      <AuthenticatedPageHeader className="sticky top-0 z-40 bg-white shadow-sm" pageTitle="Expenses" />
 
       <main className="mx-auto max-w-2xl space-y-6 px-4 pt-4">
         {resolvedBudgetAvailable && resolvedBudget ? (

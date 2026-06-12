@@ -1,8 +1,11 @@
-export type AppUser = {
+export type UserProfile = {
   id: string; // UUID
-  name: string;
-  display_name: string;
-  avatar_url: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  timezone: string | null;
   created_at: string; // ISO 8601 date string
   updated_at: string;
 };
+
+export type AppUser = UserProfile;

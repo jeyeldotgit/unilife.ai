@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getProfile } from "@/lib/api/profile";
 import { AppShell } from "@/components/layout/AppShell";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,5 +18,11 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  return <AppShell userId={user.id}>{children}</AppShell>;
+  const initialProfile = await getProfile().catch(() => null);
+
+  return (
+    <AppShell initialProfile={initialProfile} userId={user.id}>
+      {children}
+    </AppShell>
+  );
 }
