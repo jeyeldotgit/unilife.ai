@@ -6,8 +6,7 @@ import { submitChatMessageAction } from "@/actions/chat";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { QuickActions } from "@/components/chat/QuickActions";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
+import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
   executeChatClientEffect,
@@ -189,37 +188,7 @@ export default function ChatClient({
           flexDirection: "column",
         }}
       >
-        <PageHeader
-          className="fixed left-0 top-0 z-50 w-full bg-[#f8f9fa] shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
-          contentClassName="box-border flex justify-between items-center p-4"
-          title="Chat with UniLife"
-          leading={
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "9999px",
-                overflow: "hidden",
-                border: "2px solid #e7e8e9",
-                flexShrink: 0,
-              }}
-            >
-              <img
-                alt="User Profile"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDk0F9yuCw5aYwob7-amRY0OhXWoK196Cew1ljYHU04rhePgVrPPNINxzaTPjaGtf0tKQuBmeYYbhS4cqrYyDOZWBPKAfDLDvmN1hCK4uXHCXny5KxJdBEu5w1bgc6JEmYB8I-PY1c17woSEqRtbo97HJvFvPQAMzfcUu7DKQDYFtbBnMcO5HCgBPaJnq0t1-Ih_R_UuHDMzGICuVXRK5-kL3DAOdThAS-De-IvXPC5DXXjalRltr5W4hDQpg3WFv7T4TTN0LtFfKM"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
-            </div>
-          }
-          titleClassName="m-0 text-2xl font-bold leading-8 text-[#0058be]"
-          trailing={
-            <NotificationPermissionButton />
-          }
-        />
+        <AuthenticatedPageHeader className="fixed left-0 top-0 z-50 w-full bg-[#f8f9fa] shadow-[0_1px_4px_rgba(0,0,0,0.06)]" pageTitle="Chat" />
 
         <main
           className="chat-scroll"

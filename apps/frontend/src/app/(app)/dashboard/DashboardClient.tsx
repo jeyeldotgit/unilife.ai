@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlanningContext } from "@unilife-ai/types";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
+import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
+import { useProfile } from "@/components/profile/ProfileContext";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { Icon } from "@/components/ui/Icon";
 import { useAssignments } from "@/hooks/use-assignments";
@@ -15,6 +15,7 @@ import { requestDailyBriefing } from "@/lib/api/briefing";
 import { getUpcomingDashboardDeadlines } from "@/lib/api/deadlines";
 import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
 import { formatAmount, getLocalDateKey } from "@/lib/api/utils";
+import { getTime24InTimeZone } from "@/lib/profile/time";
 import { buildDailyBriefing } from "@/lib/planning/deterministic";
 import type {
   BudgetStatus,
@@ -102,6 +103,7 @@ export default function DashboardClient({
   deadlinesPartiallyAvailable,
   budgetAvailable,
 }: DashboardClientProps) {
+  const { resolvedTimeZone } = useProfile();
   const router = useRouter();
   const classesState = useClasses();
   const assignmentsState = useAssignments();
@@ -139,9 +141,7 @@ export default function DashboardClient({
   const [pressedDeadlineId, setPressedDeadlineId] = useState<string | null>(null);
   const [aiBriefingMessage, setAiBriefingMessage] = useState<string | null>(null);
   const now = new Date();
-  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-    now.getMinutes(),
-  ).padStart(2, "0")}`;
+  const currentTime = getTime24InTimeZone(resolvedTimeZone, now);
   const planningContext = useMemo(
     () => {
       const activeBudget = expensesState.activeBudget;
@@ -165,7 +165,7 @@ export default function DashboardClient({
         : 0;
 
       return {
-        today: getLocalDateKey(),
+        today: getLocalDateKey(now, resolvedTimeZone),
         current_time: currentTime,
         todays_classes: todayClasses.map((classItem) => ({
           subject: classItem.subject,
@@ -191,7 +191,9 @@ export default function DashboardClient({
       examsState.exams,
       expensesState.activeBudget,
       expensesState.expenses,
+      now,
       resolvedBudget?.remainingAmount,
+      resolvedTimeZone,
       todayClasses,
     ],
   );
@@ -201,13 +203,6 @@ export default function DashboardClient({
   );
   const planningContextKey = JSON.stringify(planningContext);
   const briefingMessage = aiBriefingMessage ?? deterministicBriefing.message;
-  const formattedDate = new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(now);
-  const greeting =
-    now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -292,37 +287,7 @@ export default function DashboardClient({
           minHeight: "100dvh",
         }}
       >
-        <PageHeader
-          className="sticky top-0 z-50 bg-[#f8f9fa]"
-          contentClassName="flex justify-between items-center px-4 py-4 w-full"
-          title={greeting}
-          subtitle={formattedDate}
-          leading={
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "9999px",
-                overflow: "hidden",
-                backgroundColor: "#e1e3e4",
-                border: "1px solid #c2c6d6",
-                flexShrink: 0,
-              }}
-            >
-              <img
-                alt="User avatar"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBi6bUWVAa9B1N0mhWR0j7Pjd27lA5Kd1VOymbLeUpxWqzX59u-1oHMevqXkmOFnfrLItuF9Jg5D_GXg3pbLsYrg2DUS0pcA7eJVGZ9kddm7vFvjDGD41Aeqh-yUQcs244nEB6HpPJ2Mwm2AIJaVTJZUOwgbS-qKfqknRKyJKEurmqaHhqPiXCChlLB5jcXDN0w_cx6lVMlNxeCQIK_9Udb6mkj-0jbvZH26JM1bHhM_aQW6vPLntdZNcCBPIVRADtndQmvrtLl3Wg"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            </div>
-          }
-          titleWrapperClassName="flex flex-col"
-          titleClassName="m-0 text-2xl font-semibold leading-8 text-[#3B82F6]"
-          subtitleClassName="text-sm font-semibold leading-5 text-[#424754]"
-          trailing={
-            <NotificationPermissionButton className="rounded-full p-2 text-[#424754] transition-opacity hover:opacity-80" />
-          }
-        />
+        <AuthenticatedPageHeader className="sticky top-0 z-50 bg-[#f8f9fa]" pageTitle="Dashboard" />
 
         <main
           style={{

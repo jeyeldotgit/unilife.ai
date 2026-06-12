@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AssignmentDetailSheet } from "@/app/(app)/assignments/AssignmentDetailSheet";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { AssignmentCard } from "@/components/ui/AssignmentCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { TasksRouteSwitcher } from "@/components/ui/TasksRouteSwitcher";
-import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { useAssignments } from "@/hooks/use-assignments";
 import type { Assignment } from "@/lib/types";
 import { dismissNotification } from "@/lib/notifications/runtime";
@@ -163,31 +162,7 @@ export default function AssignmentsClient({
           WebkitFontSmoothing: "antialiased",
         }}
       >
-        <PageHeader
-          className="sticky top-0 z-40 bg-[rgba(248,249,250,0.8)] backdrop-blur-[12px]"
-          contentClassName="flex justify-between items-center p-4"
-          title="Hi, Alex"
-          subtitle="Stay organized today"
-          leading={
-            <img
-              alt="User Profile Picture"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDC2kYCxJ3KzGZsUOoiFILnLBTDX6njkmIJaPO8xHj30wLChReouRi33jnXUipuMGWSgbnmQZI0Ok1wFkjldfYpuKX-tzGPk8r4DgztV6uHdQx8Busd9cUiN5xlWsjgLbTMAJ3iCJLNCu9KDejptW6ZI5QO6FgMN3mKkLrp9Uu8SboBTwZnWNduK01MXoeTgmwMU_06xELSyn6WLC7PVqoJD2LDUOLOpJiOa6GPz6tjFRCQjW1hBIBTuAQsauIRtGt7UZAQKt9DYXA"
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "9999px",
-                border: "2px solid rgba(0,88,190,0.1)",
-                objectFit: "cover",
-                flexShrink: 0,
-              }}
-            />
-          }
-          titleClassName="m-0 text-2xl font-bold leading-8 text-[#3B82F6]"
-          subtitleClassName="text-xs font-medium text-[#424754]"
-          trailing={
-            <NotificationPermissionButton className="p-1 text-[#3B82F6] transition-opacity hover:opacity-80" />
-          }
-        />
+        <AuthenticatedPageHeader pageTitle="Assignments" />
 
         <main
           style={{

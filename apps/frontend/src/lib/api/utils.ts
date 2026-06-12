@@ -3,6 +3,7 @@ import type {
   ExpenseCategory,
   ScheduleColor,
 } from "@/lib/types";
+import { getDateKeyInTimeZone } from "@/lib/profile/time";
 
 export const DAY_ORDER = [
   "monday",
@@ -50,7 +51,11 @@ const EXPENSE_CATEGORY_ICONS: Record<ExpenseCategory, string> = {
   miscellaneous: "inventory_2",
 };
 
-export function getLocalDateKey(date = new Date()) {
+export function getLocalDateKey(date = new Date(), timeZone?: string) {
+  if (timeZone) {
+    return getDateKeyInTimeZone(timeZone, date);
+  }
+
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");

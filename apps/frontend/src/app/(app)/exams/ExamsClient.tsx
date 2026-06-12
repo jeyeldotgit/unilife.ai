@@ -9,12 +9,11 @@ import {
   type ExamFormState,
 } from "@/app/(app)/exams/ExamFormSheet";
 import { ExamDetailSheet } from "@/app/(app)/exams/ExamDetailSheet";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ExamCard } from "@/components/ui/ExamCard";
 import { Icon } from "@/components/ui/Icon";
 import { TasksRouteSwitcher } from "@/components/ui/TasksRouteSwitcher";
-import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { useExams } from "@/hooks/use-exams";
 import {
   createExamLocal,
@@ -275,22 +274,7 @@ export default function ExamsClient({
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] pb-32 font-sans text-[#191c1d]">
-      <PageHeader
-        className="sticky top-0 z-40 bg-[rgba(248,249,250,0.92)] backdrop-blur-[12px]"
-        contentClassName="flex items-center justify-between p-4"
-        title="Hi, Alex"
-        subtitle="Keep your deadlines in view"
-        leading={
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#d8e2ff] bg-white text-[#3B82F6]">
-            <Icon name="school" />
-          </div>
-        }
-        titleClassName="m-0 text-2xl font-bold leading-8 text-[#3B82F6]"
-        subtitleClassName="text-xs font-medium text-[#424754]"
-        trailing={
-          <NotificationPermissionButton />
-        }
-      />
+      <AuthenticatedPageHeader pageTitle="Exams" />
 
       <main className="mx-auto max-w-2xl px-4 pt-6">
         <section className="mb-8">

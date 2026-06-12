@@ -7,13 +7,12 @@ import {
   type FormEvent,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { ClassBlock } from "@/components/ui/ClassBlock";
 import { ClassDetailSheet } from "@/components/ui/ClassDetailSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { useClasses } from "@/hooks/use-classes";
-import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { createClassLocal } from "@/lib/mutations/local-data";
 import type {
   CreateClassInput,
@@ -554,20 +553,7 @@ export default function ScheduleClient({
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] pb-24 font-sans text-[#191c1d]">
-      <PageHeader
-        className="sticky top-0 z-40 bg-[#f8f9fa]"
-        title="Hi, Alex"
-        leading={
-          <img
-            alt="User Profile Picture"
-            className="h-10 w-10 rounded-full border-2 border-[#0058be]"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZIniZqns3LfBww-2EcflhPq3Hj7WMwnMoz7WViy5UzWR7JI457SdssPZMxT9tnWtNyarzaNDi0MHCmlpmOOehBVV3-40WZy_xBsr6gO0xJ1nTBHV7J7uYLGoMb8ZPCi1NU9WtmNQ4mWW_1myLNu_e82ANbJQdoaU5yYCggKVHUtPUIZPAZ0EIWt2x4ctgyQQb5jRrFP_lCkFbK4USM4EvCnhR5VKFt3_r6XsA0AOA5YOR61YUIwdmUwcWf1VaLsrDWc4_GbhpZc8"
-          />
-        }
-        trailing={
-          <NotificationPermissionButton className="p-2 text-[#3B82F6] transition-opacity hover:opacity-80" />
-        }
-      />
+      <AuthenticatedPageHeader pageTitle="Schedule" />
 
       <main className="mx-auto mt-4 max-w-7xl px-4 md:px-8">
         <div className="mb-6 flex flex-col gap-4">

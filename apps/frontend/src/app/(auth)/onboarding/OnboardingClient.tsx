@@ -1,14 +1,18 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { updateProfile } from "@/lib/api/profile-client";
+import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { Icon } from "@/components/ui/Icon";
 import {
   createAssignmentLocal,
   createClassLocal,
   saveBudgetCycleLocal,
 } from "@/lib/mutations/local-data";
+import { getDeviceTimeZone } from "@/lib/profile/time";
+import { createClient } from "@/lib/supabase/client";
 import type {
   BudgetPeriod,
   DayOfWeek,
@@ -224,9 +228,19 @@ export default function OnboardingClient() {
     name: "Research Paper",
     dueDate: "Jun 12, 11:59 PM",
   });
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    void supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }, []);
 
   const inputStyle = (fieldId: string): CSSProperties => ({
     width: "100%",
@@ -340,6 +354,11 @@ export default function OnboardingClient() {
           title: starterAssignment.title.trim(),
         });
       }
+
+      await updateProfile({
+        avatar_url: profileAvatarUrl,
+        timezone: getDeviceTimeZone(),
+      });
     } catch (error) {
       setSubmitState("idle");
       setErrorMessage(
@@ -354,7 +373,23 @@ export default function OnboardingClient() {
     router.push("/dashboard");
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    if (profileAvatarUrl !== null) {
+      try {
+        await updateProfile({
+          avatar_url: profileAvatarUrl,
+          timezone: getDeviceTimeZone(),
+        });
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "We couldn't save your avatar right now.",
+        );
+        return;
+      }
+    }
+
     router.push("/dashboard");
   };
 
@@ -1127,6 +1162,74 @@ export default function OnboardingClient() {
                       </div>
                     </div>
                   </div>
+                </section>
+
+                <section
+                  className="onboarding-card"
+                  style={{
+                    backgroundColor: "#ffffff",
+                    padding: "20px",
+                    borderRadius: "12px",
+                    border: "1px solid #c2c6d6",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "8px",
+                        backgroundColor: "#d8e2ff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon name="photo_camera" className="text-[#0058be]" />
+                    </div>
+                    <div>
+                      <h2
+                        style={{
+                          fontSize: "18px",
+                          fontWeight: 600,
+                          color: "#111827",
+                          margin: 0,
+                        }}
+                      >
+                        Choose an avatar
+                      </h2>
+                      <p
+                        style={{
+                          fontSize: "14px",
+                          color: "#6B7280",
+                          margin: "4px 0 0",
+                        }}
+                      >
+                        Pick a preset, upload a photo, or skip for now.
+                      </p>
+                    </div>
+                  </div>
+
+                  {userId ? (
+                    <AvatarPicker
+                      avatarUrl={profileAvatarUrl}
+                      displayName={null}
+                      onChange={setProfileAvatarUrl}
+                      userId={userId}
+                    />
+                  ) : (
+                    <div className="rounded-xl border border-[#d8e2ff] bg-[#f8fbff] px-4 py-3 text-sm font-medium text-[#0058be]">
+                      Loading avatar options...
+                    </div>
+                  )}
                 </section>
               </div>
 
