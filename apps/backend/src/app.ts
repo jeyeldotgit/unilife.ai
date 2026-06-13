@@ -7,10 +7,18 @@ import { registerRoutes } from "./router.js";
 
 export const app = new Hono<AppBindings>();
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  ...(process.env.FRONTEND_URLS ?? process.env.FRONTEND_URL ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+];
+
 app.use(
   "/*",
   cors({
-    origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+    origin: allowedOrigins,
     credentials: true,
   }),
 );
