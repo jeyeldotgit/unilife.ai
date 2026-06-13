@@ -29,35 +29,40 @@ export function OfflineBanner() {
     }, 3000);
   });
 
+  const applyBannerState = useEffectEvent((nextState: BannerState) => {
+    setBannerState(nextState);
+  });
+
   useEffect(() => {
     clearSyncTimeout();
+    let frameId: number | null = null;
+
+    const scheduleBannerState = (nextState: BannerState) => {
+      frameId = window.setTimeout(() => {
+        applyBannerState(nextState);
+      }, 0) as unknown as number;
+    };
 
     if (!syncStatus.isOnline) {
       wasOfflineRef.current = true;
-      setBannerState("offline");
-      return;
-    }
-
-    if (syncStatus.phase === "syncing") {
-      setBannerState("syncing");
-      return;
-    }
-
-    if (syncStatus.phase === "failed" && syncStatus.failedCount > 0) {
+      scheduleBannerState("offline");
+    } else if (syncStatus.phase === "syncing") {
+      scheduleBannerState("syncing");
+    } else if (syncStatus.phase === "failed" && syncStatus.failedCount > 0) {
       wasOfflineRef.current = false;
-      setBannerState("failed");
-      return;
-    }
-
-    if (syncStatus.phase === "synced" && wasOfflineRef.current) {
+      scheduleBannerState("failed");
+    } else if (syncStatus.phase === "synced" && wasOfflineRef.current) {
       showSyncedState();
-      return;
+    } else {
+      scheduleBannerState("hidden");
     }
 
-    setBannerState("hidden");
+    return () => {
+      if (frameId !== null) {
+        window.clearTimeout(frameId);
+      }
+    };
   }, [
-    clearSyncTimeout,
-    showSyncedState,
     syncStatus.failedCount,
     syncStatus.isOnline,
     syncStatus.phase,

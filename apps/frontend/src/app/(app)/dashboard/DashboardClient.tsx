@@ -7,6 +7,7 @@ import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageH
 import { useProfile } from "@/components/profile/ProfileContext";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { Icon } from "@/components/ui/Icon";
+import { RecoverableError } from "@/components/ui/RecoverableError";
 import { useAssignments } from "@/hooks/use-assignments";
 import { useClasses } from "@/hooks/use-classes";
 import { useExams } from "@/hooks/use-exams";
@@ -140,10 +141,16 @@ export default function DashboardClient({
   const [pressedClassId, setPressedClassId] = useState<string | null>(null);
   const [pressedDeadlineId, setPressedDeadlineId] = useState<string | null>(null);
   const [aiBriefingMessage, setAiBriefingMessage] = useState<string | null>(null);
-  const now = new Date();
-  const currentTime = getTime24InTimeZone(resolvedTimeZone, now);
+  const canRequestAiBriefing =
+    isOnline &&
+    classesState.loaded &&
+    assignmentsState.loaded &&
+    examsState.loaded &&
+    expensesState.loaded;
   const planningContext = useMemo(
     () => {
+      const now = new Date();
+      const currentTime = getTime24InTimeZone(resolvedTimeZone, now);
       const activeBudget = expensesState.activeBudget;
       const cycleExpenses = activeBudget
         ? expensesState.expenses.filter(
@@ -187,11 +194,9 @@ export default function DashboardClient({
     },
     [
       assignmentsState.assignments,
-      currentTime,
       examsState.exams,
       expensesState.activeBudget,
       expensesState.expenses,
-      now,
       resolvedBudget?.remainingAmount,
       resolvedTimeZone,
       todayClasses,
@@ -201,8 +206,8 @@ export default function DashboardClient({
     () => buildDailyBriefing(planningContext),
     [planningContext],
   );
-  const planningContextKey = JSON.stringify(planningContext);
-  const briefingMessage = aiBriefingMessage ?? deterministicBriefing.message;
+  const briefingMessage =
+    (canRequestAiBriefing ? aiBriefingMessage : null) ?? deterministicBriefing.message;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -227,8 +232,7 @@ export default function DashboardClient({
   }, []);
 
   useEffect(() => {
-    if (!isOnline || !classesState.loaded || !assignmentsState.loaded || !examsState.loaded || !expensesState.loaded) {
-      setAiBriefingMessage(null);
+    if (!canRequestAiBriefing) {
       return;
     }
 
@@ -245,12 +249,8 @@ export default function DashboardClient({
       active = false;
     };
   }, [
-    assignmentsState.loaded,
-    classesState.loaded,
-    examsState.loaded,
-    expensesState.loaded,
-    isOnline,
-    planningContextKey,
+    canRequestAiBriefing,
+    planningContext,
   ]);
 
   const handleNavigate = (
@@ -574,10 +574,11 @@ export default function DashboardClient({
                   }}
                 >
                   {resolvedDeadlinesPartiallyAvailable ? (
-                    <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-left text-sm font-medium text-[#825100] shadow-sm">
-                      Some deadlines may be missing right now, but available items
-                      are still shown below.
-                    </div>
+                    <RecoverableError
+                      tone="warning"
+                      title="Partial deadline data"
+                      message="Some deadlines may be missing right now, but available items are still shown below."
+                    />
                   ) : null}
                   {upcomingDeadlines.map((deadline) => (
                     <button
@@ -684,10 +685,11 @@ export default function DashboardClient({
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   {resolvedDeadlinesPartiallyAvailable ? (
-                    <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-left text-sm font-medium text-[#825100] shadow-sm">
-                      Some deadlines may be missing right now, but no upcoming items
-                      are available from the data we could load.
-                    </div>
+                    <RecoverableError
+                      tone="warning"
+                      title="Partial deadline data"
+                      message="Some deadlines may be missing right now, and no upcoming items are available from the data we could load."
+                    />
                   ) : null}
                   <DashboardSectionFallback
                     icon="task_alt"

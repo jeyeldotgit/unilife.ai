@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { NEUTRAL_AVATAR_URL } from "@/lib/profile/avatar-presets";
 
@@ -36,11 +37,14 @@ export function UserAvatar({
 
   if (activeUrl) {
     return (
-      <img
+      <Image
         alt={displayName ? `${displayName} avatar` : "User avatar"}
         className={className}
+        height={40}
         onError={() => setFailedUrl(activeUrl)}
+        sizes="40px"
         src={activeUrl}
+        width={40}
       />
     );
   }
@@ -56,5 +60,14 @@ export function UserAvatar({
     );
   }
 
-  return <img alt="Default avatar" className={className} src={NEUTRAL_AVATAR_URL} />;
+  return (
+    <Image
+      alt="Default avatar"
+      className={className}
+      height={40}
+      sizes="40px"
+      src={NEUTRAL_AVATAR_URL}
+      width={40}
+    />
+  );
 }

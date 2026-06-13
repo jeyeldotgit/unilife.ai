@@ -19,7 +19,7 @@ const { dbMock } = vi.hoisted(() => ({
         })),
       })),
     },
-    sync_queue: { put: vi.fn() },
+    sync_queue: { delete: vi.fn(), put: vi.fn() },
     transaction: vi.fn(async (_mode: string, ...args: unknown[]) => {
       const callback = args[args.length - 1] as () => Promise<void>;
       await callback();
@@ -40,7 +40,13 @@ vi.mock("@/lib/supabase/client", () => ({
   createClient: vi.fn(),
 }));
 
-import { createClassLocal, deleteExpenseLocal } from "@/lib/mutations/local-data";
+import {
+  beginDeleteUndoLocal,
+  createClassLocal,
+  deleteExpenseLocal,
+  finalizeDeleteUndoLocal,
+  undoDeleteUndoLocal,
+} from "@/lib/mutations/local-data";
 
 describe("local data mutations", () => {
   beforeEach(() => {
@@ -94,5 +100,94 @@ describe("local data mutations", () => {
         operation: "delete",
       }),
     );
+  });
+
+  it("defers queueing until the undo window expires", async () => {
+    dbMock.exams.get.mockResolvedValue({
+      class_id: null,
+      created_at: "2026-06-08T12:30:00.000Z",
+      deleted_at: null,
+      description: null,
+      exam_date: "2026-06-12T12:30:00.000Z",
+      id: "exam-1",
+      location: null,
+      title: "Midterm",
+      updated_at: "2026-06-08T12:30:00.000Z",
+      user_id: "user-1",
+    });
+
+    const operation = await beginDeleteUndoLocal("exam", "exam-1");
+
+    expect(operation).not.toBeNull();
+    expect(dbMock.exams.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deleted_at: expect.any(String),
+      }),
+    );
+    expect(dbMock.sync_queue.put).not.toHaveBeenCalled();
+
+    dbMock.exams.get.mockResolvedValue({
+      class_id: null,
+      created_at: "2026-06-08T12:30:00.000Z",
+      deleted_at: operation?.deletedAt ?? null,
+      description: null,
+      exam_date: "2026-06-12T12:30:00.000Z",
+      id: "exam-1",
+      location: null,
+      title: "Midterm",
+      updated_at: operation?.deletedAt ?? "2026-06-08T12:30:00.000Z",
+      user_id: "user-1",
+    });
+
+    await finalizeDeleteUndoLocal(operation!);
+
+    expect(dbMock.sync_queue.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity_id: "exam-1",
+        mutation_meta: expect.objectContaining({
+          intent: "delete",
+        }),
+      }),
+    );
+  });
+
+  it("restores the same entity when delete undo is triggered", async () => {
+    dbMock.exams.get.mockResolvedValue({
+      class_id: null,
+      created_at: "2026-06-08T12:30:00.000Z",
+      deleted_at: null,
+      description: null,
+      exam_date: "2026-06-12T12:30:00.000Z",
+      id: "exam-2",
+      location: null,
+      title: "Finals",
+      updated_at: "2026-06-08T12:30:00.000Z",
+      user_id: "user-1",
+    });
+
+    const operation = await beginDeleteUndoLocal("exam", "exam-2");
+    dbMock.exams.get.mockResolvedValue({
+      class_id: null,
+      created_at: "2026-06-08T12:30:00.000Z",
+      deleted_at: operation?.deletedAt ?? null,
+      description: null,
+      exam_date: "2026-06-12T12:30:00.000Z",
+      id: "exam-2",
+      location: null,
+      title: "Finals",
+      updated_at: "2026-06-08T12:30:00.000Z",
+      user_id: "user-1",
+    });
+
+    const restored = await undoDeleteUndoLocal(operation!);
+
+    expect(restored).toBe(true);
+    expect(dbMock.exams.put).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        deleted_at: null,
+        id: "exam-2",
+      }),
+    );
+    expect(dbMock.sync_queue.delete).toHaveBeenCalledWith(operation!.queueItemId);
   });
 });

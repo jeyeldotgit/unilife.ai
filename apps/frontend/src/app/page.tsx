@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 // Component Imports
 import { HeaderComponent } from "@/components/landing/HeaderComponent";
@@ -11,8 +11,6 @@ import { CTAComponent } from "@/components/landing/CtaComponent";
 import { FooterComponent } from "@/components/landing/FooterComponent";
 
 const UniLifeLanding = () => {
-  const blobRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const blobs = document.querySelectorAll<HTMLElement>(".parallax-blob");

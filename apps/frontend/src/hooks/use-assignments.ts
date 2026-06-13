@@ -22,7 +22,6 @@ export function useAssignments() {
         .toArray();
     },
     [],
-    [userId],
   );
   const classesQuery = useLiveQueryValue(
     async () => {
@@ -37,7 +36,6 @@ export function useAssignments() {
         .toArray();
     },
     [],
-    [userId],
   );
   const notificationsQuery = useLiveQueryValue(
     async () => {
@@ -45,7 +43,6 @@ export function useAssignments() {
       return db.notifications.where("user_id").equals(userId).toArray();
     },
     [],
-    [userId],
   );
   const classSubjectById = new Map(
     classesQuery.value.map((record) => [record.id, record.subject] as const),

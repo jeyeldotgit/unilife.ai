@@ -8,11 +8,17 @@ import {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
+import { DuplicateWarningSheet } from "@/components/ui/DuplicateWarningSheet";
 import { ClassBlock } from "@/components/ui/ClassBlock";
 import { ClassDetailSheet } from "@/components/ui/ClassDetailSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { FieldErrorMessage, FormErrorSummary } from "@/components/ui/FormErrorSummary";
 import { Icon } from "@/components/ui/Icon";
+import { MutationStatus } from "@/components/ui/MutationStatus";
+import { RecoverableError } from "@/components/ui/RecoverableError";
 import { useClasses } from "@/hooks/use-classes";
+import { normalizeRecoverableError, fieldErrorMessage, type DuplicateCandidate } from "@/lib/errors/recoverable";
+import { findLikelyClassDuplicates } from "@/lib/mutations/duplicates";
 import { createClassLocal } from "@/lib/mutations/local-data";
 import type {
   CreateClassInput,
@@ -108,6 +114,7 @@ function AddClassSheet({
   dayOptions,
   formState,
   error,
+  fieldErrors,
   pending,
   onClose,
   onChange,
@@ -117,6 +124,7 @@ function AddClassSheet({
   dayOptions: DayOption[];
   formState: AddClassFormState;
   error: string | null;
+  fieldErrors?: Record<string, string[]>;
   pending: boolean;
   onClose: () => void;
   onChange: (
@@ -181,17 +189,38 @@ function AddClassSheet({
           </button>
         </div>
 
-        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+        <form className="mt-6 space-y-4" onSubmit={onSubmit} id="schedule-class-form">
+          <FormErrorSummary
+            formId="schedule-class-form"
+            fieldErrors={fieldErrors}
+            message={error}
+          />
           <label className="block">
             <span className="mb-2 block text-sm font-semibold text-[#191c1d]">
               Subject
             </span>
             <input
+              id="schedule-class-form-subject"
               required
               value={formState.subject}
               onChange={(event) => onChange("subject", event.target.value)}
-              className="w-full rounded-xl border border-[#c2c6d6] bg-white px-4 py-3 text-sm text-[#191c1d] outline-none transition-colors focus:border-[#3B82F6]"
+              aria-describedby={
+                fieldErrorMessage(fieldErrors, "subject")
+                  ? "schedule-class-form-subject-error"
+                  : undefined
+              }
+              className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-[#191c1d] outline-none transition-colors focus:border-[#3B82F6]"
+              style={{
+                borderColor: fieldErrorMessage(fieldErrors, "subject")
+                  ? "#ba1a1a"
+                  : "#c2c6d6",
+              }}
               placeholder="e.g. Math 101"
+            />
+            <FieldErrorMessage
+              field="subject"
+              error={fieldErrorMessage(fieldErrors, "subject")}
+              formId="schedule-class-form"
             />
           </label>
 
@@ -201,6 +230,7 @@ function AddClassSheet({
                 Day
               </span>
               <select
+                id="schedule-class-form-dayOfWeek"
                 value={formState.dayOfWeek}
                 onChange={(event) =>
                   onChange("dayOfWeek", event.target.value as DayOfWeek)
@@ -249,6 +279,7 @@ function AddClassSheet({
                 Start time
               </span>
               <input
+                id="schedule-class-form-startTime"
                 required
                 type="time"
                 value={formState.startTime}
@@ -262,11 +293,27 @@ function AddClassSheet({
                 End time
               </span>
               <input
+                id="schedule-class-form-endTime"
                 required
                 type="time"
                 value={formState.endTime}
                 onChange={(event) => onChange("endTime", event.target.value)}
-                className="w-full rounded-xl border border-[#c2c6d6] bg-white px-4 py-3 text-sm text-[#191c1d] outline-none transition-colors focus:border-[#3B82F6]"
+                aria-describedby={
+                  fieldErrorMessage(fieldErrors, "endTime")
+                    ? "schedule-class-form-endTime-error"
+                    : undefined
+                }
+                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-[#191c1d] outline-none transition-colors focus:border-[#3B82F6]"
+                style={{
+                  borderColor: fieldErrorMessage(fieldErrors, "endTime")
+                    ? "#ba1a1a"
+                    : "#c2c6d6",
+                }}
+              />
+              <FieldErrorMessage
+                field="endTime"
+                error={fieldErrorMessage(fieldErrors, "endTime")}
+                formId="schedule-class-form"
               />
             </label>
           </div>
@@ -295,11 +342,7 @@ function AddClassSheet({
             />
           </label>
 
-          {error ? (
-            <div className="rounded-xl border border-[#ffdad6] bg-[#fff8f7] px-4 py-3 text-sm font-medium text-[#ba1a1a]">
-              {error}
-            </div>
-          ) : null}
+          <MutationStatus state={pending ? "pending" : "idle"} />
 
           <div className="flex gap-3 pt-2">
             <button
@@ -341,6 +384,12 @@ export default function ScheduleClient({
     useState<ScheduleClassDetail | null>(null);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]> | undefined>();
+  const [mutationState, setMutationState] = useState<"idle" | "pending" | "queued" | "failed">(
+    "idle",
+  );
+  const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
+  const [allowDuplicateSave, setAllowDuplicateSave] = useState(false);
   const [formState, setFormState] = useState<AddClassFormState>(() =>
     getInitialFormState(dayOptions),
   );
@@ -401,10 +450,28 @@ export default function ScheduleClient({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitError(null);
+    setFieldErrors(undefined);
+    setMutationState("pending");
 
     const selectedDay = dayOptions.find((day) => day.dayOfWeek === formState.dayOfWeek);
     if (!selectedDay) {
       setSubmitError("Please choose a valid day.");
+      setMutationState("failed");
+      return;
+    }
+
+    const nextFieldErrors: Record<string, string[]> = {};
+
+    if (formState.subject.trim().length === 0) {
+      nextFieldErrors.subject = ["Subject is required."];
+    }
+    if (formState.endTime <= formState.startTime) {
+      nextFieldErrors.endTime = ["End time must be after the start time."];
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setMutationState("failed");
       return;
     }
 
@@ -419,33 +486,52 @@ export default function ScheduleClient({
       color: formState.color,
     };
 
-    startTransition(() => {
+    const duplicates = allowDuplicateSave
+      ? []
+      : findLikelyClassDuplicates(classesState.records, payload);
+
+    if (duplicates.length > 0) {
+      setDuplicateCandidates(duplicates);
+      setMutationState("idle");
+      return;
+    }
+
+    const runSave = () =>
+      startTransition(() => {
       void (async () => {
         try {
           await createClassLocal(payload);
         } catch (error) {
-          setSubmitError(
-            error instanceof Error
-              ? error.message
-              : "We couldn't save the class right now.",
-          );
+          const recoverable = normalizeRecoverableError(error);
+          setSubmitError(recoverable.message);
+          setFieldErrors(recoverable.fieldErrors);
+          setMutationState("failed");
           return;
         }
 
         setAddSheetOpen(false);
         setSelectedDetail(null);
         setSubmitError(null);
+        setFieldErrors(undefined);
+        setAllowDuplicateSave(false);
+        setMutationState("queued");
+        window.setTimeout(() => setMutationState("idle"), 1500);
       })();
     });
+
+    runSave();
   };
 
   const renderScheduleContent = () => {
     if (!scheduleAvailable || !scheduleWeek) {
       return (
         <>
-          <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-sm font-medium text-[#825100] shadow-sm">
-            We couldn&apos;t load your weekly grid right now. You can still add a
-            class and refresh once the data is ready.
+        <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-sm font-medium text-[#825100] shadow-sm">
+            <RecoverableError
+              tone="warning"
+              title="Schedule unavailable"
+              message="We couldn’t load your weekly grid right now. You can still add a class and refresh once the data is ready."
+            />
           </div>
           <EmptyState
             icon="calendar_month"
@@ -576,6 +662,17 @@ export default function ScheduleClient({
 
         {renderScheduleContent()}
 
+        <div className="mt-4">
+          <MutationStatus
+            state={mutationState}
+            label={
+              mutationState === "queued"
+                ? "Class saved locally and queued to sync."
+                : undefined
+            }
+          />
+        </div>
+
         <div className="mt-8 flex justify-center">
           <button
             type="button"
@@ -583,6 +680,8 @@ export default function ScheduleClient({
               setSelectedDetail(null);
               setFormState(getInitialFormState(dayOptions));
               setSubmitError(null);
+              setFieldErrors(undefined);
+              setAllowDuplicateSave(false);
               setAddSheetOpen(true);
             }}
             className="flex items-center gap-2 rounded-full bg-[#3B82F6] px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-[#3B82F6]/20 transition-all hover:opacity-90 active:scale-95"
@@ -638,15 +737,36 @@ export default function ScheduleClient({
         dayOptions={dayOptions}
         formState={formState}
         error={submitError}
+        fieldErrors={fieldErrors}
         pending={isPending}
         onClose={() => {
           if (!isPending) {
             setAddSheetOpen(false);
             setSubmitError(null);
+            setFieldErrors(undefined);
+            setAllowDuplicateSave(false);
           }
         }}
         onChange={handleFormChange}
         onSubmit={handleSubmit}
+      />
+
+      <DuplicateWarningSheet
+        open={duplicateCandidates.length > 0}
+        candidates={duplicateCandidates}
+        onCancel={() => setDuplicateCandidates([])}
+        onConfirm={() => {
+          setDuplicateCandidates([]);
+          setAllowDuplicateSave(true);
+          window.setTimeout(() => {
+            const form = document.querySelector<HTMLFormElement>("#schedule-class-form");
+            form?.requestSubmit();
+          }, 0);
+        }}
+        onReview={(candidate) => {
+          setDuplicateCandidates([]);
+          router.push(candidate.href ?? "/schedule");
+        }}
       />
     </div>
   );

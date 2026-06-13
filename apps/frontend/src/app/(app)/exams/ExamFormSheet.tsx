@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, type FormEvent } from "react";
+import { FieldErrorMessage, FormErrorSummary } from "@/components/ui/FormErrorSummary";
 import { Icon } from "@/components/ui/Icon";
+import { MutationStatus } from "@/components/ui/MutationStatus";
+import { fieldErrorMessage } from "@/lib/errors/recoverable";
 import { toDateTimeLocalValue } from "@/lib/api/utils";
 import type { ClassOption, Exam } from "@/lib/types";
 
@@ -40,6 +43,7 @@ export function ExamFormSheet({
   classesAvailable,
   formState,
   error,
+  fieldErrors,
   pending,
   onClose,
   onChange,
@@ -51,6 +55,7 @@ export function ExamFormSheet({
   classesAvailable: boolean;
   formState: ExamFormState;
   error: string | null;
+  fieldErrors?: Record<string, string[]>;
   pending: boolean;
   onClose: () => void;
   onChange: (
@@ -117,17 +122,32 @@ export function ExamFormSheet({
           </button>
         </div>
 
-        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+        <form className="mt-6 space-y-4" onSubmit={onSubmit} id="exam-form">
+          <FormErrorSummary formId="exam-form" fieldErrors={fieldErrors} message={error} />
           <label className="block">
             <span className="mb-2 block text-sm font-semibold text-[#191c1d]">
               Title
             </span>
             <input
+              id="exam-form-title"
               required
               value={formState.title}
               onChange={(event) => onChange("title", event.target.value)}
-              className="w-full rounded-xl border border-[#c2c6d6] bg-white px-4 py-3 text-sm text-[#191c1d] outline-none transition-colors focus:border-[#3B82F6]"
+              aria-describedby={
+                fieldErrorMessage(fieldErrors, "title") ? "exam-form-title-error" : undefined
+              }
+              className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-[#191c1d] outline-none transition-colors focus:border-[#3B82F6]"
+              style={{
+                borderColor: fieldErrorMessage(fieldErrors, "title")
+                  ? "#ba1a1a"
+                  : "#c2c6d6",
+              }}
               placeholder="e.g. Midterm in Calculus"
+            />
+            <FieldErrorMessage
+              field="title"
+              error={fieldErrorMessage(fieldErrors, "title")}
+              formId="exam-form"
             />
           </label>
 
@@ -136,11 +156,25 @@ export function ExamFormSheet({
               Date and time
             </span>
             <input
+              id="exam-form-examAt"
               required
               type="datetime-local"
               value={formState.examAt}
               onChange={(event) => onChange("examAt", event.target.value)}
-              className="w-full rounded-xl border border-[#c2c6d6] bg-white px-4 py-3 text-sm text-[#191c1d] outline-none transition-colors focus:border-[#3B82F6]"
+              aria-describedby={
+                fieldErrorMessage(fieldErrors, "examAt") ? "exam-form-examAt-error" : undefined
+              }
+              className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-[#191c1d] outline-none transition-colors focus:border-[#3B82F6]"
+              style={{
+                borderColor: fieldErrorMessage(fieldErrors, "examAt")
+                  ? "#ba1a1a"
+                  : "#c2c6d6",
+              }}
+            />
+            <FieldErrorMessage
+              field="examAt"
+              error={fieldErrorMessage(fieldErrors, "examAt")}
+              formId="exam-form"
             />
           </label>
 
@@ -192,11 +226,7 @@ export function ExamFormSheet({
             />
           </label>
 
-          {error ? (
-            <div className="rounded-xl border border-[#ffdad6] bg-[#fff8f7] px-4 py-3 text-sm font-medium text-[#ba1a1a]">
-              {error}
-            </div>
-          ) : null}
+          <MutationStatus state={pending ? "pending" : "idle"} />
 
           <div className="flex gap-3 pt-2">
             <button

@@ -5,6 +5,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useState,
   type ReactNode,
@@ -52,10 +53,24 @@ export function ProfileProvider({
     }
   };
 
+  const runInitialRefresh = useEffectEvent(() => {
+    void refreshProfile();
+  });
+
   useEffect(() => {
+    let timeoutId: number | null = null;
+
     if (initialProfile === null) {
-      void refreshProfile();
+      timeoutId = window.setTimeout(() => {
+        runInitialRefresh();
+      }, 0);
     }
+
+    return () => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, [initialProfile]);
 
   const value = useMemo(

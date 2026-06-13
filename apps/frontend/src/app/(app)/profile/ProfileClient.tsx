@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { UserProfile } from "@unilife-ai/types";
 import { updateProfile } from "@/lib/api/profile-client";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { useProfile } from "@/components/profile/ProfileContext";
+import { FieldErrorMessage, FormErrorSummary } from "@/components/ui/FormErrorSummary";
+import { MutationStatus } from "@/components/ui/MutationStatus";
+import { RecoverableError } from "@/components/ui/RecoverableError";
+import { fieldErrorMessage, normalizeRecoverableError } from "@/lib/errors/recoverable";
 import { deleteAvatarByUrl, isUserOwnedAvatarUrl } from "@/lib/profile/avatar-storage";
 
 const COMMON_TIME_ZONES = [
@@ -17,39 +22,87 @@ const COMMON_TIME_ZONES = [
 
 export default function ProfileClient() {
   const { profile, refreshProfile, resolvedTimeZone, setProfile } = useProfile();
-  const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null);
-  const [timezone, setTimezone] = useState(profile?.timezone ?? resolvedTimeZone);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setDisplayName(profile?.display_name ?? "");
-    setAvatarUrl(profile?.avatar_url ?? null);
-    setTimezone(profile?.timezone ?? resolvedTimeZone);
-  }, [profile, resolvedTimeZone]);
-
-  const availableTimeZones = useMemo(
-    () => Array.from(new Set([...COMMON_TIME_ZONES, ...Intl.supportedValuesOf("timeZone")])),
-    [],
-  );
 
   if (!profile) {
     return (
       <div className="min-h-screen bg-[#f8f9fa] pb-32 font-sans text-[#191c1d]">
         <AuthenticatedPageHeader pageTitle="Profile" />
         <main className="mx-auto max-w-2xl px-4 pt-6">
-          <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-sm font-medium text-[#825100] shadow-sm">
-            We couldn&apos;t load your profile right now. Try again in a moment.
-          </div>
+          <RecoverableError
+            tone="warning"
+            title="Profile unavailable"
+            message="We couldn’t load your profile right now. Try again in a moment."
+          />
         </main>
       </div>
     );
   }
 
+  const profileFormKey = [
+    profile.id,
+    profile.updated_at,
+    profile.display_name ?? "",
+    profile.avatar_url ?? "",
+    profile.timezone ?? resolvedTimeZone,
+  ].join(":");
+
+  return (
+    <ProfileFormContent
+      key={profileFormKey}
+      profile={profile}
+      refreshProfile={refreshProfile}
+      resolvedTimeZone={resolvedTimeZone}
+      setProfile={setProfile}
+    />
+  );
+}
+
+function ProfileFormContent({
+  profile,
+  refreshProfile,
+  resolvedTimeZone,
+  setProfile,
+}: {
+  profile: UserProfile;
+  refreshProfile: () => Promise<void>;
+  resolvedTimeZone: string;
+  setProfile: (profile: UserProfile | null) => void;
+}) {
+  const [displayName, setDisplayName] = useState(profile.display_name ?? "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url ?? null);
+  const [timezone, setTimezone] = useState(profile.timezone ?? resolvedTimeZone);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]> | undefined>();
+  const [saving, setSaving] = useState(false);
+  const [mutationState, setMutationState] = useState<"idle" | "pending" | "queued" | "failed">(
+    "idle",
+  );
+
+  const availableTimeZones = useMemo(
+    () => Array.from(new Set([...COMMON_TIME_ZONES, ...Intl.supportedValuesOf("timeZone")])),
+    [],
+  );
+
   const handleSave = async () => {
+    const nextFieldErrors: Record<string, string[]> = {};
+    if (displayName.trim().length > 80) {
+      nextFieldErrors.display_name = ["Display name must stay under 80 characters."];
+    }
+    if (timezone.trim().length === 0) {
+      nextFieldErrors.timezone = ["Timezone is required."];
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setMutationState("failed");
+      return;
+    }
+
     setSaving(true);
     setError(null);
+    setFieldErrors(undefined);
+    setMutationState("pending");
+    let shouldRefresh = false;
 
     const previousAvatarUrl = profile.avatar_url;
 
@@ -61,6 +114,8 @@ export default function ProfileClient() {
       });
 
       setProfile(nextProfile);
+      setMutationState("queued");
+      shouldRefresh = true;
 
       if (
         previousAvatarUrl &&
@@ -70,14 +125,16 @@ export default function ProfileClient() {
         await deleteAvatarByUrl(previousAvatarUrl);
       }
     } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "We couldn't save your profile right now.",
-      );
+      const recoverable = normalizeRecoverableError(nextError);
+      setError(recoverable.message);
+      setFieldErrors(recoverable.fieldErrors);
+      setMutationState("failed");
     } finally {
       setSaving(false);
-      await refreshProfile();
+      if (shouldRefresh) {
+        await refreshProfile();
+      }
+      window.setTimeout(() => setMutationState("idle"), 1500);
     }
   };
 
@@ -93,6 +150,12 @@ export default function ProfileClient() {
           </p>
 
           <div className="mt-6 space-y-5">
+            <FormErrorSummary
+              formId="profile-form"
+              fieldErrors={fieldErrors}
+              message={error}
+            />
+
             <AvatarPicker
               avatarUrl={avatarUrl}
               displayName={displayName}
@@ -105,10 +168,21 @@ export default function ProfileClient() {
                 Display name
               </span>
               <input
+                id="profile-form-display_name"
                 className="w-full rounded-2xl border border-[#c2c6d6] px-4 py-3 text-sm outline-none focus:border-[#3B82F6]"
                 onChange={(event) => setDisplayName(event.target.value)}
                 placeholder="How should we greet you?"
                 value={displayName}
+                aria-describedby={
+                  fieldErrorMessage(fieldErrors, "display_name")
+                    ? "profile-form-display_name-error"
+                    : undefined
+                }
+              />
+              <FieldErrorMessage
+                field="display_name"
+                error={fieldErrorMessage(fieldErrors, "display_name")}
+                formId="profile-form"
               />
             </label>
 
@@ -117,9 +191,15 @@ export default function ProfileClient() {
                 Timezone
               </span>
               <select
+                id="profile-form-timezone"
                 className="w-full rounded-2xl border border-[#c2c6d6] px-4 py-3 text-sm outline-none focus:border-[#3B82F6]"
                 onChange={(event) => setTimezone(event.target.value)}
                 value={timezone}
+                aria-describedby={
+                  fieldErrorMessage(fieldErrors, "timezone")
+                    ? "profile-form-timezone-error"
+                    : undefined
+                }
               >
                 {availableTimeZones.map((timeZoneOption) => (
                   <option key={timeZoneOption} value={timeZoneOption}>
@@ -127,13 +207,21 @@ export default function ProfileClient() {
                   </option>
                 ))}
               </select>
+              <FieldErrorMessage
+                field="timezone"
+                error={fieldErrorMessage(fieldErrors, "timezone")}
+                formId="profile-form"
+              />
             </label>
 
-            {error ? (
-              <div className="rounded-xl border border-[#ffdad6] bg-[#fff8f7] px-4 py-3 text-sm font-medium text-[#ba1a1a]">
-                {error}
-              </div>
-            ) : null}
+            <MutationStatus
+              state={saving ? "pending" : mutationState}
+              label={
+                mutationState === "queued"
+                  ? "Profile changes saved successfully."
+                  : undefined
+              }
+            />
 
             <button
               className="rounded-full bg-[#0058be] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[#0058be]/20"

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/ui/Icon";
+import { RecoverableError } from "@/components/ui/RecoverableError";
 import {
   getNotificationPermission,
   requestNotificationPermission,
@@ -30,23 +31,57 @@ export function NotificationPermissionButton({
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<NotificationPermissionState>("default");
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const openSettings = () => {
     setStatus(getNotificationPermission());
+    setError(null);
     setOpen(true);
   };
 
   const enable = async () => {
     setPending(true);
-    const nextStatus = await requestNotificationPermission();
-    setStatus(nextStatus);
-    window.dispatchEvent(new Event("unilife:notification-permission"));
-    setPending(false);
+    setError(null);
+
+    try {
+      const nextStatus = await requestNotificationPermission();
+      setStatus(nextStatus);
+      window.dispatchEvent(new Event("unilife:notification-permission"));
+    } catch {
+      setError("We couldn't update notification permissions right now.");
+    } finally {
+      setPending(false);
+    }
   };
+
+  useEffect(() => {
+    if (!open) {
+      triggerRef.current?.focus();
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !pending) {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, pending]);
 
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         aria-label="Notification settings"
         className={className}
@@ -79,6 +114,13 @@ export function NotificationPermissionButton({
                 <p className="mt-2 text-sm leading-6 text-[#424754]">
                   {statusCopy(status)}
                 </p>
+                {error ? (
+                  <RecoverableError
+                    className="mt-4"
+                    title="Notification settings failed"
+                    message={error}
+                  />
+                ) : null}
               </div>
             </div>
             <div className="mt-6 flex gap-3">

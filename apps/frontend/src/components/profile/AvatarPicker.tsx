@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChangeEvent } from "react";
+import Image from "next/image";
 import { useRef, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { AVATAR_PRESET_URLS } from "@/lib/profile/avatar-presets";
@@ -51,11 +52,13 @@ export function AvatarPicker({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-[#c2c6d6] bg-[#f3f4f5]">
+        <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-[#c2c6d6] bg-[#f3f4f5]">
           {avatarUrl ? (
-            <img
+            <Image
               alt={displayName ? `${displayName} avatar preview` : "Avatar preview"}
               className="h-full w-full object-cover"
+              fill
+              sizes="80px"
               src={avatarUrl}
             />
           ) : (
@@ -99,7 +102,14 @@ export function AvatarPicker({
               onClick={() => onChange(presetUrl)}
               type="button"
             >
-              <img alt="Avatar preset" className="h-20 w-full rounded-xl object-cover" src={presetUrl} />
+              <Image
+                alt="Avatar preset"
+                className="h-20 w-full rounded-xl object-cover"
+                height={80}
+                sizes="(max-width: 768px) 30vw, 96px"
+                src={presetUrl}
+                width={96}
+              />
             </button>
           );
         })}

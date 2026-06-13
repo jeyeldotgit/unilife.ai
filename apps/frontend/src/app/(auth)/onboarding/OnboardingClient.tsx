@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateProfile } from "@/lib/api/profile-client";
@@ -584,16 +585,16 @@ export default function OnboardingClient() {
                   position: "relative",
                 }}
               >
-                <img
+                <Image
                   className="illustration-img"
                   alt="Budgeting Tools"
                   src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJfX7CECpDoCuFmOntnKTSCzNqHciqSwpUKFHrjMZZyoooDjZTFBq1uSemzi91xx2osIYovIAmqNe-zPemnK03a53xASUga7YWiGXeGu3Eo3fqgiClrxYIsi_frCgYu4yTusvakVl5Iw7g3zU3jXKhER0t_ss8mA5xvwfnfQtBIi9QLGHgU1koxvkejkfmTQ-A1dYWVefYwvojOtY7cAPiePAbaScl1qiH54ZcofqH_jZmMQZQNQ-Mf9B2DLzL64F-3THmqAbFMqQ"
                   style={{
-                    width: "100%",
-                    height: "100%",
                     objectFit: "cover",
                     display: "block",
                   }}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 448px"
                 />
                 <div
                   style={{
