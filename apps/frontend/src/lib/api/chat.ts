@@ -3,6 +3,7 @@ import { getBudgetChatContext } from "@/lib/api/budget";
 import { requestBackend } from "@/lib/api/client";
 import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
 import { getExams } from "@/lib/api/exams";
+import { listExpenseRecords } from "@/lib/api/finance-data";
 import { getClasses } from "@/lib/api/schedule";
 import {
   inferExpenseCategory,
@@ -11,6 +12,7 @@ import {
   titleCase,
 } from "@/lib/api/utils";
 import type {
+  AiProposal,
   AllowanceForecast,
   FreeTimePlan,
   PlanningContext,
@@ -30,9 +32,16 @@ import type {
 
 type AiChatIntent =
   | "create_assignment"
+  | "update_assignment"
+  | "delete_assignment"
   | "create_class"
+  | "update_class"
+  | "delete_class"
   | "create_exam"
+  | "update_exam"
+  | "delete_exam"
   | "log_expense"
+  | "delete_expense"
   | "query_schedule"
   | "query_deadlines"
   | "query_budget"
@@ -48,6 +57,7 @@ type AiChatResponse = {
   forecast?: AllowanceForecast;
   free_time?: FreeTimePlan;
   requires_confirmation: boolean;
+  proposal: AiProposal | null;
 };
 
 const quickActions: ChatQuickAction[] = [
@@ -116,6 +126,16 @@ function buildTextMessage(text: string) {
     text,
     createdAt: new Date().toISOString(),
   } satisfies ChatTextMessage;
+}
+
+function buildProposalMessage(proposal: AiProposal) {
+  return {
+    id: crypto.randomUUID(),
+    role: "ai",
+    kind: "proposal_review",
+    payload: proposal,
+    createdAt: new Date().toISOString(),
+  } as const;
 }
 
 function buildFreeTimeRecommendation(
@@ -372,7 +392,7 @@ function getClarifyingMessage(response: AiChatResponse) {
   return null;
 }
 
-function getClientEffect(
+export function getClientEffect(
   inputText: string,
   response: AiChatResponse,
 ): ChatClientEffect | undefined {
@@ -447,11 +467,12 @@ export async function sendMessage(
   input: SendChatMessageInput,
 ): Promise<ChatSendResult> {
   const userMessage = buildUserMessage(input);
-  const [scheduleWeek, assignments, exams, budgetContext] = await Promise.all([
+  const [scheduleWeek, assignments, exams, budgetContext, expenses] = await Promise.all([
     getClasses(),
     getAssignments(),
     getExams(),
     getBudgetChatContext(),
+    listExpenseRecords(),
   ]);
 
   const context = {
@@ -466,7 +487,35 @@ export async function sendMessage(
     budget_remaining: budgetContext.budgetRemaining,
     budget_period_end_date: budgetContext.budgetPeriodEndDate,
     avg_daily_spend: budgetContext.avgDailySpend,
-  } satisfies PlanningContext;
+    entities: [
+      ...(scheduleWeek.classes ?? []).map((item) => ({
+        id: item.logicalId ?? item.id,
+        entity_type: "class" as const,
+        label: item.subject,
+      })),
+      ...assignments.map((item) => ({
+        id: item.id,
+        entity_type: "assignment" as const,
+        label: item.title,
+      })),
+      ...exams.map((item) => ({
+        id: item.id,
+        entity_type: "exam" as const,
+        label: item.title,
+      })),
+      ...expenses.map((item) => ({
+        id: item.id,
+        entity_type: "expense" as const,
+        label: item.description ?? item.category,
+      })),
+    ],
+  } satisfies PlanningContext & {
+    entities: Array<{
+      id: string;
+      entity_type: "class" | "assignment" | "exam" | "expense";
+      label: string;
+    }>;
+  };
   const response = await requestBackend<AiChatResponse>("/api/ai/chat", {
     method: "POST",
     body: {
@@ -493,8 +542,14 @@ export async function sendMessage(
     }
   }
 
+  if (response.proposal) {
+    return {
+      userMessage,
+      responseMessage: buildProposalMessage(response.proposal),
+    };
+  }
+
   return {
-    clientEffect: getClientEffect(input.text, response),
     userMessage,
     responseMessage: buildTextMessage(
       getClarifyingMessage(response) ?? response.message,

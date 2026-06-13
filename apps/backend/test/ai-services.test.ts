@@ -40,6 +40,40 @@ function createContext(overrides: Partial<Parameters<AIService["processChat"]>[0
 }
 
 describe("AIService", () => {
+  it("requires review even for high-confidence write proposals", async () => {
+    const service = new AIService(
+      {} as never,
+      "user-1",
+      { create: vi.fn() } as never,
+      vi.fn(async () => ({
+        intent: "create_assignment",
+        action: {
+          title: "Research Paper",
+          due_date: "2026-06-11T12:00:00.000Z",
+        },
+        message: "Review this assignment.",
+        confidence: 0.99,
+      })),
+    );
+
+    const result = await service.processChat({
+      message: "Add my research paper.",
+      context: createContext(),
+    });
+
+    expect(result.response.requires_confirmation).toBe(true);
+    expect(result.response.proposal).toMatchObject({
+      status: "proposed",
+      operations: [
+        expect.objectContaining({
+          entity_type: "assignment",
+          operation: "create",
+          status: "proposed",
+        }),
+      ],
+    });
+  });
+
   it("normalizes structured assignment actions and requires confirmation for low confidence", async () => {
     const service = new AIService(
       {} as never,
@@ -63,7 +97,7 @@ describe("AIService", () => {
       context: createContext(),
     });
 
-    expect(result.response).toEqual({
+    expect(result.response).toMatchObject({
       intent: "create_assignment",
       action: {
         title: "Research Paper",
@@ -102,7 +136,7 @@ describe("AIService", () => {
       context: createContext(),
     });
 
-    expect(result.response).toEqual({
+    expect(result.response).toMatchObject({
       intent: "create_class",
       action: {
         subject: "Biology",
@@ -135,7 +169,7 @@ describe("AIService", () => {
       context: createContext(),
     });
 
-    expect(result.response).toEqual({
+    expect(result.response).toMatchObject({
       intent: "general_question",
       action: null,
       message: "Focus on your most urgent task first.",
@@ -161,7 +195,7 @@ describe("AIService", () => {
       context: createContext(),
     });
 
-    expect(result.response).toEqual({
+    expect(result.response).toMatchObject({
       intent: "allowance_forecast",
       action: null,
       message: "Your budget should still last if you slow down a bit.",
@@ -198,7 +232,7 @@ describe("AIService", () => {
       }),
     });
 
-    expect(result.response).toEqual({
+    expect(result.response).toMatchObject({
       intent: "allowance_forecast",
       action: null,
       message: "I need more budget context to estimate that.",
@@ -224,7 +258,7 @@ describe("AIService", () => {
       context: createContext(),
     });
 
-    expect(result.response).toEqual({
+    expect(result.response).toMatchObject({
       intent: "free_time_finder",
       action: null,
       message: "You have time for your research paper before class.",
@@ -274,7 +308,7 @@ describe("AIService", () => {
       }),
     });
 
-    expect(result.response).toEqual({
+    expect(result.response).toMatchObject({
       intent: "free_time_finder",
       action: null,
       message: "You are free for the rest of the day.",

@@ -35,6 +35,17 @@ const planningContextSchema = z
         budget_remaining: z.number().nullable(),
         budget_period_end_date: z.string().nullable(),
         avg_daily_spend: z.number().nullable(),
+        entities: z
+          .array(
+            z
+              .object({
+                id: z.string(),
+                entity_type: z.enum(["class", "assignment", "exam", "expense"]),
+                label: z.string(),
+              })
+              .strict(),
+          )
+          .optional(),
       })
   .strict();
 
@@ -61,6 +72,10 @@ const scheduleInsightRequestSchema = z
   })
   .strict();
 
+const aiActionsQuerySchema = z.object({
+  since: z.string().optional(),
+});
+
 export const aiRouter = new Hono<AppBindings>();
 
 aiRouter.use("*", requireAuth);
@@ -77,6 +92,13 @@ aiRouter.post("/briefing", async (c) => {
   const controller = new AIController(c.get("supabase"), c.get("userId"));
 
   return c.json(await controller.briefing(input.context), 200);
+});
+
+aiRouter.get("/actions", async (c) => {
+  const filters = aiActionsQuerySchema.parse(c.req.query());
+  const controller = new AIController(c.get("supabase"), c.get("userId"));
+
+  return c.json(await controller.actions(filters), 200);
 });
 
 aiRouter.post("/schedule-insight", async (c) => {

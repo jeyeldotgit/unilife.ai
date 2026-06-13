@@ -8,6 +8,7 @@ import {
   buildExamConfirmation,
   buildExpenseConfirmation,
 } from "@/lib/chat/local-confirmations";
+import { buildLocalProposal } from "@/lib/chat/ai-actions";
 import { db } from "@/lib/db/dexie";
 import {
   createAssignmentLocal,
@@ -46,7 +47,7 @@ function getClarification(action: Extract<ParsedAction, { intent: "unknown" }>) 
   return "I could not safely understand that offline. Try a clearer command or reconnect for a full AI reply.";
 }
 
-function toClientEffect(
+export function toClientEffect(
   action: Extract<
     ParsedAction,
     { intent: "create_assignment" | "create_class" | "create_exam" | "log_expense" }
@@ -310,8 +311,41 @@ export async function resolveLocalChat(text: string): Promise<LocalChatResolutio
     };
   }
 
+  const proposed =
+    action.intent === "create_assignment"
+      ? { title: action.data.title, due_date: action.data.due_date, class_id: null }
+      : action.intent === "create_class"
+        ? action.data
+        : action.intent === "create_exam"
+          ? {
+              title: action.data.title,
+              exam_date: action.data.exam_date,
+              location: action.data.location ?? null,
+              class_id: null,
+            }
+          : {
+              amount: action.data.amount,
+              description: action.data.label,
+              category: action.data.category,
+            };
+  const entityType =
+    action.intent === "create_assignment"
+      ? "assignment"
+      : action.intent === "create_class"
+        ? "class"
+        : action.intent === "create_exam"
+          ? "exam"
+          : "expense";
+  const proposal = buildLocalProposal(entityType, proposed, action.confidence);
+
   return {
     handled: true,
-    message: await executeChatClientEffect(toClientEffect(action)),
+    message: {
+      id: crypto.randomUUID(),
+      role: "ai",
+      kind: "proposal_review",
+      payload: proposal,
+      createdAt: new Date().toISOString(),
+    },
   };
 }

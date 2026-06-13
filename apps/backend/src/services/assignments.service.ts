@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  RecurrenceEditScope,
   Assignment,
   AssignmentStatus,
   RecurrenceReference,
