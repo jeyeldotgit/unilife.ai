@@ -1,15 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { PlanningContext } from "@unilife-ai/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AssignmentDetailSheet } from "@/app/(app)/assignments/AssignmentDetailSheet";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
+import { useProfile } from "@/components/profile/ProfileContext";
 import { AssignmentCard } from "@/components/ui/AssignmentCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { RecoverableError } from "@/components/ui/RecoverableError";
 import { TasksRouteSwitcher } from "@/components/ui/TasksRouteSwitcher";
 import { useAssignments } from "@/hooks/use-assignments";
+import { useClasses } from "@/hooks/use-classes";
+import { requestDailyBriefing } from "@/lib/api/briefing";
+import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
+import { getLocalDateKey } from "@/lib/api/utils";
+import { buildDailyBriefing } from "@/lib/planning/deterministic";
+import { getTime24InTimeZone } from "@/lib/profile/time";
 import type { Assignment } from "@/lib/types";
 import { dismissNotification } from "@/lib/notifications/runtime";
 
@@ -24,7 +32,9 @@ export default function AssignmentsClient({
   assignments: initialAssignments = [],
   assignmentsAvailable,
 }: AssignmentsClientProps) {
+  const { resolvedTimeZone } = useProfile();
   const assignmentsState = useAssignments();
+  const classesState = useClasses();
   const router = useRouter();
   const searchParams = useSearchParams();
   const assignments =
@@ -36,8 +46,59 @@ export default function AssignmentsClient({
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(
     null,
   );
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof navigator === "undefined") {
+      return true;
+    }
+
+    return navigator.onLine;
+  });
+  const [aiInsight, setAiInsight] = useState<{
+    contextKey: string;
+    message: string;
+  } | null>(null);
+  const handledNotificationIdRef = useRef<string | null>(null);
   const selectedAssignment =
     assignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null;
+  const completedAssignmentCount = assignments.filter(
+    (assignment) => assignment.status === "completed",
+  ).length;
+  const completionRate =
+    assignments.length > 0
+      ? Math.round((completedAssignmentCount / assignments.length) * 100)
+      : 0;
+  const canRequestAiInsight =
+    isOnline && assignmentsState.loaded && classesState.loaded;
+  const planningContext = useMemo(() => {
+    const now = new Date();
+
+    return {
+      today: getLocalDateKey(now, resolvedTimeZone),
+      current_time: getTime24InTimeZone(resolvedTimeZone, now),
+      todays_classes: classesState.scheduleWeek.todayClasses.map((classItem) => ({
+        subject: classItem.subject,
+        start_time: classItem.startTime,
+        end_time: classItem.endTime,
+      })),
+      upcoming_deadlines: getChatUpcomingDeadlines(assignments, []),
+      budget_remaining: null,
+      budget_period_end_date: null,
+      avg_daily_spend: null,
+    } satisfies PlanningContext;
+  }, [
+    assignments,
+    classesState.scheduleWeek.todayClasses,
+    resolvedTimeZone,
+  ]);
+  const deterministicInsight = useMemo(
+    () => buildDailyBriefing(planningContext),
+    [planningContext],
+  );
+  const planningContextKey = JSON.stringify(planningContext);
+  const aiInsightMessage =
+    aiInsight?.contextKey === planningContextKey ? aiInsight.message : null;
+  const insightMessage =
+    (canRequestAiInsight ? aiInsightMessage : null) ?? deterministicInsight.message;
 
   useEffect(() => {
     const itemId = searchParams.get("item");
@@ -48,11 +109,73 @@ export default function AssignmentsClient({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedAssignmentId(itemId);
     }
+  }, [assignments, searchParams, selectedAssignmentId]);
+
+  useEffect(() => {
     const notificationId = searchParams.get("notification");
-    if (notificationId) {
-      void dismissNotification(notificationId).then(() => router.replace("/assignments"));
+    if (!notificationId) {
+      handledNotificationIdRef.current = null;
+      return;
     }
-  }, [assignments, router, searchParams, selectedAssignmentId]);
+    if (handledNotificationIdRef.current === notificationId) {
+      return;
+    }
+
+    handledNotificationIdRef.current = notificationId;
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("notification");
+    const nextQuery = nextSearchParams.toString();
+    void dismissNotification(notificationId)
+      .then(() =>
+        router.replace(
+          nextQuery ? `/assignments?${nextQuery}` : "/assignments",
+          { scroll: false },
+        ),
+      )
+      .catch(() => {
+        handledNotificationIdRef.current = null;
+      });
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canRequestAiInsight) {
+      return;
+    }
+
+    let active = true;
+    const requestContext = JSON.parse(planningContextKey) as PlanningContext;
+    void requestDailyBriefing(requestContext)
+      .then((briefing) => {
+        if (active && briefing.source === "ai") {
+          setAiInsight({
+            contextKey: planningContextKey,
+            message: briefing.message,
+          });
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAiInsight(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canRequestAiInsight, planningContextKey]);
 
   const toggleCheck = (id: string) => {
     setCheckedIds((prev) => {
@@ -291,7 +414,9 @@ export default function AssignmentsClient({
                     margin: 0,
                   }}
                 >
-                  Focus Session Recommended
+                  {canRequestAiInsight && aiInsightMessage
+                    ? "AI Assignment Insight"
+                    : "Assignment Insight"}
                 </h4>
                 <p
                   style={{
@@ -301,11 +426,12 @@ export default function AssignmentsClient({
                     opacity: 0.9,
                   }}
                 >
-                  Start a 45min deep work for Math 101 paper.
+                  {insightMessage}
                 </p>
               </div>
               <button
                 type="button"
+                onClick={() => router.push("/chat")}
                 style={{
                   position: "relative",
                   zIndex: 1,
@@ -332,7 +458,7 @@ export default function AssignmentsClient({
                     "rgba(255,255,255,0.2)";
                 }}
               >
-                Start Now
+                Ask UniLife for a study plan
               </button>
 
               <div
@@ -390,7 +516,7 @@ export default function AssignmentsClient({
                       color: "#3B82F6",
                     }}
                   >
-                    68%
+                    {completionRate}%
                   </span>
                   <span
                     style={{
@@ -400,7 +526,7 @@ export default function AssignmentsClient({
                       paddingBottom: "8px",
                     }}
                   >
-                    +12% this week
+                    {completedAssignmentCount} of {assignments.length} completed
                   </span>
                 </div>
               </div>
@@ -418,7 +544,7 @@ export default function AssignmentsClient({
                   style={{
                     backgroundColor: "#10B981",
                     height: "100%",
-                    width: "68%",
+                    width: `${completionRate}%`,
                     borderRadius: "9999px",
                   }}
                 />

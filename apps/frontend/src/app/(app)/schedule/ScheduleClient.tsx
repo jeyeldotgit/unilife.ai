@@ -2,12 +2,16 @@
 
 import {
   useEffect,
+  useMemo,
+  useRef,
   useState,
   useTransition,
   type FormEvent,
 } from "react";
+import type { ScheduleInsightContext } from "@unilife-ai/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
+import { useProfile } from "@/components/profile/ProfileContext";
 import { DuplicateWarningSheet } from "@/components/ui/DuplicateWarningSheet";
 import { ClassBlock } from "@/components/ui/ClassBlock";
 import { ClassDetailSheet } from "@/components/ui/ClassDetailSheet";
@@ -17,9 +21,13 @@ import { Icon } from "@/components/ui/Icon";
 import { MutationStatus } from "@/components/ui/MutationStatus";
 import { RecoverableError } from "@/components/ui/RecoverableError";
 import { useClasses } from "@/hooks/use-classes";
+import { requestScheduleInsight } from "@/lib/api/briefing";
+import { getLocalDateKey } from "@/lib/api/utils";
 import { normalizeRecoverableError, fieldErrorMessage, type DuplicateCandidate } from "@/lib/errors/recoverable";
 import { findLikelyClassDuplicates } from "@/lib/mutations/duplicates";
 import { createClassLocal } from "@/lib/mutations/local-data";
+import { buildScheduleInsight } from "@/lib/planning/deterministic";
+import { getTime24InTimeZone } from "@/lib/profile/time";
 import type {
   CreateClassInput,
   DayOfWeek,
@@ -168,34 +176,41 @@ function AddClassSheet({
         onClick={onClose}
         disabled={pending}
       />
-      <div className="relative z-10 w-full rounded-t-[28px] bg-white px-5 pb-8 pt-3 shadow-2xl">
-        <div className="mx-auto h-1.5 w-14 rounded-full bg-[#c2c6d6]" />
-        <div className="mt-5 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#3B82F6]">
-              Add Class
-            </p>
-            <h2 className="mt-1 text-2xl font-bold text-[#191c1d]">
-              Create a new schedule block
-            </h2>
+      <div className="relative z-10 flex max-h-[92dvh] w-full flex-col rounded-t-[28px] bg-white shadow-2xl">
+        <div className="shrink-0 px-5 pt-3">
+          <div className="mx-auto h-1.5 w-14 rounded-full bg-[#c2c6d6]" />
+          <div className="mt-5 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#3B82F6]">
+                Add Class
+              </p>
+              <h2 className="mt-1 text-2xl font-bold text-[#191c1d]">
+                Create a new schedule block
+              </h2>
+            </div>
+            <button
+              type="button"
+              className="rounded-full p-2 text-[#424754] transition-colors hover:bg-[#f3f4f5]"
+              onClick={onClose}
+              disabled={pending}
+            >
+              <Icon name="close" />
+            </button>
           </div>
-          <button
-            type="button"
-            className="rounded-full p-2 text-[#424754] transition-colors hover:bg-[#f3f4f5]"
-            onClick={onClose}
-            disabled={pending}
-          >
-            <Icon name="close" />
-          </button>
         </div>
 
-        <form className="mt-6 space-y-4" onSubmit={onSubmit} id="schedule-class-form">
-          <FormErrorSummary
-            formId="schedule-class-form"
-            fieldErrors={fieldErrors}
-            message={error}
-          />
-          <label className="block">
+        <form
+          className="mt-6 flex min-h-0 flex-1 flex-col"
+          onSubmit={onSubmit}
+          id="schedule-class-form"
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
+            <FormErrorSummary
+              formId="schedule-class-form"
+              fieldErrors={fieldErrors}
+              message={error}
+            />
+            <label className="block">
             <span className="mb-2 block text-sm font-semibold text-[#191c1d]">
               Subject
             </span>
@@ -222,7 +237,7 @@ function AddClassSheet({
               error={fieldErrorMessage(fieldErrors, "subject")}
               formId="schedule-class-form"
             />
-          </label>
+            </label>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
@@ -342,9 +357,10 @@ function AddClassSheet({
             />
           </label>
 
-          <MutationStatus state={pending ? "pending" : "idle"} />
+            <MutationStatus state={pending ? "pending" : "idle"} />
+          </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex shrink-0 gap-3 border-t border-[#c2c6d6]/40 bg-white px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
             <button
               type="button"
               onClick={onClose}
@@ -371,6 +387,7 @@ export default function ScheduleClient({
   scheduleWeek: initialScheduleWeek,
   scheduleAvailable: initialScheduleAvailable,
 }: ScheduleClientProps) {
+  const { resolvedTimeZone } = useProfile();
   const classesState = useClasses();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -390,6 +407,18 @@ export default function ScheduleClient({
   );
   const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
   const [allowDuplicateSave, setAllowDuplicateSave] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof navigator === "undefined") {
+      return true;
+    }
+
+    return navigator.onLine;
+  });
+  const [aiInsight, setAiInsight] = useState<{
+    contextKey: string;
+    message: string;
+  } | null>(null);
+  const handledNotificationIdRef = useRef<string | null>(null);
   const [formState, setFormState] = useState<AddClassFormState>(() =>
     getInitialFormState(dayOptions),
   );
@@ -397,6 +426,33 @@ export default function ScheduleClient({
   const displayedSelectedDetail = selectedDetail
     ? scheduleWeek?.classDetails[selectedDetail.id] ?? selectedDetail
     : null;
+  const canRequestAiInsight =
+    isOnline && classesState.loaded;
+  const planningContext = useMemo(() => {
+    const now = new Date();
+
+    return {
+      today: getLocalDateKey(now, resolvedTimeZone),
+      current_time: getTime24InTimeZone(resolvedTimeZone, now),
+      todays_classes: (scheduleWeek?.todayClasses ?? []).map((classItem) => ({
+        subject: classItem.subject,
+        start_time: classItem.startTime,
+        end_time: classItem.endTime,
+      })),
+    } satisfies ScheduleInsightContext;
+  }, [
+    resolvedTimeZone,
+    scheduleWeek?.todayClasses,
+  ]);
+  const deterministicInsight = useMemo(
+    () => buildScheduleInsight(planningContext),
+    [planningContext],
+  );
+  const planningContextKey = JSON.stringify(planningContext);
+  const aiInsightMessage =
+    aiInsight?.contextKey === planningContextKey ? aiInsight.message : null;
+  const insightMessage =
+    (canRequestAiInsight ? aiInsightMessage : null) ?? deterministicInsight.message;
 
   useEffect(() => {
     const itemId = searchParams.get("item");
@@ -406,11 +462,72 @@ export default function ScheduleClient({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedDetail(scheduleWeek.classDetails[itemId] ?? null);
     }
+  }, [scheduleWeek, searchParams, selectedDetail?.id]);
+
+  useEffect(() => {
     const notificationId = searchParams.get("notification");
-    if (notificationId) {
-      void dismissNotification(notificationId).then(() => router.replace("/schedule"));
+    if (!notificationId) {
+      handledNotificationIdRef.current = null;
+      return;
     }
-  }, [router, scheduleWeek, searchParams, selectedDetail?.id]);
+    if (handledNotificationIdRef.current === notificationId) {
+      return;
+    }
+
+    handledNotificationIdRef.current = notificationId;
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("notification");
+    const nextQuery = nextSearchParams.toString();
+    void dismissNotification(notificationId)
+      .then(() =>
+        router.replace(nextQuery ? `/schedule?${nextQuery}` : "/schedule", {
+          scroll: false,
+        }),
+      )
+      .catch(() => {
+        handledNotificationIdRef.current = null;
+      });
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canRequestAiInsight) {
+      return;
+    }
+
+    let active = true;
+    const requestContext = JSON.parse(planningContextKey) as ScheduleInsightContext;
+    void requestScheduleInsight(requestContext)
+      .then((briefing) => {
+        if (active && briefing.source === "ai") {
+          setAiInsight({
+            contextKey: planningContextKey,
+            message: briefing.message,
+          });
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAiInsight(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canRequestAiInsight, planningContextKey]);
 
   const getClassBlock = (day: number, hour: number) => {
     return scheduleWeek?.classes.find(
@@ -711,14 +828,19 @@ export default function ScheduleClient({
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[#191c1d]">
-                AI Study Insight
+                {canRequestAiInsight && aiInsightMessage
+                  ? "AI Schedule Insight"
+                  : "Schedule Insight"}
               </h3>
               <p className="mt-1 text-base text-[#424754]">
-                Your Thursday afternoon is 100% free. Based on your upcoming
-                Math exam, I recommend a 2-hour deep work session at 14:30.
+                {insightMessage}
               </p>
-              <button className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#10B981] hover:underline">
-                Schedule study session
+              <button
+                type="button"
+                onClick={() => router.push("/chat")}
+                className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#10B981] hover:underline"
+              >
+                Ask UniLife for a study plan
                 <Icon name="arrow_forward" className="text-xs" />
               </button>
             </div>

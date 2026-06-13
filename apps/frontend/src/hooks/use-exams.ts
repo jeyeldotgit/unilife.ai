@@ -1,15 +1,15 @@
 "use client";
 
 import { db } from "@/lib/db/dexie";
-import { getCurrentUserId } from "@/lib/session/current-user";
 import { normalizeExamRecord } from "@/lib/selectors/exams";
 import { buildClassOptions } from "@/lib/selectors/schedule";
+import { useCurrentUserId } from "@/hooks/use-current-user-id";
 import { useLiveQueryValue } from "@/hooks/use-live-query";
 import { useSyncStatus } from "@/hooks/use-sync-status";
 
 export function useExams() {
   const syncStatus = useSyncStatus();
-  const userId = getCurrentUserId();
+  const userId = useCurrentUserId();
   const examsQuery = useLiveQueryValue(
     async () => {
       if (!userId) {
@@ -23,6 +23,7 @@ export function useExams() {
         .toArray();
     },
     [],
+    [userId],
   );
   const classesQuery = useLiveQueryValue(
     async () => {
@@ -37,6 +38,7 @@ export function useExams() {
         .toArray();
     },
     [],
+    [userId],
   );
   const notificationsQuery = useLiveQueryValue(
     async () => {
@@ -44,6 +46,7 @@ export function useExams() {
       return db.notifications.where("user_id").equals(userId).toArray();
     },
     [],
+    [userId],
   );
   const classSubjectById = new Map(
     classesQuery.value.map((record) => [record.id, record.subject] as const),

@@ -27,6 +27,7 @@ import {
 import { normalizeAssignmentRecord } from "@/lib/selectors/assignments";
 import { normalizeExamRecord } from "@/lib/selectors/exams";
 import { createClient } from "@/lib/supabase/client";
+import { notifySyncMutationQueued } from "@/lib/sync/mutation-signal";
 import type {
   CreateAssignmentInput,
   CreateClassInput,
@@ -255,6 +256,7 @@ export async function finalizeDeleteUndoLocal(
   });
 
   await db.sync_queue.put(queueItem);
+  notifySyncMutationQueued();
   return createMutationReceipt(queueItem);
 }
 
@@ -366,6 +368,7 @@ export async function createClassLocal(input: CreateClassInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return record;
 }
@@ -437,6 +440,7 @@ export async function updateClassLocal(id: string, input: UpdateClassInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return updatedRecord;
 }
@@ -469,6 +473,7 @@ export async function deleteClassLocal(id: string) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return true;
 }
@@ -525,6 +530,7 @@ export async function createAssignmentLocal(input: CreateAssignmentInput) {
     );
     },
   );
+  notifySyncMutationQueued();
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeAssignmentRecord(record, {
@@ -609,6 +615,7 @@ export async function updateAssignmentLocal(
     );
     },
   );
+  notifySyncMutationQueued();
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeAssignmentRecord(updatedRecord, {
@@ -649,6 +656,7 @@ export async function deleteAssignmentLocal(id: string) {
     );
     },
   );
+  notifySyncMutationQueued();
 
   return true;
 }
@@ -695,6 +703,7 @@ export async function createExamLocal(input: CreateExamInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeExamRecord(record, {
@@ -747,6 +756,7 @@ export async function updateExamLocal(id: string, input: UpdateExamInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeExamRecord(updatedRecord, {
@@ -781,6 +791,7 @@ export async function deleteExamLocal(id: string) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return true;
 }
@@ -826,6 +837,7 @@ export async function logExpenseLocal(input: LogExpenseInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return normalizeExpenseRecord(record);
 }
@@ -856,6 +868,7 @@ export async function deleteExpenseLocal(id: string) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return true;
 }
@@ -895,6 +908,7 @@ async function createBudgetLocal(input: OnboardingBudgetInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return record;
 }
@@ -933,6 +947,7 @@ async function updateBudgetLocal(id: string, input: OnboardingBudgetInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return updatedRecord;
 }

@@ -49,6 +49,10 @@ function parseTime(time: string) {
   return { hours, minutes };
 }
 
+function normalizeTime(time: string) {
+  return time.slice(0, 5);
+}
+
 function setTime(date: Date, time: string) {
   const next = new Date(date);
   const { hours, minutes } = parseTime(time);
@@ -84,7 +88,7 @@ function createOccurrence(
     color: record.color,
     dayIndex: getDayIndex(dayOfWeek),
     dayOfWeek,
-    endTime: record.end_time,
+    endTime: normalizeTime(record.end_time),
     id: `${record.id}:${start.toISOString()}`,
     instructor: record.instructor,
     isToday: startKey === todayKey,
@@ -94,7 +98,7 @@ function createOccurrence(
     room: record.room,
     sourceClassId: record.id,
     spansOvernight,
-    startTime: record.start_time,
+    startTime: normalizeTime(record.start_time),
     subject: record.subject,
   };
 }

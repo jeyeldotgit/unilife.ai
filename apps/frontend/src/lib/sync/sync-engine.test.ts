@@ -43,6 +43,7 @@ vi.mock("@/lib/sync/queue", async () => {
 
 import { createSyncEngine } from "@/lib/sync/sync-engine";
 import { buildFailureQueueUpdate } from "@/lib/sync/queue";
+import { SYNC_MUTATION_QUEUED_EVENT } from "@/lib/sync/mutation-signal";
 
 function createQueueItem(id: string, createdAt: string, retryCount = 0) {
   return {
@@ -73,7 +74,7 @@ function createWindowMock() {
       nextListeners.add(listener);
       listeners.set(event, nextListeners);
     }),
-    dispatch(event: "offline" | "online") {
+    dispatch(event: string) {
       for (const listener of listeners.get(event) ?? []) {
         listener();
       }
@@ -219,6 +220,33 @@ describe("sync engine", () => {
 
     await vi.waitFor(() => {
       expect(requestPush).toHaveBeenCalled();
+    });
+    engine.stop();
+  });
+
+  it("flushes automatically when a local mutation is queued", async () => {
+    const queueItems = [createQueueItem("queue-1", "2026-06-01T08:00:00.000Z")];
+    const requestPush = vi.fn().mockResolvedValue({
+      failed: [],
+      synced: ["queue-1"],
+    });
+    const windowMock = createWindowMock();
+    getPendingQueueItemsMock.mockResolvedValue(queueItems);
+    const engine = createSyncEngine({
+      requestPush,
+      userId: "user-1",
+      windowRef: windowMock,
+    });
+
+    engine.start();
+    await vi.waitFor(() => {
+      expect(resetSyncingQueueItemsMock).toHaveBeenCalled();
+    });
+
+    windowMock.dispatch(SYNC_MUTATION_QUEUED_EVENT);
+
+    await vi.waitFor(() => {
+      expect(requestPush).toHaveBeenCalledWith(queueItems);
     });
     engine.stop();
   });

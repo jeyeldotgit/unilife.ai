@@ -134,4 +134,34 @@ describe("schedule adapter", () => {
     expect(schedule.days).toHaveLength(1);
     expect(schedule.classes).toHaveLength(1);
   });
+
+  it("renders hydrated database time values that include seconds", () => {
+    const schedule = buildScheduleWeekSnapshot(
+      [
+        {
+          id: "class-db-time",
+          user_id: "user-1",
+          subject: "Capstone",
+          room: null,
+          instructor: null,
+          day_of_week: "tuesday",
+          start_time: "09:00:00",
+          end_time: "12:00:00",
+          color: null,
+          is_active: true,
+          recurrence: null,
+          created_at: "2026-06-01T00:00:00.000Z",
+          updated_at: "2026-06-01T00:00:00.000Z",
+          deleted_at: null,
+        },
+      ],
+      [],
+    );
+
+    expect(schedule.classes[0]).toMatchObject({
+      subject: "Capstone",
+      startTime: "09:00",
+      endTime: "12:00",
+    });
+  });
 });
