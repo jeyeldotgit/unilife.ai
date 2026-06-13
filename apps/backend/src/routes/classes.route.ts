@@ -21,6 +21,28 @@ const isoDateTimeSchema = z
     message: "Invalid ISO datetime.",
   });
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const recurrenceSchema = z
+  .object({
+    series_id: z.string().uuid().nullable(),
+    occurrence_id: z.string().uuid().nullable(),
+    original_start_at: isoDateTimeSchema.nullable(),
+    effective_start_at: isoDateTimeSchema.nullable(),
+    effective_end_at: isoDateTimeSchema.nullable(),
+    source_revision: z.number().int().nullable(),
+    timezone: z.string().trim().min(1).max(255).nullable(),
+    rule: z
+      .object({
+        frequency: z.enum(["daily", "weekly"]),
+        interval: z.number().int().min(1),
+        weekdays: z.array(dayOfWeekSchema),
+        timezone: z.string().trim().min(1).max(255),
+        starts_at: isoDateTimeSchema,
+        ends_at: isoDateTimeSchema.nullable(),
+      })
+      .nullable(),
+    edit_scope: z.enum(["occurrence", "future", "series"]).optional(),
+  })
+  .strict();
 const idParamsSchema = z.object({
   id: z.string().uuid(),
 });
@@ -37,6 +59,7 @@ const createClassSchema = z
     start_time: timeSchema,
     end_time: timeSchema,
     color: z.string().trim().min(1).max(64).optional(),
+    recurrence: recurrenceSchema.nullable().optional(),
     created_at: isoDateTimeSchema,
     updated_at: isoDateTimeSchema,
   })
@@ -51,6 +74,8 @@ const updateClassSchema = z
     end_time: timeSchema.optional(),
     color: z.string().trim().min(1).max(64).optional(),
     is_active: z.boolean().optional(),
+    recurrence: recurrenceSchema.nullable().optional(),
+    edit_scope: z.enum(["occurrence", "future", "series"]).optional(),
     updated_at: isoDateTimeSchema,
   })
   .strict();

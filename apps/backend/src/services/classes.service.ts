@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClassRecord, DayOfWeek } from "@unilife-ai/types";
+import type {
+  ClassRecord,
+  DayOfWeek,
+  RecurrenceReference,
+} from "@unilife-ai/types";
 
 import { ClassesRepository } from "../repositories/classes.repository.js";
 
@@ -16,6 +20,7 @@ export type CreateClassInput = {
   start_time: string;
   end_time: string;
   color?: string;
+  recurrence?: RecurrenceReference | null;
   created_at: string;
   updated_at: string;
 };
@@ -29,6 +34,8 @@ export type UpdateClassInput = {
   end_time?: string;
   color?: string;
   is_active?: boolean;
+  recurrence?: RecurrenceReference | null;
+  edit_scope?: RecurrenceEditScope;
   updated_at: string;
 };
 
@@ -93,6 +100,7 @@ export class ClassesService {
       end_time: input.end_time,
       color: input.color ?? null,
       is_active: true,
+      recurrence: input.recurrence ?? null,
       created_at: input.created_at,
       updated_at: input.updated_at,
       deleted_at: null,
@@ -150,6 +158,10 @@ export class ClassesService {
 
     if (input.is_active !== undefined) {
       changes.is_active = input.is_active;
+    }
+
+    if (input.recurrence !== undefined) {
+      changes.recurrence = input.recurrence;
     }
 
     const updatedRecord = await this.repository.updateForUser(id, this.userId, changes);

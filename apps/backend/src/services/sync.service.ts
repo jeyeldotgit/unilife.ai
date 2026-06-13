@@ -5,6 +5,7 @@ import type {
   ClassRecord,
   Exam,
   Expense,
+  RecurrenceReference,
 } from "@unilife-ai/types";
 import { z } from "zod";
 
@@ -68,6 +69,7 @@ const createClassPayloadSchema = z.object({
   end_time: timeOfDaySchema,
   color: optionalTrimmedString(32),
   is_active: z.boolean().optional(),
+  recurrence: z.record(z.string(), z.unknown()).nullable().optional(),
   created_at: isoDateTimeSchema,
   updated_at: isoDateTimeSchema,
 });
@@ -80,6 +82,8 @@ const updateClassPayloadSchema = z.object({
   end_time: timeOfDaySchema.optional(),
   color: nullableTrimmedString(32),
   is_active: z.boolean().optional(),
+  recurrence: z.record(z.string(), z.unknown()).nullable().optional(),
+  edit_scope: z.enum(["occurrence", "future", "series"]).optional(),
   updated_at: isoDateTimeSchema,
 });
 const createAssignmentPayloadSchema = z.object({
@@ -89,6 +93,7 @@ const createAssignmentPayloadSchema = z.object({
   description: optionalTrimmedString(2000),
   priority: z.number().int().min(1).max(3).optional(),
   status: assignmentStatusSchema.optional(),
+  recurrence: z.record(z.string(), z.unknown()).nullable().optional(),
   created_at: isoDateTimeSchema,
   updated_at: isoDateTimeSchema,
 });
@@ -99,6 +104,8 @@ const updateAssignmentPayloadSchema = z.object({
   description: nullableTrimmedString(2000),
   status: assignmentStatusSchema.optional(),
   priority: z.number().int().min(1).max(3).optional(),
+  recurrence: z.record(z.string(), z.unknown()).nullable().optional(),
+  edit_scope: z.enum(["occurrence", "future", "series"]).optional(),
   updated_at: isoDateTimeSchema,
 });
 const createExamPayloadSchema = z.object({
@@ -142,7 +149,15 @@ const updateBudgetPayloadSchema = z.object({
   updated_at: isoDateTimeSchema,
 });
 
-export type SyncEntityType = "class" | "assignment" | "exam" | "expense" | "budget";
+export type SyncEntityType =
+  | "class"
+  | "assignment"
+  | "exam"
+  | "expense"
+  | "budget"
+  | "recurrence_series"
+  | "recurrence_occurrence"
+  | "recurrence_exception";
 export type SyncOperation = "create" | "update" | "delete";
 
 export type SyncPushItem = {
@@ -189,6 +204,16 @@ function isOlderTimestamp(incomingUpdatedAt: string, currentUpdatedAt: string) {
 
 function normalizeOptionalString(value: string | undefined) {
   return value ?? null;
+}
+
+function normalizeRecurrenceReference(
+  value: Record<string, unknown> | null | undefined,
+): RecurrenceReference | null {
+  if (!value) {
+    return null;
+  }
+
+  return value as unknown as RecurrenceReference;
 }
 
 function toRecordPayload(payload: Record<string, unknown>) {
@@ -244,6 +269,10 @@ export class SyncService {
         return this.processExpenseItem(item);
       case "budget":
         return this.processBudgetItem(item);
+      case "recurrence_series":
+      case "recurrence_occurrence":
+      case "recurrence_exception":
+        return true;
       default:
         return false;
     }
@@ -347,6 +376,7 @@ export class SyncService {
       end_time: incoming.end_time,
       color: normalizeOptionalString(incoming.color),
       is_active: incoming.is_active ?? true,
+      recurrence: normalizeRecurrenceReference(incoming.recurrence),
       created_at: incoming.created_at,
       updated_at: incoming.updated_at,
       deleted_at: null,
@@ -411,6 +441,7 @@ export class SyncService {
       due_date: incoming.due_date,
       status: incoming.status ?? "pending",
       priority: incoming.priority ?? 1,
+      recurrence: normalizeRecurrenceReference(incoming.recurrence),
       created_at: incoming.created_at,
       updated_at: incoming.updated_at,
       deleted_at: null,

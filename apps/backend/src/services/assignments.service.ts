@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Assignment, AssignmentStatus } from "@unilife-ai/types";
+import type {
+  Assignment,
+  AssignmentStatus,
+  RecurrenceReference,
+} from "@unilife-ai/types";
 
 import { AssignmentsRepository } from "../repositories/assignments.repository.js";
 
@@ -16,6 +20,7 @@ export type CreateAssignmentInput = {
   due_date: string;
   status?: AssignmentStatus;
   priority?: number;
+  recurrence?: RecurrenceReference | null;
   created_at: string;
   updated_at: string;
 };
@@ -27,6 +32,8 @@ export type UpdateAssignmentInput = {
   due_date?: string;
   status?: AssignmentStatus;
   priority?: number;
+  recurrence?: RecurrenceReference | null;
+  edit_scope?: RecurrenceEditScope;
   updated_at: string;
 };
 
@@ -92,6 +99,7 @@ export class AssignmentsService {
       due_date: input.due_date,
       status: input.status ?? "pending",
       priority: input.priority ?? 1,
+      recurrence: input.recurrence ?? null,
       created_at: input.created_at,
       updated_at: input.updated_at,
       deleted_at: null,
@@ -141,6 +149,10 @@ export class AssignmentsService {
 
     if (input.priority !== undefined) {
       changes.priority = input.priority;
+    }
+
+    if (input.recurrence !== undefined) {
+      changes.recurrence = input.recurrence;
     }
 
     const updatedRecord = await this.repository.updateForUser(id, this.userId, changes);
