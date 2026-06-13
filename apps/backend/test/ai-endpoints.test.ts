@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@unilife-ai/ai-core", () => ({
   buildDailyBriefingPrompt: () => "daily briefing prompt",
+  buildScheduleInsightPrompt: () => "schedule insight prompt",
   callGemini: state.callGemini,
 }));
 
@@ -297,6 +298,80 @@ describe("POST /api/ai/briefing", () => {
     expect(body).toMatchObject({
       class_count: 0,
       deadline_count: 0,
+      source: "deterministic",
+    });
+  });
+});
+
+describe("POST /api/ai/schedule-insight", () => {
+  it("sends only schedule context to Gemini", async () => {
+    state.callGemini.mockResolvedValue({
+      intent: "general_question",
+      action: null,
+      message: "Your next class is Physics at 13:00.",
+      confidence: 0.9,
+    });
+    const { app } = await import("../src/app.js");
+    const context = {
+      today: createRequestBody().context.today,
+      current_time: createRequestBody().context.current_time,
+      todays_classes: [
+        { subject: "Physics", start_time: "13:00", end_time: "14:00" },
+      ],
+    };
+
+    const response = await app.request("http://localhost/api/ai/schedule-insight", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ context }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      message: "Your next class is Physics at 13:00.",
+      source: "ai",
+    });
+    expect(state.callGemini).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.not.objectContaining({
+          upcoming_deadlines: expect.anything(),
+          budget_remaining: expect.anything(),
+        }),
+      }),
+    );
+  });
+
+  it("returns a schedule-only deterministic insight when Gemini is unavailable", async () => {
+    state.callGemini.mockRejectedValue(new Error("offline"));
+    const { app } = await import("../src/app.js");
+    const context = {
+      today: createRequestBody().context.today,
+      current_time: "10:30",
+      todays_classes: [
+        { subject: "Math", start_time: "10:00", end_time: "11:00" },
+        { subject: "Physics", start_time: "13:00", end_time: "14:00" },
+      ],
+    };
+
+    const response = await app.request("http://localhost/api/ai/schedule-insight", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ context }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      class_count: 2,
+      next_class_subject: "Physics",
+      free_minutes_before_next_class: 120,
       source: "deterministic",
     });
   });

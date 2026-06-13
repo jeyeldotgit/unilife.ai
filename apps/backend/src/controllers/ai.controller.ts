@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ScheduleInsightContext } from "@unilife-ai/types";
 
 import type { AIChatInput } from "../services/ai.service.js";
 import { AIService } from "../services/ai.service.js";
@@ -24,5 +25,9 @@ export class AIController {
 
   async briefing(context: AIChatInput["context"]) {
     return this.service.createBriefing(context);
+  }
+
+  async scheduleInsight(context: ScheduleInsightContext) {
+    return this.service.createScheduleInsight(context);
   }
 }

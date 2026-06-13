@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildAllowanceForecast,
+  buildDeterministicScheduleInsight,
   buildFreeTimePlan,
   rankDeadlines,
 } from "../src/services/planning.service.js";
@@ -25,6 +26,15 @@ describe("planning service", () => {
       current_class_subject: "Math",
       next_class_subject: "Physics",
       window_minutes: 120,
+    });
+  });
+
+  it("builds a schedule-specific insight from class gaps", () => {
+    expect(buildDeterministicScheduleInsight(baseContext)).toMatchObject({
+      class_count: 2,
+      next_class_subject: "Physics",
+      free_minutes_before_next_class: 120,
+      source: "deterministic",
     });
   });
 
