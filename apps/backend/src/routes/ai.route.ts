@@ -51,6 +51,16 @@ const aiBriefingRequestSchema = z
   })
   .strict();
 
+const scheduleInsightRequestSchema = z
+  .object({
+    context: planningContextSchema.pick({
+      today: true,
+      current_time: true,
+      todays_classes: true,
+    }),
+  })
+  .strict();
+
 export const aiRouter = new Hono<AppBindings>();
 
 aiRouter.use("*", requireAuth);
@@ -67,4 +77,11 @@ aiRouter.post("/briefing", async (c) => {
   const controller = new AIController(c.get("supabase"), c.get("userId"));
 
   return c.json(await controller.briefing(input.context), 200);
+});
+
+aiRouter.post("/schedule-insight", async (c) => {
+  const input = await parseJsonBody(c, scheduleInsightRequestSchema);
+  const controller = new AIController(c.get("supabase"), c.get("userId"));
+
+  return c.json(await controller.scheduleInsight(input.context), 200);
 });

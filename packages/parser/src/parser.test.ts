@@ -33,6 +33,20 @@ describe("local parser", () => {
     });
   });
 
+  it("parses a class command with the subject after the time range", () => {
+    expect(
+      routeIntent("Add class on tuesday 9am-12pm Capstone", { referenceDate }),
+    ).toMatchObject({
+      intent: "create_class",
+      data: {
+        subject: "Capstone",
+        day_of_week: "tuesday",
+        start_time: "09:00",
+        end_time: "12:00",
+      },
+    });
+  });
+
   it("requires an explicit exam time", () => {
     expect(routeIntent("chemistry exam tomorrow", { referenceDate })).toMatchObject({
       intent: "unknown",

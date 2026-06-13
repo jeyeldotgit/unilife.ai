@@ -24,6 +24,11 @@ export type PlanningContext = {
   avg_daily_spend: number | null;
 };
 
+export type ScheduleInsightContext = Pick<
+  PlanningContext,
+  "today" | "current_time" | "todays_classes"
+>;
+
 export type RankedPlanningTask = PlanningDeadline & {
   urgency_days: number;
 };
@@ -51,6 +56,14 @@ export type DailyBriefing = {
   deadline_count: number;
   budget_remaining: number | null;
   focus_task: RankedPlanningTask | null;
+  message: string;
+  source: "ai" | "deterministic";
+};
+
+export type ScheduleInsight = {
+  class_count: number;
+  next_class_subject: string | null;
+  free_minutes_before_next_class: number | null;
   message: string;
   source: "ai" | "deterministic";
 };

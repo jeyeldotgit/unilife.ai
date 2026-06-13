@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { dbMock } = vi.hoisted(() => ({
+const { dbMock, notifySyncMutationQueuedMock } = vi.hoisted(() => ({
   dbMock: {
     assignments: { put: vi.fn() },
     budgets: { get: vi.fn(), put: vi.fn(), where: vi.fn() },
@@ -25,6 +25,7 @@ const { dbMock } = vi.hoisted(() => ({
       await callback();
     }),
   },
+  notifySyncMutationQueuedMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/dexie", () => ({
@@ -38,6 +39,10 @@ vi.mock("@/lib/session/current-user", () => ({
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: vi.fn(),
+}));
+
+vi.mock("@/lib/sync/mutation-signal", () => ({
+  notifySyncMutationQueued: notifySyncMutationQueuedMock,
 }));
 
 import {
@@ -70,6 +75,7 @@ describe("local data mutations", () => {
     expect(dbMock.transaction).toHaveBeenCalled();
     expect(dbMock.classes.put).toHaveBeenCalledTimes(1);
     expect(dbMock.sync_queue.put).toHaveBeenCalledTimes(1);
+    expect(notifySyncMutationQueuedMock).toHaveBeenCalledTimes(1);
   });
 
   it("soft deletes an expense locally before queueing the delete", async () => {

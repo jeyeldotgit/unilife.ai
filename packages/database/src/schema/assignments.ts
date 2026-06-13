@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, smallint } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, uuid, text, timestamp, smallint } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { classes } from "./classes.js";
 
@@ -15,6 +15,7 @@ export const assignments = pgTable("assignments", {
   dueDate: timestamp("due_date", { withTimezone: true }).notNull(),
   status: text("status").notNull().default("pending"),
   priority: smallint("priority").notNull().default(1),
+  recurrence: jsonb("recurrence"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

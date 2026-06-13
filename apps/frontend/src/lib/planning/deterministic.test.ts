@@ -4,6 +4,7 @@ import {
   buildAllowanceForecast,
   buildDailyBriefing,
   buildFreeTimePlan,
+  buildScheduleInsight,
 } from "@/lib/planning/deterministic";
 
 const context = {
@@ -44,6 +45,17 @@ describe("deterministic planning", () => {
       next_class_subject: "Physics",
       window_minutes: 120,
     });
+  });
+
+  it("builds a schedule insight without using deadline data", () => {
+    const insight = buildScheduleInsight(context);
+
+    expect(insight).toMatchObject({
+      next_class_subject: "Physics",
+      free_minutes_before_next_class: 120,
+      source: "deterministic",
+    });
+    expect(insight.message).not.toContain("Research Paper");
   });
 
   it("calculates allowance risk from real cycle values", () => {

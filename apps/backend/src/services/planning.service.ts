@@ -5,6 +5,8 @@ import type {
   PlanningContext,
   PlanningDeadline,
   RankedPlanningTask,
+  ScheduleInsightContext,
+  ScheduleInsight,
 } from "@unilife-ai/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -153,6 +155,58 @@ export function buildDeterministicBriefing(context: PlanningContext): DailyBrief
     deadline_count: deadlineCount,
     budget_remaining: context.budget_remaining,
     focus_task: focusTask,
+    message,
+    source: "deterministic",
+  };
+}
+
+export function buildDeterministicScheduleInsight(
+  context: ScheduleInsightContext,
+): ScheduleInsight {
+  const currentMinutes = toMinutes(context.current_time) ?? 0;
+  const classes = context.todays_classes
+    .map((classItem) => ({
+      ...classItem,
+      startMinutes: toMinutes(classItem.start_time),
+      endMinutes: toMinutes(classItem.end_time),
+    }))
+    .filter(
+      (classItem): classItem is typeof classItem & {
+        startMinutes: number;
+        endMinutes: number;
+      } => classItem.startMinutes !== null && classItem.endMinutes !== null,
+    )
+    .sort((left, right) => left.startMinutes - right.startMinutes);
+  const currentClass =
+    classes.find(
+      (classItem) =>
+        classItem.startMinutes <= currentMinutes &&
+        classItem.endMinutes > currentMinutes,
+    ) ?? null;
+  const nextClass =
+    classes.find((classItem) => classItem.startMinutes > currentMinutes) ?? null;
+  const freeMinutesBeforeNextClass = nextClass
+    ? Math.max(
+        0,
+        nextClass.startMinutes - (currentClass?.endMinutes ?? currentMinutes),
+      )
+    : null;
+  const message = currentClass
+    ? nextClass && freeMinutesBeforeNextClass && freeMinutesBeforeNextClass >= 30
+      ? `${currentClass.subject} ends at ${currentClass.end_time.slice(0, 5)}, followed by ${freeMinutesBeforeNextClass} free minutes before ${nextClass.subject}.`
+      : `You are currently in ${currentClass.subject} until ${currentClass.end_time.slice(0, 5)}.`
+    : nextClass
+      ? freeMinutesBeforeNextClass && freeMinutesBeforeNextClass >= 30
+        ? `You have ${freeMinutesBeforeNextClass} free minutes before ${nextClass.subject} at ${nextClass.start_time.slice(0, 5)}.`
+        : `${nextClass.subject} is your next class at ${nextClass.start_time.slice(0, 5)}.`
+      : classes.length > 0
+        ? "Your remaining schedule is clear for today."
+        : "You have no classes scheduled today.";
+
+  return {
+    class_count: classes.length,
+    next_class_subject: nextClass?.subject ?? null,
+    free_minutes_before_next_class: freeMinutesBeforeNextClass,
     message,
     source: "deterministic",
   };

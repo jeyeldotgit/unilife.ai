@@ -1,11 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildDailyBriefingPrompt,
+  buildScheduleInsightPrompt,
   callGemini,
   type GeminiChatResponse,
   type GeminiIntent,
 } from "@unilife-ai/ai-core";
-import type { DailyBriefing, PlanningContext } from "@unilife-ai/types";
+import type {
+  DailyBriefing,
+  PlanningContext,
+  ScheduleInsight,
+  ScheduleInsightContext,
+} from "@unilife-ai/types";
 import { z } from "zod";
 
 import {
@@ -15,6 +21,7 @@ import {
 import {
   buildAllowanceForecast,
   buildDeterministicBriefing,
+  buildDeterministicScheduleInsight,
   buildFreeTimePlan,
   detectPlanningIntent,
 } from "./planning.service.js";
@@ -428,6 +435,33 @@ export class AIService {
         context: {
           ...context,
           deterministic_briefing: deterministic,
+        },
+      });
+
+      return {
+        ...deterministic,
+        message: raw.message,
+        source: "ai",
+      };
+    } catch {
+      return deterministic;
+    }
+  }
+
+  async createScheduleInsight(
+    context: ScheduleInsightContext,
+  ): Promise<ScheduleInsight> {
+    const deterministic = buildDeterministicScheduleInsight(context);
+
+    try {
+      const raw = await this.geminiCaller({
+        message: "Create a schedule-specific insight for today.",
+        systemPrompt: buildScheduleInsightPrompt(),
+        context: {
+          today: context.today,
+          current_time: context.current_time,
+          todays_classes: context.todays_classes,
+          deterministic_schedule_insight: deterministic,
         },
       });
 

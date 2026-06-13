@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   createEmptyExamFormState,
@@ -83,6 +83,7 @@ export default function ExamsClient({
   );
   const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
   const [allowDuplicateSave, setAllowDuplicateSave] = useState(false);
+  const handledNotificationIdRef = useRef<string | null>(null);
   const { showUndo } = useDeleteUndoToast();
 
   useEffect(() => {
@@ -94,11 +95,32 @@ export default function ExamsClient({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedExam(exam);
     }
+  }, [resolvedExams, searchParams, selectedExam?.id]);
+
+  useEffect(() => {
     const notificationId = searchParams.get("notification");
-    if (notificationId) {
-      void dismissNotification(notificationId).then(() => router.replace("/exams"));
+    if (!notificationId) {
+      handledNotificationIdRef.current = null;
+      return;
     }
-  }, [resolvedExams, router, searchParams, selectedExam?.id]);
+    if (handledNotificationIdRef.current === notificationId) {
+      return;
+    }
+
+    handledNotificationIdRef.current = notificationId;
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("notification");
+    const nextQuery = nextSearchParams.toString();
+    void dismissNotification(notificationId)
+      .then(() =>
+        router.replace(nextQuery ? `/exams?${nextQuery}` : "/exams", {
+          scroll: false,
+        }),
+      )
+      .catch(() => {
+        handledNotificationIdRef.current = null;
+      });
+  }, [router, searchParams]);
 
   const upcomingExams = resolvedExams
     .filter(isUpcomingExam)

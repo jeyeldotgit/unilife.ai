@@ -27,6 +27,7 @@ import {
 import { normalizeAssignmentRecord } from "@/lib/selectors/assignments";
 import { normalizeExamRecord } from "@/lib/selectors/exams";
 import { createClient } from "@/lib/supabase/client";
+import { notifySyncMutationQueued } from "@/lib/sync/mutation-signal";
 import type {
   CreateAssignmentInput,
   CreateClassInput,
@@ -255,6 +256,7 @@ export async function finalizeDeleteUndoLocal(
   });
 
   await db.sync_queue.put(queueItem);
+  notifySyncMutationQueued();
   return createMutationReceipt(queueItem);
 }
 
@@ -324,6 +326,7 @@ export async function createClassLocal(input: CreateClassInput) {
     id: crypto.randomUUID(),
     instructor: input.instructor ?? null,
     is_active: true,
+    recurrence: input.recurrence ?? null,
     room: input.room ?? null,
     start_time: input.startTime,
     subject: input.subject,
@@ -348,6 +351,9 @@ export async function createClassLocal(input: CreateClassInput) {
   if (record.color) {
     payload.color = record.color;
   }
+  if (record.recurrence) {
+    payload.recurrence = record.recurrence;
+  }
 
   await db.transaction("rw", db.classes, db.notifications, db.sync_queue, async () => {
     await db.classes.put(record);
@@ -362,6 +368,7 @@ export async function createClassLocal(input: CreateClassInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return record;
 }
@@ -383,6 +390,8 @@ export async function updateClassLocal(id: string, input: UpdateClassInput) {
     instructor:
       input.instructor !== undefined ? input.instructor : existingRecord.instructor,
     is_active: input.isActive !== undefined ? input.isActive : existingRecord.is_active,
+    recurrence:
+      input.recurrence !== undefined ? input.recurrence : existingRecord.recurrence,
     room: input.room !== undefined ? input.room : existingRecord.room,
     start_time:
       input.startTime !== undefined ? input.startTime : existingRecord.start_time,
@@ -408,6 +417,12 @@ export async function updateClassLocal(id: string, input: UpdateClassInput) {
   if (input.isActive !== undefined) {
     payload.is_active = input.isActive;
   }
+  if (input.recurrence !== undefined) {
+    payload.recurrence = input.recurrence;
+  }
+  if (input.editScope !== undefined) {
+    payload.edit_scope = input.editScope;
+  }
   maybeSetNullableString("room", input.room, payload);
   maybeSetNullableString("instructor", input.instructor, payload);
   maybeSetNullableString("color", input.color, payload);
@@ -425,6 +440,7 @@ export async function updateClassLocal(id: string, input: UpdateClassInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return updatedRecord;
 }
@@ -457,6 +473,7 @@ export async function deleteClassLocal(id: string) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return true;
 }
@@ -472,6 +489,7 @@ export async function createAssignmentLocal(input: CreateAssignmentInput) {
     due_date: input.dueAt,
     id: crypto.randomUUID(),
     priority: input.priority ?? 2,
+    recurrence: input.recurrence ?? null,
     status: "pending",
     title: input.title,
     updated_at: timestamp,
@@ -488,6 +506,9 @@ export async function createAssignmentLocal(input: CreateAssignmentInput) {
   maybeSetNullableString("class_id", record.class_id, payload);
   if (record.description) {
     payload.description = record.description;
+  }
+  if (record.recurrence) {
+    payload.recurrence = record.recurrence;
   }
 
   await db.transaction(
@@ -509,6 +530,7 @@ export async function createAssignmentLocal(input: CreateAssignmentInput) {
     );
     },
   );
+  notifySyncMutationQueued();
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeAssignmentRecord(record, {
@@ -522,7 +544,9 @@ export async function updateAssignmentLocal(
     classId: string | null;
     description: string | null;
     dueAt: string;
+    editScope: "occurrence" | "future" | "series";
     priority: number;
+    recurrence: AssignmentRecord["recurrence"];
     status: AssignmentRecord["status"];
     title: string;
   }>,
@@ -541,6 +565,8 @@ export async function updateAssignmentLocal(
       input.description !== undefined ? input.description : existingRecord.description,
     due_date: input.dueAt !== undefined ? input.dueAt : existingRecord.due_date,
     priority: input.priority !== undefined ? input.priority : existingRecord.priority,
+    recurrence:
+      input.recurrence !== undefined ? input.recurrence : existingRecord.recurrence,
     status: input.status !== undefined ? input.status : existingRecord.status,
     title: input.title !== undefined ? input.title : existingRecord.title,
     updated_at: new Date().toISOString(),
@@ -560,6 +586,12 @@ export async function updateAssignmentLocal(
   }
   if (input.status !== undefined) {
     payload.status = input.status;
+  }
+  if (input.recurrence !== undefined) {
+    payload.recurrence = input.recurrence;
+  }
+  if (input.editScope !== undefined) {
+    payload.edit_scope = input.editScope;
   }
   maybeSetNullableString("class_id", input.classId, payload);
   maybeSetNullableString("description", input.description, payload);
@@ -583,6 +615,7 @@ export async function updateAssignmentLocal(
     );
     },
   );
+  notifySyncMutationQueued();
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeAssignmentRecord(updatedRecord, {
@@ -623,6 +656,7 @@ export async function deleteAssignmentLocal(id: string) {
     );
     },
   );
+  notifySyncMutationQueued();
 
   return true;
 }
@@ -669,6 +703,7 @@ export async function createExamLocal(input: CreateExamInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeExamRecord(record, {
@@ -721,6 +756,7 @@ export async function updateExamLocal(id: string, input: UpdateExamInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   const classSubjectById = await getClassSubjectById(userId);
   return normalizeExamRecord(updatedRecord, {
@@ -755,6 +791,7 @@ export async function deleteExamLocal(id: string) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return true;
 }
@@ -800,6 +837,7 @@ export async function logExpenseLocal(input: LogExpenseInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return normalizeExpenseRecord(record);
 }
@@ -830,6 +868,7 @@ export async function deleteExpenseLocal(id: string) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return true;
 }
@@ -869,6 +908,7 @@ async function createBudgetLocal(input: OnboardingBudgetInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return record;
 }
@@ -907,6 +947,7 @@ async function updateBudgetLocal(id: string, input: OnboardingBudgetInput) {
       }),
     );
   });
+  notifySyncMutationQueued();
 
   return updatedRecord;
 }

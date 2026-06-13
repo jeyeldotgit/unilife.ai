@@ -4,6 +4,10 @@ import type {
   ClassRecord,
   Exam,
   Expense,
+  HolidayExclusion,
+  RecurrenceException,
+  RecurrenceOccurrence,
+  RecurrenceSeries,
 } from "@unilife-ai/types";
 
 import { requestBackendClient } from "@/lib/api/client-browser";
@@ -15,6 +19,10 @@ type EntityRecordMap = {
   class: ClassRecord;
   exam: Exam;
   expense: Expense;
+  holiday_exclusion: HolidayExclusion;
+  recurrence_exception: RecurrenceException;
+  recurrence_occurrence: RecurrenceOccurrence;
+  recurrence_series: RecurrenceSeries;
 };
 
 type HydrationResponseMap = {
@@ -23,26 +31,45 @@ type HydrationResponseMap = {
   class: { classes: ClassRecord[] };
   exam: { exams: Exam[] };
   expense: { expenses: Expense[]; total: number };
+  holiday_exclusion: { holiday_exclusions: HolidayExclusion[] };
+  recurrence_exception: { recurrence_exceptions: RecurrenceException[] };
+  recurrence_occurrence: { recurrence_occurrences: RecurrenceOccurrence[] };
+  recurrence_series: { recurrence_series: RecurrenceSeries[] };
 };
+
+type HydratableEntity = keyof EntityRecordMap;
 
 type HydrationOptions = {
   forceFull?: boolean;
   userId: string;
 };
 
-const HYDRATION_ENTITIES: SyncMetaEntity[] = [
+const HYDRATION_ENTITIES: HydratableEntity[] = [
   "class",
   "assignment",
   "exam",
   "budget",
   "expense",
+  "recurrence_series",
+  "recurrence_occurrence",
+  "recurrence_exception",
+  "holiday_exclusion",
 ];
 
 const entityConfig: {
-  [T in SyncMetaEntity]: {
-    endpoint: string;
+  [T in HydratableEntity]: {
+    endpoint: string | null;
     extract: (response: HydrationResponseMap[T]) => EntityRecordMap[T][];
-    table: "classes" | "assignments" | "exams" | "budgets" | "expenses";
+    table:
+      | "classes"
+      | "assignments"
+      | "exams"
+      | "budgets"
+      | "expenses"
+      | "recurrence_series"
+      | "recurrence_occurrences"
+      | "recurrence_exceptions"
+      | "holiday_exclusions";
   };
 } = {
   class: {
@@ -70,6 +97,26 @@ const entityConfig: {
     extract: (response) => response.expenses,
     table: "expenses",
   },
+  recurrence_series: {
+    endpoint: null,
+    extract: () => [],
+    table: "recurrence_series",
+  },
+  recurrence_occurrence: {
+    endpoint: null,
+    extract: () => [],
+    table: "recurrence_occurrences",
+  },
+  recurrence_exception: {
+    endpoint: null,
+    extract: () => [],
+    table: "recurrence_exceptions",
+  },
+  holiday_exclusion: {
+    endpoint: null,
+    extract: () => [],
+    table: "holiday_exclusions",
+  },
 };
 
 function getMetaId(userId: string, entityType: SyncMetaEntity) {
@@ -94,7 +141,7 @@ async function upsertMeta(record: SyncMetaRecord) {
   await db.sync_meta.put(record);
 }
 
-async function hydrateEntity<T extends SyncMetaEntity>(
+async function hydrateEntity<T extends HydratableEntity>(
   entityType: T,
   options: HydrationOptions,
 ) {
@@ -102,16 +149,15 @@ async function hydrateEntity<T extends SyncMetaEntity>(
   const currentMeta = options.forceFull
     ? null
     : await getMeta(options.userId, entityType);
-  const query = currentMeta?.last_hydrated_at
-    ? { since: currentMeta.last_hydrated_at }
-    : undefined;
-  const response = await requestBackendClient<HydrationResponseMap[T]>(
-    config.endpoint,
-    {
-      query,
-    },
-  );
-  const records = config.extract(response);
+  const records = config.endpoint
+    ? config.extract(
+        await requestBackendClient<HydrationResponseMap[T]>(config.endpoint, {
+          query: currentMeta?.last_hydrated_at
+            ? { since: currentMeta.last_hydrated_at }
+            : undefined,
+        }),
+      )
+    : [];
 
   if (records.length > 0) {
     await db.table(config.table).bulkPut(records);

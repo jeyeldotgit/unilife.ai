@@ -4,6 +4,9 @@ import type {
   DayOfWeek as DomainDayOfWeek,
   ExpenseCategory as DomainExpenseCategory,
   NotificationStatus,
+  RecurrenceEditScope,
+  RecurrenceReference,
+  ScheduleConflict,
 } from "@unilife-ai/types";
 import type { AllowanceForecast, DailyBriefing } from "@unilife-ai/types";
 
@@ -23,10 +26,13 @@ export type ScheduleDay = {
   dayOfWeek: DayOfWeek;
   shortLabel: string;
   dateLabel: string;
+  isToday?: boolean;
+  isHidden?: boolean;
 };
 
 export type ScheduleAgendaItem = {
   id: string;
+  logicalId?: string;
   subject: string;
   startTime: string;
   endTime: string;
@@ -44,6 +50,7 @@ export type LinkedAssignmentSummary = {
 
 export type ScheduleClass = {
   id: string;
+  logicalId?: string;
   subject: string;
   dayOfWeek: DayOfWeek;
   dayIndex: number;
@@ -57,6 +64,11 @@ export type ScheduleClass = {
   locationLabel: string;
   instructor: string | null;
   linkedAssignmentIds: string[];
+  occurrenceStartAt?: string;
+  occurrenceEndAt?: string;
+  isToday?: boolean;
+  spansOvernight?: boolean;
+  conflictIds?: string[];
 };
 
 export type FreeWindow = {
@@ -85,6 +97,7 @@ export type ScheduleWeek = {
   freeWindows: FreeWindow[];
   todayClasses: ScheduleAgendaItem[];
   classDetails: Record<string, ScheduleClassDetail>;
+  conflicts?: ScheduleConflict[];
 };
 
 export type AssignmentPriority = 1 | 2 | 3;
@@ -138,6 +151,7 @@ export type CreateAssignmentInput = {
   priority?: AssignmentPriority;
   icon?: string;
   iconColor?: string;
+  recurrence?: RecurrenceReference | null;
 };
 
 export type ExamUrgencyTone = "danger" | "warning" | "neutral";
@@ -447,6 +461,7 @@ export type CreateClassInput = {
   room?: string | null;
   instructor?: string | null;
   color?: ScheduleColor;
+  recurrence?: RecurrenceReference | null;
 };
 
 export type UpdateClassInput = {
@@ -458,6 +473,8 @@ export type UpdateClassInput = {
   room?: string | null;
   startTime?: string;
   subject?: string;
+  recurrence?: RecurrenceReference | null;
+  editScope?: RecurrenceEditScope;
 };
 
 export type OnboardingBudgetInput = {

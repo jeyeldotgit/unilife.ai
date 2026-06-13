@@ -1,18 +1,18 @@
 "use client";
 
 import { db } from "@/lib/db/dexie";
-import { getCurrentUserId } from "@/lib/session/current-user";
 import {
   buildBudgetStatusSnapshot,
   buildExpensesSnapshot,
   findActiveBudget,
 } from "@/lib/selectors/finance";
+import { useCurrentUserId } from "@/hooks/use-current-user-id";
 import { useLiveQueryValue } from "@/hooks/use-live-query";
 import { useSyncStatus } from "@/hooks/use-sync-status";
 
 export function useExpenses() {
   const syncStatus = useSyncStatus();
-  const userId = getCurrentUserId();
+  const userId = useCurrentUserId();
   const budgetsQuery = useLiveQueryValue(
     async () => {
       if (!userId) {
@@ -22,6 +22,7 @@ export function useExpenses() {
       return db.budgets.where("user_id").equals(userId).toArray();
     },
     [],
+    [userId],
   );
   const expensesQuery = useLiveQueryValue(
     async () => {
@@ -36,6 +37,7 @@ export function useExpenses() {
         .toArray();
     },
     [],
+    [userId],
   );
   const activeBudget = findActiveBudget(budgetsQuery.value);
   const filteredExpenses = activeBudget

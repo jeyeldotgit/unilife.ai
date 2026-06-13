@@ -1,14 +1,14 @@
 "use client";
 
 import { db } from "@/lib/db/dexie";
-import { getCurrentUserId } from "@/lib/session/current-user";
 import { normalizeAssignmentRecord } from "@/lib/selectors/assignments";
+import { useCurrentUserId } from "@/hooks/use-current-user-id";
 import { useLiveQueryValue } from "@/hooks/use-live-query";
 import { useSyncStatus } from "@/hooks/use-sync-status";
 
 export function useAssignments() {
   const syncStatus = useSyncStatus();
-  const userId = getCurrentUserId();
+  const userId = useCurrentUserId();
   const assignmentsQuery = useLiveQueryValue(
     async () => {
       if (!userId) {
@@ -22,6 +22,7 @@ export function useAssignments() {
         .toArray();
     },
     [],
+    [userId],
   );
   const classesQuery = useLiveQueryValue(
     async () => {
@@ -36,6 +37,7 @@ export function useAssignments() {
         .toArray();
     },
     [],
+    [userId],
   );
   const notificationsQuery = useLiveQueryValue(
     async () => {
@@ -43,6 +45,7 @@ export function useAssignments() {
       return db.notifications.where("user_id").equals(userId).toArray();
     },
     [],
+    [userId],
   );
   const classSubjectById = new Map(
     classesQuery.value.map((record) => [record.id, record.subject] as const),

@@ -15,6 +15,38 @@ const isoDateTimeSchema = z
 const idParamsSchema = z.object({
   id: z.string().uuid(),
 });
+const recurrenceSchema = z
+  .object({
+    series_id: z.string().uuid().nullable(),
+    occurrence_id: z.string().uuid().nullable(),
+    original_start_at: isoDateTimeSchema.nullable(),
+    effective_start_at: isoDateTimeSchema.nullable(),
+    effective_end_at: isoDateTimeSchema.nullable(),
+    source_revision: z.number().int().nullable(),
+    timezone: z.string().trim().min(1).max(255).nullable(),
+    rule: z
+      .object({
+        frequency: z.enum(["daily", "weekly"]),
+        interval: z.number().int().min(1),
+        weekdays: z.array(
+          z.enum([
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+          ]),
+        ),
+        timezone: z.string().trim().min(1).max(255),
+        starts_at: isoDateTimeSchema,
+        ends_at: isoDateTimeSchema.nullable(),
+      })
+      .nullable(),
+    edit_scope: z.enum(["occurrence", "future", "series"]).optional(),
+  })
+  .strict();
 const listAssignmentsQuerySchema = z.object({
   since: isoDateTimeSchema.optional(),
   status: assignmentStatusSchema.optional(),
@@ -28,6 +60,7 @@ const createAssignmentSchema = z
     description: z.string().trim().min(1).max(2000).optional(),
     priority: z.number().int().min(1).max(3).optional(),
     status: assignmentStatusSchema.optional(),
+    recurrence: recurrenceSchema.nullable().optional(),
     created_at: isoDateTimeSchema,
     updated_at: isoDateTimeSchema,
   })
@@ -40,6 +73,8 @@ const updateAssignmentSchema = z
     description: z.string().trim().min(1).max(2000).nullable().optional(),
     status: assignmentStatusSchema.optional(),
     priority: z.number().int().min(1).max(3).optional(),
+    recurrence: recurrenceSchema.nullable().optional(),
+    edit_scope: z.enum(["occurrence", "future", "series"]).optional(),
     updated_at: isoDateTimeSchema,
   })
   .strict();

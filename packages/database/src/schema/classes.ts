@@ -5,6 +5,7 @@ import {
   timestamp,
   time,
   boolean,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
@@ -21,6 +22,7 @@ export const classes = pgTable("classes", {
   endTime: time("end_time").notNull(),
   color: text("color"),
   isActive: boolean("is_active").notNull().default(true),
+  recurrence: jsonb("recurrence"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -11,10 +11,15 @@ import {
   getDayLabel,
   getScheduleColor,
   getShortDayLabel,
+  getLocalDateKey,
   startOfWeekMonday,
 } from "@/lib/api/utils";
 import { normalizeAssignmentRecord } from "@/lib/selectors/assignments";
 import { buildReminderStatusItems } from "@/lib/selectors/notifications";
+import {
+  detectScheduleConflicts,
+  materializeClassOccurrences,
+} from "@/lib/schedule/recurrence";
 import type {
   ClassOption,
   LinkedAssignmentSummary,
@@ -61,29 +66,37 @@ function toLinkedAssignmentSummary(
   };
 }
 
-function buildDisplayedDayOrder(classRecords: ClassRecord[]) {
-  const hasWeekendClasses = classRecords.some(
-    (record) =>
-      record.day_of_week === "saturday" || record.day_of_week === "sunday",
-  );
-
-  return hasWeekendClasses ? DAY_ORDER : DAY_ORDER.slice(0, 5);
+function buildDisplayedDayOrder() {
+  return DAY_ORDER;
 }
 
-function buildScheduleDays(dayOrder: readonly ClassRecord["day_of_week"][]) {
+function buildScheduleDays(
+  dayOrder: readonly ClassRecord["day_of_week"][],
+  options?: {
+    hideEmptyDays?: boolean;
+    populatedDays?: Set<ClassRecord["day_of_week"]>;
+    timeZone?: string;
+  },
+) {
   const weekStart = startOfWeekMonday();
+  const todayKey = getLocalDateKey(new Date(), options?.timeZone);
 
   return dayOrder.map((dayOfWeek, index) => {
     const dayDate = new Date(weekStart);
     dayDate.setDate(weekStart.getDate() + index);
+    const dateKey = getLocalDateKey(dayDate, options?.timeZone);
 
     return {
       dayIndex: getDayIndex(dayOfWeek),
       dayOfWeek,
       shortLabel: getShortDayLabel(dayOfWeek),
       dateLabel: formatMonthDay(dayDate.toISOString()).split(" ")[1] ?? "",
+      isHidden: options?.hideEmptyDays
+        ? !options.populatedDays?.has(dayOfWeek)
+        : false,
+      isToday: dateKey === todayKey,
     } satisfies ScheduleDay;
-  });
+  }).filter((day) => !day.isHidden);
 }
 
 function buildWeekLabel(days: ScheduleDay[]) {
@@ -235,10 +248,38 @@ export function buildScheduleWeekSnapshot(
   classRecords: ClassRecord[],
   assignmentRecords: AssignmentRecord[],
   notifications: Notification[] = [],
+  options?: {
+    hideEmptyDays?: boolean;
+    timeZone?: string;
+  },
 ) {
-  const displayedDayOrder = buildDisplayedDayOrder(classRecords);
-  const days = buildScheduleDays(displayedDayOrder);
-  const hours = buildHours(classRecords);
+  const occurrences = materializeClassOccurrences(classRecords, {
+    timeZone: options?.timeZone,
+  });
+  const populatedDays = new Set(occurrences.map((occurrence) => occurrence.dayOfWeek));
+  const displayedDayOrder = buildDisplayedDayOrder();
+  const days = buildScheduleDays(displayedDayOrder, {
+    hideEmptyDays: options?.hideEmptyDays,
+    populatedDays,
+    timeZone: options?.timeZone,
+  });
+  const scheduleClassRecords: ClassRecord[] = occurrences.map((occurrence) => ({
+    color: occurrence.color,
+    created_at: occurrence.occurrenceStartAt,
+    day_of_week: occurrence.dayOfWeek,
+    deleted_at: null,
+    end_time: occurrence.endTime,
+    id: occurrence.id,
+    instructor: occurrence.instructor,
+    is_active: true,
+    recurrence: null,
+    room: occurrence.room,
+    start_time: occurrence.startTime,
+    subject: occurrence.subject,
+    updated_at: occurrence.occurrenceStartAt,
+    user_id: classRecords.find((record) => record.id === occurrence.logicalId)?.user_id ?? "",
+  }));
+  const hours = buildHours(scheduleClassRecords);
   const classSubjectById = new Map(
     classRecords.map((record) => [record.id, record.subject] as const),
   );
@@ -258,62 +299,80 @@ export function buildScheduleWeekSnapshot(
     linkedAssignmentIdsByClass.set(assignment.classId, existing);
   }
 
-  const classes = classRecords
+  const conflicts = detectScheduleConflicts(occurrences);
+  const classes = occurrences
     .slice()
     .sort((left, right) => {
-      const dayDiff = getDayIndex(left.day_of_week) - getDayIndex(right.day_of_week);
+      const dayDiff = getDayIndex(left.dayOfWeek) - getDayIndex(right.dayOfWeek);
       if (dayDiff !== 0) {
         return dayDiff;
       }
 
-      return left.start_time.localeCompare(right.start_time);
+      return left.startTime.localeCompare(right.startTime);
     })
-    .map((record) => {
+    .map((occurrence) => {
       return {
-        id: record.id,
-        subject: record.subject,
-        dayOfWeek: record.day_of_week,
-        dayIndex: getDayIndex(record.day_of_week),
-        startTime: record.start_time,
-        endTime: record.end_time,
-        timeLabel: formatClassTimeLabel(record.start_time, record.end_time),
-        gridHour: parseHour(record.start_time),
-        label: record.subject,
-        color: getScheduleColor(record.color),
-        room: record.room,
-        locationLabel: formatLocationLabel(record.room),
-        instructor: record.instructor,
-        linkedAssignmentIds: linkedAssignmentIdsByClass.get(record.id) ?? [],
+        id: occurrence.id,
+        logicalId: occurrence.logicalId,
+        subject: occurrence.subject,
+        dayOfWeek: occurrence.dayOfWeek,
+        dayIndex: getDayIndex(occurrence.dayOfWeek),
+        startTime: occurrence.startTime,
+        endTime: occurrence.endTime,
+        timeLabel: formatClassTimeLabel(occurrence.startTime, occurrence.endTime),
+        gridHour: parseHour(occurrence.startTime),
+        label: occurrence.subject,
+        color: getScheduleColor(occurrence.color),
+        room: occurrence.room,
+        locationLabel: formatLocationLabel(occurrence.room),
+        instructor: occurrence.instructor,
+        linkedAssignmentIds: linkedAssignmentIdsByClass.get(occurrence.logicalId) ?? [],
+        occurrenceStartAt: occurrence.occurrenceStartAt,
+        occurrenceEndAt: occurrence.occurrenceEndAt,
+        isToday: occurrence.isToday,
+        spansOvernight: occurrence.spansOvernight,
+        conflictIds: conflicts
+          .filter((conflict) => conflict.entity_id === occurrence.id)
+          .map((conflict) => conflict.id),
       } satisfies ScheduleClass;
     });
-  const meetingLabels = buildMeetingLabels(classRecords);
-  const classDetails = Object.fromEntries(
-    classes.map((classItem) => {
-      const linkedAssignments = normalizedAssignments
-        .filter((assignment) => assignment.classId === classItem.id)
-        .map(toLinkedAssignmentSummary);
+  const meetingLabels = buildMeetingLabels(scheduleClassRecords);
+  const classDetailsEntries = classes.map((classItem) => {
+    const linkedAssignments = normalizedAssignments
+      .filter((assignment) => assignment.classId === classItem.logicalId)
+      .map(toLinkedAssignmentSummary);
 
-      return [
-        classItem.id,
-        {
-          ...classItem,
-          meetingLabel:
-            meetingLabels.get(classItem.id) ?? getDayLabel(classItem.dayOfWeek),
-          assignments: linkedAssignments,
-          reminders: buildReminderStatusItems(
-            notifications.filter(
-              (notification) =>
-                notification.entity_type === "class" &&
-                notification.entity_id === classItem.id,
-            ),
+    return [
+      classItem.id,
+      {
+        ...classItem,
+        meetingLabel:
+          meetingLabels.get(classItem.id) ?? getDayLabel(classItem.dayOfWeek),
+        assignments: linkedAssignments,
+        reminders: buildReminderStatusItems(
+          notifications.filter(
+            (notification) =>
+              notification.entity_type === "class" &&
+              (notification.entity_id === classItem.id ||
+                notification.entity_id === classItem.logicalId),
           ),
-        } satisfies ScheduleClassDetail,
-      ];
-    }),
-  ) satisfies Record<string, ScheduleClassDetail>;
+        ),
+      } satisfies ScheduleClassDetail,
+    ] as const;
+  });
+  const classDetails = Object.fromEntries(classDetailsEntries) as Record<
+    string,
+    ScheduleClassDetail
+  >;
 
-  const today = new Date();
-  const todayDayOfWeek = DAY_ORDER[(today.getDay() + 6) % 7];
+  for (const [, detail] of classDetailsEntries) {
+    if (!classDetails[detail.logicalId]) {
+      classDetails[detail.logicalId] = detail;
+    }
+  }
+
+  const todayDayOfWeek =
+    days.find((day) => day.isToday)?.dayOfWeek ?? DAY_ORDER[(new Date().getDay() + 6) % 7];
 
   return {
     weekLabel: buildWeekLabel(days),
@@ -323,6 +382,7 @@ export function buildScheduleWeekSnapshot(
     freeWindows: buildFreeWindows(classes, hours, days),
     todayClasses: buildTodayClasses(classes, todayDayOfWeek),
     classDetails,
+    conflicts,
   } satisfies ScheduleWeek;
 }
 

@@ -39,6 +39,7 @@ describe("notification schedules", () => {
       id: "class-1",
       instructor: null,
       is_active: true,
+      recurrence: null,
       room: "101",
       start_time: "09:00",
       subject: "Math",
@@ -65,6 +66,7 @@ describe("notification schedules", () => {
       due_date: "2026-06-20T12:00:00.000Z",
       id: "assignment-1",
       priority: 2,
+      recurrence: null,
       status: "pending" as const,
       title: "Paper",
       updated_at: NOW.toISOString(),
@@ -94,5 +96,43 @@ describe("notification schedules", () => {
         NOW,
       ),
     ).toEqual([]);
+  });
+
+  it("materializes recurring assignments with deterministic IDs per due date", () => {
+    const assignment = {
+      class_id: null,
+      created_at: NOW.toISOString(),
+      deleted_at: null,
+      description: null,
+      due_date: "2026-06-12T12:00:00.000Z",
+      id: "assignment-recurring",
+      priority: 2,
+      recurrence: {
+        series_id: "series-1",
+        occurrence_id: null,
+        original_start_at: null,
+        effective_start_at: null,
+        effective_end_at: null,
+        source_revision: 1,
+        timezone: "UTC",
+        rule: {
+          ends_at: null,
+          frequency: "daily" as const,
+          interval: 1,
+          starts_at: "2026-06-12T12:00:00.000Z",
+          timezone: "UTC",
+          weekdays: [],
+        },
+      },
+      status: "pending" as const,
+      title: "Daily Journal",
+      updated_at: NOW.toISOString(),
+      user_id: "user-1",
+    };
+
+    const notifications = buildAssignmentNotifications(assignment, NOW);
+
+    expect(notifications.length).toBeGreaterThan(4);
+    expect(new Set(notifications.map((item) => item.id)).size).toBe(notifications.length);
   });
 });

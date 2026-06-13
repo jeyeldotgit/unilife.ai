@@ -12,7 +12,16 @@ const syncPushSchema = z
       z
         .object({
           id: z.string().uuid(),
-          entity_type: z.enum(["class", "assignment", "exam", "expense", "budget"]),
+          entity_type: z.enum([
+            "class",
+            "assignment",
+            "exam",
+            "expense",
+            "budget",
+            "recurrence_series",
+            "recurrence_occurrence",
+            "recurrence_exception",
+          ]),
           entity_id: z.string().uuid(),
           operation: z.enum(["create", "update", "delete"]),
           payload: z.record(z.string(), z.unknown()),

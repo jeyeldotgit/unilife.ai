@@ -1,3 +1,9 @@
+import type {
+  RecurrenceException,
+  RecurrenceOccurrence,
+  RecurrenceSeries,
+} from "./recurrence";
+
 export type SyncOperation = "create" | "update" | "delete";
 
 export type SyncEntityType =
@@ -5,7 +11,10 @@ export type SyncEntityType =
   | "assignment"
   | "exam"
   | "expense"
-  | "budget";
+  | "budget"
+  | "recurrence_series"
+  | "recurrence_occurrence"
+  | "recurrence_exception";
 
 export type SyncStatus = "pending" | "syncing" | "synced" | "failed";
 
@@ -30,3 +39,8 @@ export type SyncQueueItem = {
   last_attempted_at: string | null;
   mutation_meta?: SyncQueueMutationMeta;
 };
+
+export type SyncHydrationRecord =
+  | RecurrenceException
+  | RecurrenceOccurrence
+  | RecurrenceSeries;

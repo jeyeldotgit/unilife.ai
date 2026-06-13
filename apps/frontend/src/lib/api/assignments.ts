@@ -23,7 +23,9 @@ export type UpdateAssignmentInput = {
   classId?: string | null;
   description?: string | null;
   dueAt?: string;
+  editScope?: "occurrence" | "future" | "series";
   priority?: AssignmentPriority;
+  recurrence?: AssignmentRecord["recurrence"];
   status?: AssignmentStatus;
   title?: string;
 };
@@ -172,6 +174,7 @@ export async function createAssignment(
       class_id: input.classId ?? null,
       description: input.description ?? undefined,
       priority: input.priority ?? 2,
+      recurrence: input.recurrence ?? undefined,
       status: "pending",
       created_at: timestamp,
       updated_at: timestamp,
@@ -202,6 +205,8 @@ export async function updateAssignment(
           : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.priority !== undefined ? { priority: input.priority } : {}),
+        ...(input.recurrence !== undefined ? { recurrence: input.recurrence } : {}),
+        ...(input.editScope !== undefined ? { edit_scope: input.editScope } : {}),
         updated_at: new Date().toISOString(),
       },
     },

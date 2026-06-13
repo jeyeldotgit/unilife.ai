@@ -10,6 +10,7 @@ import {
   reconcileQueueResults,
   resetSyncingQueueItems,
 } from "@/lib/sync/queue";
+import { SYNC_MUTATION_QUEUED_EVENT } from "@/lib/sync/mutation-signal";
 import { setSyncStatusState } from "@/lib/sync/sync-status";
 
 type SyncPushResponse = {
@@ -177,6 +178,14 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
     }));
   };
 
+  const handleMutationQueued = () => {
+    setSyncStatusState((current) => ({
+      ...current,
+      hasPendingWork: true,
+    }));
+    void flush();
+  };
+
   function start() {
     if (isStarted) {
       return;
@@ -191,6 +200,7 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
     if (hasWindow(windowRef)) {
       windowRef.addEventListener("online", handleOnline);
       windowRef.addEventListener("offline", handleOffline);
+      windowRef.addEventListener(SYNC_MUTATION_QUEUED_EVENT, handleMutationQueued);
     }
 
     void initialize();
@@ -206,6 +216,7 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
     if (hasWindow(windowRef)) {
       windowRef.removeEventListener("online", handleOnline);
       windowRef.removeEventListener("offline", handleOffline);
+      windowRef.removeEventListener(SYNC_MUTATION_QUEUED_EVENT, handleMutationQueued);
     }
   }
 
