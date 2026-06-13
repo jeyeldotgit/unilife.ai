@@ -1,3 +1,5 @@
+import type { RecurrenceReference, ScheduleConflict } from "./recurrence";
+
 export type AssignmentStatus = "pending" | "in_progress" | "completed";
 
 export type Assignment = {
@@ -9,6 +11,8 @@ export type Assignment = {
   due_date: string; // ISO 8601
   status: AssignmentStatus;
   priority: number; // 1 (low) to 3 (high)
+  recurrence?: RecurrenceReference | null;
+  conflict_warnings?: ScheduleConflict[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

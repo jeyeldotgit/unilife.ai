@@ -8,3 +8,4 @@ export type * from "./user";
 export type * from "./expense";
 export type * from "./budget";
 export type * from "./planning";
+export type * from "./recurrence";

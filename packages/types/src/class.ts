@@ -1,3 +1,5 @@
+import type { RecurrenceReference, ScheduleConflict } from "./recurrence";
+
 export type DayOfWeek =
   | "monday"
   | "tuesday"
@@ -18,6 +20,8 @@ export type ClassRecord = {
   end_time: string; // "HH:MM" 24-hour format
   color: string | null; // hex color for UI
   is_active: boolean;
+  recurrence?: RecurrenceReference | null;
+  conflict_warnings?: ScheduleConflict[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null; // soft delete
