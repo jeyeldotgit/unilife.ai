@@ -11,7 +11,10 @@ export function useLiveQueryValue<T>(
   const [value, setValue] = useState<T>(initialValue);
   const [loaded, setLoaded] = useState(false);
   const queryRef = useRef(query);
-  queryRef.current = query;
+
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
 
   useEffect(() => {
     let isMounted = true;

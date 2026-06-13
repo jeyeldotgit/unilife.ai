@@ -8,6 +8,8 @@ import type {
 } from "@/lib/types";
 import { AssignmentCard } from "@/components/ui/AssignmentCard";
 import { Icon } from "@/components/ui/Icon";
+import { ProposalReviewCard } from "@/components/chat/ProposalReviewCard";
+import type { AiProposal } from "@unilife-ai/types";
 
 type ChatBubbleProps = {
   message: ChatMessage;
@@ -15,6 +17,7 @@ type ChatBubbleProps = {
   onClassCtaClick?: (classId: string) => void;
   onExamCtaClick?: (examId: string) => void;
   onExpenseCtaClick?: (expenseId: string) => void;
+  onProposalChange?: (proposal: AiProposal) => void;
 };
 
 function AiAvatar() {
@@ -531,6 +534,7 @@ export function ChatBubble({
   onClassCtaClick,
   onExamCtaClick,
   onExpenseCtaClick,
+  onProposalChange,
 }: ChatBubbleProps) {
   if (message.role === "user") {
     const userText = message.kind === "text" ? message.text : "";
@@ -670,6 +674,9 @@ export function ChatBubble({
         ) : null}
         {message.kind === "allowance_forecast" ? (
           <AllowanceForecastCard payload={message.payload} />
+        ) : null}
+        {message.kind === "proposal_review" ? (
+          <ProposalReviewCard proposal={message.payload} onChange={onProposalChange} />
         ) : null}
       </div>
     </div>

@@ -120,6 +120,9 @@ The endpoint may return explanatory text without a proposal for read-only intent
 - Undo never overwrites later user or synchronized changes.
 - Partial failures do not replay already applied operations.
 - The AI backend remains free of direct domain CRUD writes.
+- Frontend lint passes: `pnpm --filter @unilife-ai/frontend lint`.
+- Monorepo development starts successfully: `pnpm dev`.
+- Monorepo tests pass: `pnpm test`.
 
 ## VI. Required Tests
 
