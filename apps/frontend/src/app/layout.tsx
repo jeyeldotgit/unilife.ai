@@ -17,9 +17,9 @@ export const metadata: Metadata = {
   description:
     "Your AI-powered university assistant. Get personalized help with course selection, study planning, and more. Simplify your university experience with UniLife.AI.",
   icons: {
-    icon: "/unilife-ai.svg",
-    shortcut: "/unilife-ai.svg",
-    apple: "/unilife-ai.svg",
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
   },
 };
 
