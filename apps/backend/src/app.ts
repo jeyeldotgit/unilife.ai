@@ -9,6 +9,7 @@ export const app = new Hono<AppBindings>();
 
 const allowedOrigins = [
   "http://localhost:3000",
+  "https://unilife-ai-frontend.vercel.app",
   ...(process.env.FRONTEND_URLS ?? process.env.FRONTEND_URL ?? "")
     .split(",")
     .map((origin) => origin.trim())
@@ -26,3 +27,5 @@ app.use(
 app.onError(handleHttpError);
 
 registerRoutes(app);
+
+export default app;
