@@ -21,6 +21,7 @@ const syncPushSchema = z
             "recurrence_series",
             "recurrence_occurrence",
             "recurrence_exception",
+            "ai_action",
           ]),
           entity_id: z.string().uuid(),
           operation: z.enum(["create", "update", "delete"]),

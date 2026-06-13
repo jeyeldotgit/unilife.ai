@@ -7,6 +7,7 @@ export * from "./budgets.js";
 export * from "./notifications.js";
 export * from "./sync_queue.js";
 export * from "./ai_logs.js";
+export * from "./ai_action_history.js";
 export * from "./recurrence_series.js";
 export * from "./recurrence_occurrences.js";
 export * from "./recurrence_exceptions.js";

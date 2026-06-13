@@ -14,7 +14,8 @@ export type SyncEntityType =
   | "budget"
   | "recurrence_series"
   | "recurrence_occurrence"
-  | "recurrence_exception";
+  | "recurrence_exception"
+  | "ai_action";
 
 export type SyncStatus = "pending" | "syncing" | "synced" | "failed";
 
@@ -41,6 +42,7 @@ export type SyncQueueItem = {
 };
 
 export type SyncHydrationRecord =
+  | import("./ai-action").AiActionHistory
   | RecurrenceException
   | RecurrenceOccurrence
   | RecurrenceSeries;

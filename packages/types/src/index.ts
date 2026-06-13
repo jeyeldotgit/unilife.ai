@@ -1,4 +1,5 @@
 export type * from "./ai-log";
+export type * from "./ai-action";
 export type * from "./assignment";
 export type * from "./class";
 export type * from "./exam";
