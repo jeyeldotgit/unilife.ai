@@ -16,11 +16,6 @@ export const metadata: Metadata = {
   title: "UniLife.AI",
   description:
     "Your AI-powered university assistant. Get personalized help with course selection, study planning, and more. Simplify your university experience with UniLife.AI.",
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/favicon.ico",
-  },
 };
 
 export default function RootLayout({
