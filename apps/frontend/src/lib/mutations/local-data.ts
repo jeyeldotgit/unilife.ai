@@ -37,6 +37,31 @@ import type {
   UpdateClassInput,
 } from "@/lib/types";
 
+export type LocalMutationIntent =
+  | "create"
+  | "update"
+  | "delete"
+  | "delete_restore";
+
+export type LocalMutationReceipt = {
+  queueItemId: string;
+  clientMutationId: string;
+  logicalOperationId: string;
+  acceptedAt: string;
+  state: "queued";
+};
+
+type DeleteUndoEntityType = "assignment" | "class" | "exam" | "expense";
+
+export type DeleteUndoOperation<T extends DeleteUndoEntityType = DeleteUndoEntityType> = {
+  entityType: T;
+  entityId: string;
+  deletedAt: string;
+  queueItemId: string;
+  clientMutationId: string;
+  logicalOperationId: string;
+};
+
 async function getMutationUserId() {
   const existingUserId = getCurrentUserId();
 
@@ -63,18 +88,43 @@ function createQueueItem(input: {
   operation: SyncOperation;
   payload: Record<string, unknown>;
   userId: string;
+  queueItemId?: string;
+  clientMutationId?: string;
+  logicalOperationId?: string;
+  intent?: LocalMutationIntent;
+  supersedesQueueItemId?: string | null;
 }): SyncQueueItem {
+  const createdAt = new Date().toISOString();
+
   return {
-    created_at: new Date().toISOString(),
+    created_at: createdAt,
     entity_id: input.entityId,
     entity_type: input.entityType,
-    id: crypto.randomUUID(),
+    id: input.queueItemId ?? crypto.randomUUID(),
     last_attempted_at: null,
+    mutation_meta: {
+      acknowledged_at: createdAt,
+      client_mutation_id: input.clientMutationId ?? crypto.randomUUID(),
+      intent: input.intent ?? input.operation,
+      logical_operation_id: input.logicalOperationId ?? crypto.randomUUID(),
+      supersedes_queue_item_id: input.supersedesQueueItemId ?? null,
+    },
     operation: input.operation,
     payload: input.payload,
     retry_count: 0,
     status: "pending",
     user_id: input.userId,
+  };
+}
+
+function createMutationReceipt(queueItem: SyncQueueItem): LocalMutationReceipt {
+  return {
+    acceptedAt: queueItem.mutation_meta?.acknowledged_at ?? queueItem.created_at,
+    clientMutationId: queueItem.mutation_meta?.client_mutation_id ?? queueItem.id,
+    logicalOperationId:
+      queueItem.mutation_meta?.logical_operation_id ?? queueItem.entity_id,
+    queueItemId: queueItem.id,
+    state: "queued",
   };
 }
 
@@ -98,6 +148,168 @@ async function getClassSubjectById(userId: string) {
     .toArray();
 
   return new Map(classes.map((record) => [record.id, record.subject] as const));
+}
+
+type DeleteUndoRecordMap = {
+  assignment: AssignmentRecord;
+  class: ClassRecord;
+  exam: ExamRecord;
+  expense: ExpenseRecord;
+};
+
+function getEntityTable(entityType: keyof DeleteUndoRecordMap) {
+  if (entityType === "class") {
+    return db.classes;
+  }
+  if (entityType === "assignment") {
+    return db.assignments;
+  }
+  if (entityType === "exam") {
+    return db.exams;
+  }
+  return db.expenses;
+}
+
+export async function beginDeleteUndoLocal<T extends keyof DeleteUndoRecordMap>(
+  entityType: T,
+  entityId: string,
+): Promise<DeleteUndoOperation<T> | null> {
+  const userId = await getMutationUserId();
+  const rawTable = getEntityTable(entityType);
+  const table = rawTable as {
+    get: (id: string) => Promise<DeleteUndoRecordMap[T] | undefined>;
+    put: (record: DeleteUndoRecordMap[T]) => Promise<unknown>;
+  };
+  const existingRecord = await table.get(entityId);
+
+  if (!existingRecord || existingRecord.user_id !== userId || existingRecord.deleted_at) {
+    return null;
+  }
+
+  const deletedAt = new Date().toISOString();
+  const queueItemId = crypto.randomUUID();
+  const clientMutationId = crypto.randomUUID();
+  const logicalOperationId = crypto.randomUUID();
+  const nextRecord =
+    entityType === "class"
+      ? {
+          ...existingRecord,
+          deleted_at: deletedAt,
+          is_active: false,
+          updated_at: deletedAt,
+        }
+      : {
+          ...existingRecord,
+          deleted_at: deletedAt,
+          updated_at: deletedAt,
+        };
+
+  await db.transaction("rw", rawTable, db.notifications, async () => {
+    await table.put(nextRecord as DeleteUndoRecordMap[T]);
+
+    if (entityType === "class" || entityType === "assignment" || entityType === "exam") {
+      await deleteEntityNotifications(entityType, entityId);
+    }
+  });
+
+  return {
+    clientMutationId,
+    deletedAt,
+    entityId,
+    entityType,
+    logicalOperationId,
+    queueItemId,
+  };
+}
+
+export async function finalizeDeleteUndoLocal(
+  operation: DeleteUndoOperation,
+): Promise<LocalMutationReceipt | null> {
+  const userId = await getMutationUserId();
+  const rawTable = getEntityTable(operation.entityType);
+  const table = rawTable as {
+    get: (
+      id: string,
+    ) => Promise<DeleteUndoRecordMap[typeof operation.entityType] | undefined>;
+  };
+  const existingRecord = await table.get(operation.entityId);
+
+  if (!existingRecord || existingRecord.user_id !== userId) {
+    return null;
+  }
+
+  if (existingRecord.deleted_at !== operation.deletedAt) {
+    return null;
+  }
+
+  const queueItem = createQueueItem({
+    clientMutationId: operation.clientMutationId,
+    entityId: operation.entityId,
+    entityType: operation.entityType,
+    intent: "delete",
+    logicalOperationId: operation.logicalOperationId,
+    operation: "delete",
+    payload: { deleted_at: operation.deletedAt },
+    queueItemId: operation.queueItemId,
+    userId,
+  });
+
+  await db.sync_queue.put(queueItem);
+  return createMutationReceipt(queueItem);
+}
+
+export async function undoDeleteUndoLocal(
+  operation: DeleteUndoOperation,
+): Promise<boolean> {
+  const userId = await getMutationUserId();
+  const rawTable = getEntityTable(operation.entityType);
+  const table = rawTable as {
+    get: (
+      id: string,
+    ) => Promise<DeleteUndoRecordMap[typeof operation.entityType] | undefined>;
+    put: (
+      record: DeleteUndoRecordMap[typeof operation.entityType],
+    ) => Promise<unknown>;
+  };
+  const existingRecord = await table.get(operation.entityId);
+
+  if (!existingRecord || existingRecord.user_id !== userId) {
+    return false;
+  }
+
+  if (existingRecord.deleted_at !== operation.deletedAt) {
+    return false;
+  }
+
+  const restoredRecord =
+    operation.entityType === "class"
+      ? {
+          ...existingRecord,
+          deleted_at: null,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        }
+      : {
+          ...existingRecord,
+          deleted_at: null,
+          updated_at: new Date().toISOString(),
+        };
+
+  await db.transaction("rw", rawTable, db.notifications, db.sync_queue, async () => {
+    await table.put(restoredRecord as DeleteUndoRecordMap[keyof DeleteUndoRecordMap]);
+
+    if (operation.entityType === "class") {
+      await replaceEntityNotifications("class", restoredRecord as ClassRecord);
+    } else if (operation.entityType === "assignment") {
+      await replaceEntityNotifications("assignment", restoredRecord as AssignmentRecord);
+    } else if (operation.entityType === "exam") {
+      await replaceEntityNotifications("exam", restoredRecord as ExamRecord);
+    }
+
+    await db.sync_queue.delete(operation.queueItemId);
+  });
+
+  return true;
 }
 
 export async function createClassLocal(input: CreateClassInput) {

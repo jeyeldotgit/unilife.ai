@@ -22,7 +22,6 @@ export function useExpenses() {
       return db.budgets.where("user_id").equals(userId).toArray();
     },
     [],
-    [userId],
   );
   const expensesQuery = useLiveQueryValue(
     async () => {
@@ -37,7 +36,6 @@ export function useExpenses() {
         .toArray();
     },
     [],
-    [userId],
   );
   const activeBudget = findActiveBudget(budgetsQuery.value);
   const filteredExpenses = activeBudget

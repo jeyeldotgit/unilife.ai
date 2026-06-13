@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export const HeroComponent = () => {
   return (
     <section className="max-w-7xl mx-auto px-4 md:px-8 pt-12 pb-24 flex flex-col md:flex-row items-center gap-12 lg:gap-20">
@@ -71,12 +73,15 @@ export const HeroComponent = () => {
               "https://lh3.googleusercontent.com/aida-public/AB6AXuBe1XaCxZRzT9pKeQqbhsGw_VANomzFuVDusGNO-B3OjF4U-BcFhWgaylv8FpeF8IUUhImTEc9IKMKGnVgcXsva4NJTXMnVn7l0sELBi5chcwK1YIhtKwBtPfgeBB5SKbF4w1ZKwoqDuJrFEROEd73eg6qpPlp4msCJixiwFsVTNkb0AdnfwrjcTT6OnDHlbP-6YfHvvy-WnDiTL6NO0zPMcJNbTXmSQBBBn6QVUok04RcMbv7qTlOc4oLjsGF8C1zjcvz1mQhuM-I",
               "https://lh3.googleusercontent.com/aida-public/AB6AXuDDgWjwG0pg9uGDzDw5SamB0X-c0wPN9coGmsZOcmKs_qbQK8GrPrhqvh76HlddSfFKk3580SzUp9w1ZRNDN6cmaQPKyueCljy8TymfdYCIQkciFO8WeC5nY53uZy-2sQG_G_qp8Wp-m6IJAqgrM47524bNqXmOvWXAV9sXyQBx176nWuM7OFBfRl0IqABUP3BLw4NromczBppsDRqdP6UByXoFM73lsE8fYTr3KXUqL5xpF2EwOsq-r81z7s6h9GZu8yzhan8HS7E",
             ].map((src, i) => (
-              <img
+              <Image
                 key={i}
                 src={src}
                 alt="Student"
                 className="w-10 h-10 rounded-full"
+                height={40}
+                sizes="40px"
                 style={{ border: "2px solid white" }}
+                width={40}
               />
             ))}
           </div>
@@ -192,10 +197,12 @@ export const HeroComponent = () => {
               boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
             }}
           >
-            <img
+            <Image
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUnur24rmCkHWGVCDvqqNMY_j4vOzdAqeeJQpqH2KWdt_PkDdNFZrk4j4nXT3IsfnZg8oN9K4f31ezwm6hSyyvIhR73QlmJg8gw1w_DLayfB5GQXydbhgQpp2AUY4BwBqrNZpYn7uWprhhOlHn2Xd8V8sx57QgTXFnXKH0CphqvGNmPPHNWDM6Rwn4QCQUaZqc4v4apjTNiIJZZ6Uc8_zpyIDadvKAKieK2lu5dQV7Gv0fwmiL9L9peJfdO_bJHYwBVRdzGKDqP7w"
               alt="Campus library"
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              fill
+              sizes="(max-width: 768px) 100vw, 33vw"
             />
             <div
               className="absolute inset-0 flex items-end p-4"

@@ -22,7 +22,6 @@ export function useClasses() {
         .toArray();
     },
     [],
-    [userId],
   );
   const assignmentQuery = useLiveQueryValue(
     async () => {
@@ -37,7 +36,6 @@ export function useClasses() {
         .toArray();
     },
     [],
-    [userId],
   );
   const notificationsQuery = useLiveQueryValue(
     async () => {
@@ -45,7 +43,6 @@ export function useClasses() {
       return db.notifications.where("user_id").equals(userId).toArray();
     },
     [],
-    [userId],
   );
   const scheduleWeek = buildScheduleWeekSnapshot(
     classQuery.value,

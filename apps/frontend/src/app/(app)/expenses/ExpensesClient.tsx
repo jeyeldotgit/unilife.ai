@@ -3,10 +3,18 @@
 import { useState } from "react";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
+import { useDeleteUndoToast } from "@/components/ui/DeleteUndoToast";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { MutationStatus } from "@/components/ui/MutationStatus";
+import { RecoverableError } from "@/components/ui/RecoverableError";
 import { Icon } from "@/components/ui/Icon";
 import { useExpenses } from "@/hooks/use-expenses";
-import { deleteExpenseLocal } from "@/lib/mutations/local-data";
+import { normalizeRecoverableError } from "@/lib/errors/recoverable";
+import {
+  beginDeleteUndoLocal,
+  finalizeDeleteUndoLocal,
+  undoDeleteUndoLocal,
+} from "@/lib/mutations/local-data";
 import type {
   BudgetStatus,
   ExpenseCategoryTotal,
@@ -99,9 +107,14 @@ export default function ExpensesClient({
   const resolvedBudgetAvailable = budgetAvailable ?? expensesState.budgetAvailable;
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mutationState, setMutationState] = useState<"idle" | "pending" | "queued" | "failed">(
+    "idle",
+  );
+  const { showUndo } = useDeleteUndoToast();
 
   const handleDelete = (id: string) => {
     setErrorMessage(null);
+    setMutationState("pending");
     setRemovingIds((prev) => {
       const next = new Set(prev);
       next.add(id);
@@ -114,17 +127,30 @@ export default function ExpensesClient({
 
     void (async () => {
       try {
-        const deleted = await deleteExpenseLocal(id);
+        const operation = await beginDeleteUndoLocal("expense", id);
 
-        if (!deleted) {
+        if (!operation) {
           setErrorMessage("We couldn't delete that expense right now.");
+          setMutationState("failed");
+          return;
         }
+
+        setMutationState("queued");
+        showUndo({
+          id: operation.queueItemId,
+          label: "Expense deleted",
+          onExpire: async () => {
+            await finalizeDeleteUndoLocal(operation);
+            setMutationState("idle");
+          },
+          onUndo: async () => {
+            await undoDeleteUndoLocal(operation);
+            setMutationState("idle");
+          },
+        });
       } catch (error) {
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "We couldn't delete that expense right now.",
-        );
+        setErrorMessage(normalizeRecoverableError(error).message);
+        setMutationState("failed");
       } finally {
         setRemovingIds((prev) => {
           const next = new Set(prev);
@@ -139,10 +165,11 @@ export default function ExpensesClient({
     if (!resolvedExpensesAvailable) {
       return (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div className="rounded-xl border border-[#ffddb8] bg-[#fff8f1] px-4 py-3 text-sm font-medium text-[#825100] shadow-sm">
-            We couldn&apos;t load your latest expenses right now. You can still
-            open this page and refresh when the data is ready.
-          </div>
+          <RecoverableError
+            tone="warning"
+            title="Expenses unavailable"
+            message="We couldn’t load your latest expenses right now. You can still open this page and refresh when the data is ready."
+          />
           <EmptyState
             icon="payments"
             title="Expenses unavailable"
@@ -278,10 +305,17 @@ export default function ExpensesClient({
             Recent Expenses
           </h3>
 
+          <MutationStatus
+            state={mutationState}
+            label={
+              mutationState === "queued"
+                ? "Expense hidden now. It will sync after the undo window ends."
+                : undefined
+            }
+          />
+
           {errorMessage ? (
-            <div className="rounded-xl border border-[#ffdad6] bg-[#fff8f7] px-4 py-3 text-sm font-medium text-[#ba1a1a] shadow-sm">
-              {errorMessage}
-            </div>
+            <RecoverableError title="Expense action failed" message={errorMessage} />
           ) : null}
 
           {renderRecentExpenses()}

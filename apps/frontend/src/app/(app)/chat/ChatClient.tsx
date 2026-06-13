@@ -8,10 +8,13 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { QuickActions } from "@/components/chat/QuickActions";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { MutationStatus } from "@/components/ui/MutationStatus";
+import { RecoverableError } from "@/components/ui/RecoverableError";
 import {
   executeChatClientEffect,
   resolveLocalChat,
 } from "@/lib/chat/local-executor";
+import { normalizeRecoverableError } from "@/lib/errors/recoverable";
 import type { ChatMessage, ChatQuickAction, ChatTextMessage } from "@/lib/types";
 
 export type ChatClientProps = {
@@ -62,16 +65,6 @@ function createOptimisticUserMessage(text: string): ChatTextMessage {
   };
 }
 
-function buildFailureMessage(error: string): ChatMessage {
-  return {
-    id: `fallback-${crypto.randomUUID()}`,
-    role: "ai",
-    kind: "text",
-    text: error,
-    createdAt: new Date().toISOString(),
-  };
-}
-
 export default function ChatClient({
   initialMessages,
   quickActions,
@@ -88,6 +81,8 @@ export default function ChatClient({
     return !navigator.onLine;
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -107,8 +102,8 @@ export default function ChatClient({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSubmitting]);
 
-  const handleSend = async () => {
-    const text = inputValue.trim();
+  const handleSend = async (draftText?: string) => {
+    const text = (draftText ?? inputValue).trim();
 
     if (!text || isSubmitting) {
       return;
@@ -117,6 +112,8 @@ export default function ChatClient({
     const optimisticMessage = createOptimisticUserMessage(text);
     setMessages((current) => [...current, optimisticMessage]);
     setInputValue("");
+    setSendError(null);
+    setLastFailedText(null);
     setIsSubmitting(true);
 
     try {
@@ -130,6 +127,8 @@ export default function ChatClient({
 
       if (isOffline) {
         setMessages((current) => [...current, localResult.offlineMessage]);
+        setSendError("You’re offline, so only local quick actions can complete right now.");
+        setLastFailedText(text);
         setIsSubmitting(false);
         return;
       }
@@ -145,17 +144,13 @@ export default function ChatClient({
         const responseMessage = result.responseMessage;
         setMessages((current) => [...current, responseMessage]);
       } else {
-        setMessages((current) => [...current, buildFailureMessage(result.error)]);
+        setSendError(result.error);
+        setLastFailedText(text);
       }
     } catch (error) {
-      setMessages((current) => [
-        ...current,
-        buildFailureMessage(
-          error instanceof Error
-            ? error.message
-            : "We couldn't process that message right now.",
-        ),
-      ]);
+      const recoverable = normalizeRecoverableError(error);
+      setSendError(recoverable.message);
+      setLastFailedText(text);
     }
 
     setIsSubmitting(false);
@@ -206,6 +201,26 @@ export default function ChatClient({
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             <OfflineNotice isOffline={isOffline} chatAvailable={chatAvailable} />
+
+            {sendError ? (
+              <RecoverableError
+                title="Message not sent"
+                message={sendError}
+                onRetry={
+                  lastFailedText
+                    ? () => {
+                        void handleSend(lastFailedText);
+                      }
+                    : null
+                }
+                retryLabel="Retry send"
+              />
+            ) : null}
+
+            <MutationStatus
+              state={isSubmitting ? "pending" : "idle"}
+              label="Sending your message..."
+            />
 
             {messages.length > 0 ? (
               messages.map((message) => (
