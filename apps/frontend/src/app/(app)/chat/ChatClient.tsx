@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { submitChatMessageAction } from "@/actions/chat";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -43,7 +44,7 @@ function OfflineNotice({
       }`}
     >
       {isOffline
-        ? "You are offline. Quick logging still works, but chat replies that depend on a connection may be limited."
+        ? "You are offline. Local actions can still be reviewed and applied, but connected replies may be limited."
         : "We could not load your earlier messages right now, but you can still start a new chat."}
     </div>
   );
@@ -201,6 +202,14 @@ export default function ChatClient({
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             <OfflineNotice isOffline={isOffline} chatAvailable={chatAvailable} />
+            <div className="flex justify-end">
+              <Link
+                className="rounded-xl border border-[#c2c6d6] bg-white px-3 py-2 text-sm font-semibold text-[#0058be]"
+                href="/chat/history"
+              >
+                AI action history
+              </Link>
+            </div>
 
             {sendError ? (
               <RecoverableError
@@ -231,6 +240,16 @@ export default function ChatClient({
                   onClassCtaClick={() => router.push("/schedule")}
                   onExamCtaClick={() => router.push("/exams")}
                   onExpenseCtaClick={() => router.push("/expenses")}
+                  onProposalChange={(proposal) => {
+                    setMessages((current) =>
+                      current.map((item) =>
+                        item.kind === "proposal_review" &&
+                        item.payload.id === proposal.id
+                          ? { ...item, payload: proposal }
+                          : item,
+                      ),
+                    );
+                  }}
                 />
               ))
             ) : (

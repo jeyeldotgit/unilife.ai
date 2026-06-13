@@ -63,7 +63,7 @@ export type DeleteUndoOperation<T extends DeleteUndoEntityType = DeleteUndoEntit
   logicalOperationId: string;
 };
 
-async function getMutationUserId() {
+export async function getMutationUserId() {
   const existingUserId = getCurrentUserId();
 
   if (existingUserId) {
@@ -83,7 +83,7 @@ async function getMutationUserId() {
   return user.id;
 }
 
-function createQueueItem(input: {
+export function createQueueItem(input: {
   entityId: string;
   entityType: SyncEntityType;
   operation: SyncOperation;

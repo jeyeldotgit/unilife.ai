@@ -65,7 +65,7 @@ describe("local chat executor", () => {
     mocks.planningContext = null;
   });
 
-  it("executes a locally parsed assignment through the Dexie mutation helper", async () => {
+  it("returns a locally parsed assignment for review without writing", async () => {
     mocks.routeIntent.mockReturnValue({
       intent: "create_assignment",
       confidence: 0.9,
@@ -83,14 +83,21 @@ describe("local chat executor", () => {
 
     const result = await resolveLocalChat("submit research paper june 20");
 
-    expect(mocks.createAssignmentLocal).toHaveBeenCalledWith({
-      title: "Research Paper",
-      dueAt: "2099-06-20T15:59:00.000Z",
-      classId: null,
-    });
+    expect(mocks.createAssignmentLocal).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       handled: true,
-      message: { kind: "assignment_confirmation" },
+      message: {
+        kind: "proposal_review",
+        payload: {
+          processing_layer: "local",
+          operations: [
+            expect.objectContaining({
+              entity_type: "assignment",
+              operation: "create",
+            }),
+          ],
+        },
+      },
     });
   });
 

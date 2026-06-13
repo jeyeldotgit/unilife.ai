@@ -842,9 +842,30 @@ This endpoint also handles Story 6 (allowance forecast), Story 7 (Filipino class
     }>;
   };
 
-  // Whether the client should show a confirm/edit prompt before saving the action.
-  // True for create_class (Story 7 confirm step) and any low-confidence structured action.
+  // True for every response containing a write proposal.
   requires_confirmation: boolean;
+
+  proposal: {
+    id: string;
+    processing_layer: "gemini";
+    status: "proposed";
+    operations: Array<{
+      id: string;
+      operation: "create" | "update" | "delete";
+      entity_type: "class" | "assignment" | "exam" | "expense";
+      entity_id: string | null;
+      before: null;
+      proposed: Record<string, unknown>;
+      uncertain_fields: string[];
+      confidence: number | null;
+      status: "proposed";
+      approved_payload: null;
+      applied_revision: null;
+      error: null;
+    }>;
+    created_at: string;
+    updated_at: string;
+  } | null;
 }
 ```
 
@@ -852,7 +873,25 @@ This endpoint also handles Story 6 (allowance forecast), Story 7 (Filipino class
 
 - The backend does **not** write to the database from this endpoint. It returns a structured `action` payload and the frontend is responsible for writing to Dexie and enqueueing sync. This keeps the AI layer stateless and avoids double-writes when users edit before confirming.
 - All Gemini calls are logged to `ai_logs` with `processing_layer = "gemini"`, including the raw input, detected intent, and any error.
+- `ai_logs` remains provider telemetry. User-visible proposal lifecycle state is stored separately in `ai_action_history`.
 - If Gemini is unavailable (503, timeout, quota exceeded), the endpoint returns `{ intent: "unknown", action: null, message: "...", requires_confirmation: false }` with a user-friendly fallback message. It does not throw a 500.
+
+---
+
+## GET /api/ai/actions
+
+**Type:** Protected REST endpoint
+**Responsibility:** Returns user-scoped AI proposal/action history for hydration of the local-first history surface. Supports an optional `since` timestamp for delta hydration.
+
+### Response
+
+```ts
+{
+  actions: AiActionHistory[];
+}
+```
+
+AI action-history writes are produced locally after review/apply/undo and synchronized through `POST /api/sync/push` with `entity_type = "ai_action"`.
 
 ---
 

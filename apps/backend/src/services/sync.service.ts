@@ -5,6 +5,7 @@ import type {
   ClassRecord,
   Exam,
   Expense,
+  AiActionHistory,
   RecurrenceReference,
 } from "@unilife-ai/types";
 import { z } from "zod";
@@ -23,6 +24,7 @@ import { BudgetsRepository } from "../repositories/budgets.repository.js";
 import { ClassesRepository } from "../repositories/classes.repository.js";
 import { ExamsRepository } from "../repositories/exams.repository.js";
 import { ExpensesRepository } from "../repositories/expenses.repository.js";
+import { AIActionsRepository } from "../repositories/ai-actions.repository.js";
 
 const assignmentStatusSchema = z.enum(["pending", "in_progress", "completed"]);
 const budgetPeriodSchema = z.enum(["weekly", "biweekly", "monthly"]);
@@ -148,6 +150,13 @@ const updateBudgetPayloadSchema = z.object({
   end_date: isoDateSchema.optional(),
   updated_at: isoDateTimeSchema,
 });
+const aiActionPayloadSchema = z.object({
+  proposal: z.record(z.string(), z.unknown()),
+  status: z.string(),
+  processing_layer: z.enum(["local", "gemini"]),
+  created_at: isoDateTimeSchema,
+  updated_at: isoDateTimeSchema,
+});
 
 export type SyncEntityType =
   | "class"
@@ -157,7 +166,8 @@ export type SyncEntityType =
   | "budget"
   | "recurrence_series"
   | "recurrence_occurrence"
-  | "recurrence_exception";
+  | "recurrence_exception"
+  | "ai_action";
 export type SyncOperation = "create" | "update" | "delete";
 
 export type SyncPushItem = {
@@ -174,6 +184,7 @@ type SyncPushResult = {
 };
 
 type SyncDependencies = {
+  aiActionsRepository: Pick<AIActionsRepository, "upsert">;
   assignmentsRepository: Pick<
     AssignmentsRepository,
     "findByIdIncludingDeletedForUser" | "existsForOtherUserIncludingDeleted" | "upsert"
@@ -225,6 +236,8 @@ export class SyncService {
 
   constructor(supabase: SupabaseClient, private readonly userId: string, dependencies?: Partial<SyncDependencies>) {
     this.dependencies = {
+      aiActionsRepository:
+        dependencies?.aiActionsRepository ?? new AIActionsRepository(supabase),
       classesService: dependencies?.classesService ?? new ClassesService(supabase, userId),
       assignmentsService:
         dependencies?.assignmentsService ?? new AssignmentsService(supabase, userId),
@@ -273,6 +286,8 @@ export class SyncService {
       case "recurrence_occurrence":
       case "recurrence_exception":
         return true;
+      case "ai_action":
+        return this.processAiAction(item);
       default:
         return false;
     }
@@ -337,6 +352,26 @@ export class SyncService {
       default:
         return false;
     }
+  }
+
+  private async processAiAction(item: SyncPushItem) {
+    if (item.operation !== "create" && item.operation !== "update") {
+      return false;
+    }
+
+    const parsed = aiActionPayloadSchema.safeParse(toRecordPayload(item.payload));
+    if (!parsed.success) return false;
+
+    await this.dependencies.aiActionsRepository.upsert({
+      id: item.entity_id,
+      user_id: this.userId,
+      proposal: parsed.data.proposal as unknown as AiActionHistory["proposal"],
+      status: parsed.data.status as AiActionHistory["status"],
+      processing_layer: parsed.data.processing_layer,
+      created_at: parsed.data.created_at,
+      updated_at: parsed.data.updated_at,
+    });
+    return true;
   }
 
   private async createClass(item: SyncPushItem) {

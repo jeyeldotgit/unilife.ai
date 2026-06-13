@@ -3,6 +3,39 @@ import { describe, expect, it, vi } from "vitest";
 import { SyncService } from "../src/services/sync.service.js";
 
 describe("sync service", () => {
+  it("syncs AI action history through the authenticated user scope", async () => {
+    const upsert = vi.fn();
+    const service = new SyncService({} as never, "user-1", {
+      aiActionsRepository: { upsert } as never,
+    });
+    const timestamp = "2026-06-13T00:00:00.000Z";
+
+    const result = await service.push([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        entity_type: "ai_action",
+        entity_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        operation: "create",
+        payload: {
+          proposal: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+          status: "proposed",
+          processing_layer: "local",
+          created_at: timestamp,
+          updated_at: timestamp,
+        },
+      },
+    ]);
+
+    expect(result.failed).toEqual([]);
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        user_id: "user-1",
+        status: "proposed",
+      }),
+    );
+  });
+
   it("processes mixed batches independently and does not abort after a failed item", async () => {
     const updateClass = vi
       .fn()

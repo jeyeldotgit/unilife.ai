@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type {
   Assignment,
+  AiActionHistory,
   Budget,
   ClassRecord,
   Exam,
@@ -22,7 +23,8 @@ export type SyncMetaEntity =
   | "recurrence_series"
   | "recurrence_occurrence"
   | "recurrence_exception"
-  | "holiday_exclusion";
+  | "holiday_exclusion"
+  | "ai_action";
 
 export type SyncMetaRecord = {
   id: string;
@@ -45,6 +47,7 @@ export class UniLifeDB extends Dexie {
   notifications!: Table<Notification, string>;
   sync_queue!: Table<SyncQueueItem, string>;
   sync_meta!: Table<SyncMetaRecord, string>;
+  ai_actions!: Table<AiActionHistory, string>;
 
   constructor() {
     super("unilife");
@@ -109,6 +112,28 @@ export class UniLifeDB extends Dexie {
       sync_queue:
         "id, user_id, entity_type, entity_id, status, created_at, [user_id+status+created_at], [entity_type+entity_id+status]",
       sync_meta: "id, user_id, entity_type",
+    });
+
+    this.version(5).stores({
+      classes: "id, user_id, day_of_week, is_active, deleted_at, updated_at",
+      assignments:
+        "id, user_id, class_id, due_date, status, deleted_at, updated_at",
+      exams: "id, user_id, class_id, exam_date, deleted_at, updated_at",
+      expenses:
+        "id, user_id, budget_id, category, spent_at, deleted_at, updated_at",
+      budgets: "id, user_id, start_date, end_date, updated_at",
+      recurrence_series: "id, user_id, entity_type, updated_at, deleted_at",
+      recurrence_occurrences:
+        "id, user_id, series_id, entity_id, effective_start_at, updated_at, deleted_at",
+      recurrence_exceptions:
+        "id, user_id, series_id, original_start_at, updated_at, deleted_at",
+      holiday_exclusions: "id, user_id, date, updated_at, deleted_at",
+      notifications:
+        "id, user_id, entity_type, entity_id, scheduled_at, status",
+      sync_queue:
+        "id, user_id, entity_type, entity_id, status, created_at, [user_id+status+created_at], [entity_type+entity_id+status]",
+      sync_meta: "id, user_id, entity_type",
+      ai_actions: "id, user_id, status, processing_layer, created_at, updated_at",
     });
   }
 }

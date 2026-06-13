@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getBudgetChatContext: vi.fn(),
   getBudgetStatus: vi.fn(),
   logExpense: vi.fn(),
+  listExpenseRecords: vi.fn(),
   getClasses: vi.fn(),
   requestBackend: vi.fn(),
 }));
@@ -29,6 +30,10 @@ vi.mock("@/lib/api/expenses", () => ({
   logExpense: mocks.logExpense,
 }));
 
+vi.mock("@/lib/api/finance-data", () => ({
+  listExpenseRecords: mocks.listExpenseRecords,
+}));
+
 vi.mock("@/lib/api/schedule", () => ({
   getClasses: mocks.getClasses,
 }));
@@ -45,6 +50,7 @@ describe("chat adapter", () => {
     mocks.getBudgetChatContext.mockReset();
     mocks.getBudgetStatus.mockReset();
     mocks.logExpense.mockReset();
+    mocks.listExpenseRecords.mockReset();
     mocks.createAssignment.mockReset();
     mocks.requestBackend.mockReset();
 
@@ -59,6 +65,7 @@ describe("chat adapter", () => {
       budgetRemaining: null,
     });
     mocks.getBudgetStatus.mockResolvedValue(null);
+    mocks.listExpenseRecords.mockResolvedValue([]);
   });
 
   it("maps plain AI replies to text messages", async () => {
@@ -116,7 +123,7 @@ describe("chat adapter", () => {
     });
   });
 
-  it("auto-saves high-confidence assignment intents into confirmation cards", async () => {
+  it("returns high-confidence assignment intents for review without auto-saving", async () => {
     mocks.requestBackend.mockResolvedValue({
       intent: "create_assignment",
       action: {
@@ -125,26 +132,27 @@ describe("chat adapter", () => {
         class_id: null,
       },
       message: "I added that for you.",
-      requires_confirmation: false,
+      requires_confirmation: true,
+      proposal: {
+        id: "proposal-1",
+        processing_layer: "gemini",
+        status: "proposed",
+        operations: [],
+        created_at: "2026-06-13T00:00:00.000Z",
+        updated_at: "2026-06-13T00:00:00.000Z",
+      },
     });
 
     const { sendMessage } = await import("@/lib/api/chat");
     const result = await sendMessage({ text: "book report next friday 11:59pm" });
 
-    expect(result.clientEffect).toMatchObject({
-      kind: "create_assignment",
-      payload: expect.objectContaining({
-        dueAt: "2099-06-05T23:59:00.000Z",
-        title: "Research Paper",
-      }),
-    });
     expect(result.responseMessage).toMatchObject({
-      kind: "text",
-      text: "I added that for you.",
+      kind: "proposal_review",
+      payload: { id: "proposal-1" },
     });
   });
 
-  it("auto-saves high-confidence expense intents into confirmation cards", async () => {
+  it("returns high-confidence expense intents for review without auto-saving", async () => {
     mocks.requestBackend.mockResolvedValue({
       intent: "log_expense",
       action: {
@@ -152,27 +160,27 @@ describe("chat adapter", () => {
         category: "food",
       },
       message: "Logged.",
-      requires_confirmation: false,
+      requires_confirmation: true,
+      proposal: {
+        id: "proposal-2",
+        processing_layer: "gemini",
+        status: "proposed",
+        operations: [],
+        created_at: "2026-06-13T00:00:00.000Z",
+        updated_at: "2026-06-13T00:00:00.000Z",
+      },
     });
 
     const { sendMessage } = await import("@/lib/api/chat");
     const result = await sendMessage({ text: "lunch 85" });
 
-    expect(result.clientEffect).toMatchObject({
-      kind: "log_expense",
-      payload: expect.objectContaining({
-        amount: 85,
-        category: "food",
-        label: "Lunch",
-      }),
-    });
     expect(result.responseMessage).toMatchObject({
-      kind: "text",
-      text: "Logged.",
+      kind: "proposal_review",
+      payload: { id: "proposal-2" },
     });
   });
 
-  it("maps complete class intents into a local class client effect", async () => {
+  it("maps complete class intents into a review proposal", async () => {
     mocks.requestBackend.mockResolvedValue({
       intent: "create_class",
       action: {
@@ -182,25 +190,27 @@ describe("chat adapter", () => {
         subject: "Orgman",
       },
       message: "Sige, idadagdag ko ang klase mo sa Orgman.",
-      requires_confirmation: false,
+      requires_confirmation: true,
+      proposal: {
+        id: "proposal-3",
+        processing_layer: "gemini",
+        status: "proposed",
+        operations: [],
+        created_at: "2026-06-13T00:00:00.000Z",
+        updated_at: "2026-06-13T00:00:00.000Z",
+      },
     });
 
     const { sendMessage } = await import("@/lib/api/chat");
     const result = await sendMessage({ text: "add class on orgman tomorrow 5pm to 7pm" });
 
-    expect(result.clientEffect).toMatchObject({
-      kind: "create_class",
-      payload: expect.objectContaining({
-        dayOfWeek: "friday",
-        dayIndex: 4,
-        endTime: "19:00",
-        startTime: "17:00",
-        subject: "Orgman",
-      }),
+    expect(result.responseMessage).toMatchObject({
+      kind: "proposal_review",
+      payload: { id: "proposal-3" },
     });
   });
 
-  it("maps complete exam intents into a local exam client effect", async () => {
+  it("maps complete exam intents into a review proposal", async () => {
     mocks.requestBackend.mockResolvedValue({
       intent: "create_exam",
       action: {
@@ -210,24 +220,27 @@ describe("chat adapter", () => {
         location: "Room 204",
       },
       message: "I added your exam.",
-      requires_confirmation: false,
+      requires_confirmation: true,
+      proposal: {
+        id: "proposal-4",
+        processing_layer: "gemini",
+        status: "proposed",
+        operations: [],
+        created_at: "2026-06-13T00:00:00.000Z",
+        updated_at: "2026-06-13T00:00:00.000Z",
+      },
     });
 
     const { sendMessage } = await import("@/lib/api/chat");
     const result = await sendMessage({ text: "add chemistry quiz on june 20 at 8:30am" });
 
-    expect(result.clientEffect).toMatchObject({
-      kind: "create_exam",
-      payload: expect.objectContaining({
-        title: "Chemistry Quiz",
-        examAt: "2099-06-20T08:30:00.000Z",
-        classId: "class-1",
-        location: "Room 204",
-      }),
+    expect(result.responseMessage).toMatchObject({
+      kind: "proposal_review",
+      payload: { id: "proposal-4" },
     });
   });
 
-  it("infers expense category from the raw chat input when AI omits it", async () => {
+  it("does not auto-save expenses when AI omits the category", async () => {
     mocks.requestBackend.mockResolvedValue({
       intent: "log_expense",
       action: {
@@ -240,14 +253,8 @@ describe("chat adapter", () => {
     const { sendMessage } = await import("@/lib/api/chat");
     const result = await sendMessage({ text: "transpo 120" });
 
-    expect(result.clientEffect).toMatchObject({
-      kind: "log_expense",
-      payload: expect.objectContaining({
-        amount: 120,
-        category: "transportation",
-        label: "Transpo",
-      }),
-    });
+    expect(result.clientEffect).toBeUndefined();
+    expect(result.responseMessage.kind).toBe("text");
   });
 
   it("returns a specific class clarification instead of a generic fallback", async () => {

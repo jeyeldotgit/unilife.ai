@@ -7,6 +7,7 @@ import {
   type GeminiIntent,
 } from "@unilife-ai/ai-core";
 import type {
+  AiProposal,
   DailyBriefing,
   PlanningContext,
   ScheduleInsight,
@@ -31,6 +32,8 @@ const AI_CHAT_SYSTEM_PROMPT = [
   "Convert the student's message into one supported UniLife chat intent.",
   "Use the provided frontend context when it helps answer schedule, deadline, budget, free-time, or allowance questions.",
   "For structured create or log intents, fill action with only the fields you can confidently infer.",
+  "For update or delete intents, use only an entity_id present in the provided frontend entities context.",
+  "Never invent an entity_id.",
   "For non-CRUD intents, set action to null.",
   "Always include a confidence number between 0 and 1.",
 ].join("\n");
@@ -52,9 +55,16 @@ const dayOfWeekSchema = z.enum([
 ]);
 const aiChatIntentSchema = z.enum([
   "create_assignment",
+  "update_assignment",
+  "delete_assignment",
   "create_class",
+  "update_class",
+  "delete_class",
   "create_exam",
+  "update_exam",
+  "delete_exam",
   "log_expense",
+  "delete_expense",
   "query_schedule",
   "query_deadlines",
   "query_budget",
@@ -96,9 +106,16 @@ const aiChatResponseSchema = z.object({
   forecast: aiForecastSchema.optional(),
   free_time: aiFreeTimeSchema.optional(),
   requires_confirmation: z.boolean(),
+  proposal: z.custom<AiProposal>().nullable(),
 });
 
-export type AIChatContext = PlanningContext;
+export type AIChatContext = PlanningContext & {
+  entities?: Array<{
+    id: string;
+    entity_type: "class" | "assignment" | "exam" | "expense";
+    label: string;
+  }>;
+};
 
 export type AIChatInput = {
   message: string;
@@ -122,9 +139,16 @@ type GeminiCaller = typeof callGemini;
 function isStructuredIntent(intent: GeminiIntent) {
   return (
     intent === "create_assignment" ||
+    intent === "update_assignment" ||
+    intent === "delete_assignment" ||
     intent === "create_class" ||
+    intent === "update_class" ||
+    intent === "delete_class" ||
     intent === "create_exam" ||
-    intent === "log_expense"
+    intent === "update_exam" ||
+    intent === "delete_exam" ||
+    intent === "log_expense" ||
+    intent === "delete_expense"
   );
 }
 
@@ -288,6 +312,17 @@ function normalizeAction(
   switch (intent) {
     case "create_assignment":
       return normalizeCreateAssignmentAction(action);
+    case "update_assignment":
+    case "update_class":
+    case "update_exam":
+      return action && typeof action.entity_id === "string" ? action : null;
+    case "delete_assignment":
+    case "delete_class":
+    case "delete_exam":
+    case "delete_expense":
+      return action && typeof action.entity_id === "string"
+        ? { entity_id: action.entity_id }
+        : null;
     case "create_class":
       return normalizeCreateClassAction(action, context);
     case "create_exam":
@@ -305,6 +340,7 @@ function createFallbackResponse(): AIChatResponse {
     action: null,
     message: "I couldn't understand that. Try rephrasing.",
     requires_confirmation: false,
+    proposal: null,
   };
 }
 
@@ -321,6 +357,7 @@ function createPlanningFallbackResponse(
       message: "Here is a recommendation based on your saved schedule and deadlines.",
       free_time: buildFreeTimePlan(context),
       requires_confirmation: false,
+      proposal: null,
     };
   }
 
@@ -331,6 +368,7 @@ function createPlanningFallbackResponse(
       message: "Here is a forecast based on your current budget cycle and spending.",
       forecast: buildAllowanceForecast(context),
       requires_confirmation: false,
+      proposal: null,
     };
   }
 
@@ -350,6 +388,71 @@ function toStructuredOutput(raw: GeminiChatResponse) {
 
 function sanitizeActionRecord(action: GeminiChatResponse["action"]) {
   return action ?? null;
+}
+
+function getEntityType(intent: GeminiIntent) {
+  switch (intent) {
+    case "create_assignment":
+    case "update_assignment":
+    case "delete_assignment":
+      return "assignment" as const;
+    case "create_class":
+    case "update_class":
+    case "delete_class":
+      return "class" as const;
+    case "create_exam":
+    case "update_exam":
+    case "delete_exam":
+      return "exam" as const;
+    case "log_expense":
+    case "delete_expense":
+      return "expense" as const;
+    default:
+      return null;
+  }
+}
+
+function buildProposal(
+  intent: GeminiIntent,
+  action: Record<string, unknown> | null,
+  confidence: number,
+): AiProposal | null {
+  const entityType = getEntityType(intent);
+  if (!entityType || !action) return null;
+
+  const timestamp = new Date().toISOString();
+  const entityId = typeof action.entity_id === "string" ? action.entity_id : null;
+  const proposed = { ...action };
+  delete proposed.entity_id;
+  const operation =
+    intent.startsWith("delete_")
+      ? "delete"
+      : intent.startsWith("update_")
+        ? "update"
+        : "create";
+  return {
+    id: crypto.randomUUID(),
+    processing_layer: "gemini",
+    status: "proposed",
+    operations: [
+      {
+        id: crypto.randomUUID(),
+        operation,
+        entity_type: entityType,
+        entity_id: entityId,
+        before: null,
+        proposed,
+        uncertain_fields: confidence < AI_CONFIDENCE_THRESHOLD ? Object.keys(proposed) : [],
+        confidence,
+        status: "proposed",
+        approved_payload: null,
+        applied_revision: null,
+        error: null,
+      },
+    ],
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
 }
 
 export class AIService {
@@ -389,11 +492,8 @@ export class AIService {
         message: raw.message,
         ...(forecast ? { forecast } : {}),
         ...(freeTime ? { free_time: freeTime } : {}),
-        requires_confirmation:
-          raw.intent === "create_class" ||
-          (isStructuredIntent(raw.intent) && normalizedAction === null) ||
-          (isStructuredIntent(raw.intent) &&
-            raw.confidence < AI_CONFIDENCE_THRESHOLD),
+        requires_confirmation: isStructuredIntent(raw.intent),
+        proposal: buildProposal(raw.intent, normalizedAction, raw.confidence),
       });
 
       return {

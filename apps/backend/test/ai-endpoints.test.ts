@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   aiLogs: [] as Record<string, unknown>[],
+  aiActions: [] as Record<string, unknown>[],
   callGemini: vi.fn(),
   logShouldFail: false,
   repositoryConstructors: {
@@ -55,6 +56,14 @@ vi.mock("../src/repositories/ai-logs.repository.js", () => ({
       }
 
       state.aiLogs.push(record);
+    }
+  },
+}));
+
+vi.mock("../src/repositories/ai-actions.repository.js", () => ({
+  AIActionsRepository: class AIActionsRepository {
+    async listForUser(userId: string) {
+      return state.aiActions.filter((action) => action.user_id === userId);
     }
   },
 }));
@@ -123,6 +132,7 @@ beforeEach(() => {
   state.repositoryConstructors.exams.mockReset();
   state.repositoryConstructors.expenses.mockReset();
   state.aiLogs = [];
+  state.aiActions = [];
   state.logShouldFail = false;
 });
 
@@ -172,7 +182,7 @@ describe("POST /api/ai/chat", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       intent: "create_class",
       action: {
         subject: "Biology",
@@ -182,6 +192,17 @@ describe("POST /api/ai/chat", () => {
       },
       message: "Narito ang class details mo.",
       requires_confirmation: true,
+    });
+    expect(body.proposal).toMatchObject({
+      processing_layer: "gemini",
+      status: "proposed",
+      operations: [
+        expect.objectContaining({
+          entity_type: "class",
+          operation: "create",
+          status: "proposed",
+        }),
+      ],
     });
     expect(state.aiLogs).toHaveLength(1);
     expect(state.aiLogs[0]).toEqual({
@@ -228,7 +249,7 @@ describe("POST /api/ai/chat", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       intent: "unknown",
       action: null,
       message: "I couldn't understand that. Try rephrasing.",
@@ -269,7 +290,7 @@ describe("POST /api/ai/chat", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       intent: "general_question",
       action: null,
       message: "Focus on your next deadline first.",
@@ -300,6 +321,26 @@ describe("POST /api/ai/briefing", () => {
       deadline_count: 0,
       source: "deterministic",
     });
+  });
+});
+
+describe("GET /api/ai/actions", () => {
+  it("returns only action history belonging to the authenticated user", async () => {
+    state.aiActions = [
+      { id: "action-1", user_id: "user-1", status: "applied" },
+      { id: "action-2", user_id: "user-2", status: "applied" },
+    ];
+    const { app } = await import("../src/app.js");
+
+    const response = await app.request("http://localhost/api/ai/actions", {
+      headers: { Authorization: "Bearer valid-token" },
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.actions).toEqual([
+      { id: "action-1", user_id: "user-1", status: "applied" },
+    ]);
   });
 });
 

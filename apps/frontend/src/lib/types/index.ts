@@ -7,6 +7,7 @@ import type {
   RecurrenceEditScope,
   RecurrenceReference,
   ScheduleConflict,
+  AiProposal,
 } from "@unilife-ai/types";
 import type { AllowanceForecast, DailyBriefing } from "@unilife-ai/types";
 
@@ -407,6 +408,11 @@ export type ChatAllowanceForecastMessage = ChatMessageBase & {
   payload: ChatAllowanceForecastPayload;
 };
 
+export type ChatProposalReviewMessage = ChatMessageBase & {
+  kind: "proposal_review";
+  payload: AiProposal;
+};
+
 export type ChatMessage =
   | ChatTextMessage
   | ChatAssignmentConfirmationMessage
@@ -414,7 +420,8 @@ export type ChatMessage =
   | ChatExamConfirmationMessage
   | ChatExpenseConfirmationMessage
   | ChatFreeTimeRecommendationMessage
-  | ChatAllowanceForecastMessage;
+  | ChatAllowanceForecastMessage
+  | ChatProposalReviewMessage;
 
 export type DashboardBriefing = DailyBriefing;
 

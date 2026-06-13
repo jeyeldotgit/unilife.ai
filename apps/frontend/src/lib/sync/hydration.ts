@@ -1,5 +1,6 @@
 import type {
   Assignment,
+  AiActionHistory,
   Budget,
   ClassRecord,
   Exam,
@@ -14,6 +15,7 @@ import { requestBackendClient } from "@/lib/api/client-browser";
 import { db, type SyncMetaEntity, type SyncMetaRecord } from "@/lib/db/dexie";
 
 type EntityRecordMap = {
+  ai_action: AiActionHistory;
   assignment: Assignment;
   budget: Budget;
   class: ClassRecord;
@@ -26,6 +28,7 @@ type EntityRecordMap = {
 };
 
 type HydrationResponseMap = {
+  ai_action: { actions: AiActionHistory[] };
   assignment: { assignments: Assignment[] };
   budget: { budgets: Budget[] };
   class: { classes: ClassRecord[] };
@@ -45,6 +48,7 @@ type HydrationOptions = {
 };
 
 const HYDRATION_ENTITIES: HydratableEntity[] = [
+  "ai_action",
   "class",
   "assignment",
   "exam",
@@ -69,9 +73,15 @@ const entityConfig: {
       | "recurrence_series"
       | "recurrence_occurrences"
       | "recurrence_exceptions"
-      | "holiday_exclusions";
+      | "holiday_exclusions"
+      | "ai_actions";
   };
 } = {
+  ai_action: {
+    endpoint: "/api/ai/actions",
+    extract: (response) => response.actions,
+    table: "ai_actions",
+  },
   class: {
     endpoint: "/api/classes",
     extract: (response) => response.classes,
