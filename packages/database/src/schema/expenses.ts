@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, numeric } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, uuid, text, timestamp, numeric } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
 export const expenses = pgTable("expenses", {
@@ -7,10 +7,12 @@ export const expenses = pgTable("expenses", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   budgetId: uuid("budget_id"), // no FK constraint per LLD
+  refundOfExpenseId: uuid("refund_of_expense_id"),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   category: text("category").notNull(),
   description: text("description"),
   spentAt: timestamp("spent_at", { withTimezone: true }).notNull().defaultNow(),
+  recurrence: jsonb("recurrence"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

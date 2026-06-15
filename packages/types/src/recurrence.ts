@@ -25,6 +25,7 @@ export type RecurrenceSeries = {
   starts_at: string;
   ends_at: string | null;
   revision: number;
+  expense_template?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
