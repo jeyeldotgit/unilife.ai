@@ -24,10 +24,11 @@ import { BudgetsRepository } from "../repositories/budgets.repository.js";
 import { ClassesRepository } from "../repositories/classes.repository.js";
 import { ExamsRepository } from "../repositories/exams.repository.js";
 import { ExpensesRepository } from "../repositories/expenses.repository.js";
+import { RecurrenceRepository, type RecurrenceSyncEntity } from "../repositories/recurrence.repository.js";
 import { AIActionsRepository } from "../repositories/ai-actions.repository.js";
 
 const assignmentStatusSchema = z.enum(["pending", "in_progress", "completed"]);
-const budgetPeriodSchema = z.enum(["weekly", "biweekly", "monthly"]);
+const budgetPeriodSchema = z.enum(["daily", "weekly", "biweekly", "monthly"]);
 const dayOfWeekSchema = z.enum([
   "monday",
   "tuesday",
@@ -129,10 +130,12 @@ const updateExamPayloadSchema = z.object({
 });
 const createExpensePayloadSchema = z.object({
   budget_id: z.string().uuid().nullable().optional(),
-  amount: z.number().positive(),
+  refund_of_expense_id: z.string().uuid().nullable().optional(),
+  amount: z.number().refine((value) => value !== 0),
   category: expenseCategorySchema,
   description: optionalTrimmedString(2000),
   spent_at: isoDateTimeSchema.optional(),
+  recurrence: z.record(z.string(), z.unknown()).nullable().optional(),
   created_at: isoDateTimeSchema,
   updated_at: isoDateTimeSchema,
 });
@@ -147,8 +150,10 @@ const createBudgetPayloadSchema = z.object({
 const updateBudgetPayloadSchema = z.object({
   amount: z.number().positive().optional(),
   period: budgetPeriodSchema.optional(),
+  start_date: isoDateSchema.optional(),
   end_date: isoDateSchema.optional(),
   updated_at: isoDateTimeSchema,
+  mutation_id: z.string().uuid(),
 });
 const aiActionPayloadSchema = z.object({
   proposal: z.record(z.string(), z.unknown()),
@@ -206,7 +211,8 @@ type SyncDependencies = {
     ExpensesRepository,
     "findByIdIncludingDeletedForUser" | "existsForOtherUserIncludingDeleted" | "upsert"
   >;
-  expensesService: Pick<ExpensesService, "deleteExpense">;
+  expensesService: Pick<ExpensesService, "createExpense" | "deleteExpense">;
+  recurrenceRepository: Pick<RecurrenceRepository, "upsertForUser">;
 };
 
 function isOlderTimestamp(incomingUpdatedAt: string, currentUpdatedAt: string) {
@@ -250,6 +256,7 @@ export class SyncService {
         dependencies?.assignmentsRepository ?? new AssignmentsRepository(supabase),
       examsRepository: dependencies?.examsRepository ?? new ExamsRepository(supabase),
       expensesRepository: dependencies?.expensesRepository ?? new ExpensesRepository(supabase),
+      recurrenceRepository: dependencies?.recurrenceRepository ?? new RecurrenceRepository(supabase),
       budgetsRepository: dependencies?.budgetsRepository ?? new BudgetsRepository(supabase),
     };
   }
@@ -285,12 +292,22 @@ export class SyncService {
       case "recurrence_series":
       case "recurrence_occurrence":
       case "recurrence_exception":
-        return true;
+        return this.processRecurrenceItem(item);
       case "ai_action":
         return this.processAiAction(item);
       default:
         return false;
     }
+  }
+
+  private async processRecurrenceItem(item: SyncPushItem) {
+    if (item.operation !== "create" && item.operation !== "update") return false;
+    return this.dependencies.recurrenceRepository.upsertForUser(
+      item.entity_type as RecurrenceSyncEntity,
+      this.userId,
+      item.entity_id,
+      item.payload,
+    );
   }
 
   private async processClassItem(item: SyncPushItem) {
@@ -389,7 +406,6 @@ export class SyncService {
     if (existing && isOlderTimestamp(incoming.updated_at, existing.updated_at)) {
       return true;
     }
-
     if (
       !existing &&
       (await this.dependencies.classesRepository.existsForOtherUserIncludingDeleted(
@@ -582,6 +598,9 @@ export class SyncService {
     if (existing && isOlderTimestamp(incoming.updated_at, existing.updated_at)) {
       return true;
     }
+    if (existing) {
+      return true;
+    }
 
     if (
       !existing &&
@@ -593,20 +612,18 @@ export class SyncService {
       return false;
     }
 
-    const record: Expense = {
+    await this.dependencies.expensesService.createExpense({
       id: item.entity_id,
-      user_id: this.userId,
       budget_id: incoming.budget_id ?? null,
+      refund_of_expense_id: incoming.refund_of_expense_id ?? null,
       amount: incoming.amount,
       category: incoming.category,
-      description: normalizeOptionalString(incoming.description),
-      spent_at: incoming.spent_at ?? new Date().toISOString(),
+      description: normalizeOptionalString(incoming.description) ?? undefined,
+      spent_at: incoming.spent_at,
+      recurrence: normalizeRecurrenceReference(incoming.recurrence),
       created_at: incoming.created_at,
       updated_at: incoming.updated_at,
-      deleted_at: null,
-    };
-
-    await this.dependencies.expensesRepository.upsert(record);
+    });
     return true;
   }
 

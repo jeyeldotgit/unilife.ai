@@ -2,6 +2,7 @@ import type {
   Assignment,
   AiActionHistory,
   Budget,
+  BudgetRevision,
   ClassRecord,
   Exam,
   Expense,
@@ -18,6 +19,7 @@ type EntityRecordMap = {
   ai_action: AiActionHistory;
   assignment: Assignment;
   budget: Budget;
+  budget_revision: BudgetRevision;
   class: ClassRecord;
   exam: Exam;
   expense: Expense;
@@ -31,6 +33,7 @@ type HydrationResponseMap = {
   ai_action: { actions: AiActionHistory[] };
   assignment: { assignments: Assignment[] };
   budget: { budgets: Budget[] };
+  budget_revision: { revisions: BudgetRevision[] };
   class: { classes: ClassRecord[] };
   exam: { exams: Exam[] };
   expense: { expenses: Expense[]; total: number };
@@ -53,6 +56,7 @@ const HYDRATION_ENTITIES: HydratableEntity[] = [
   "assignment",
   "exam",
   "budget",
+  "budget_revision",
   "expense",
   "recurrence_series",
   "recurrence_occurrence",
@@ -69,6 +73,7 @@ const entityConfig: {
       | "assignments"
       | "exams"
       | "budgets"
+      | "budget_revisions"
       | "expenses"
       | "recurrence_series"
       | "recurrence_occurrences"
@@ -102,24 +107,29 @@ const entityConfig: {
     extract: (response) => response.budgets,
     table: "budgets",
   },
+  budget_revision: {
+    endpoint: "/api/budgets/revisions",
+    extract: (response) => response.revisions,
+    table: "budget_revisions",
+  },
   expense: {
     endpoint: "/api/expenses",
     extract: (response) => response.expenses,
     table: "expenses",
   },
   recurrence_series: {
-    endpoint: null,
-    extract: () => [],
+    endpoint: "/api/recurrence/series",
+    extract: (response) => response.recurrence_series,
     table: "recurrence_series",
   },
   recurrence_occurrence: {
-    endpoint: null,
-    extract: () => [],
+    endpoint: "/api/recurrence/occurrences",
+    extract: (response) => response.recurrence_occurrences,
     table: "recurrence_occurrences",
   },
   recurrence_exception: {
-    endpoint: null,
-    extract: () => [],
+    endpoint: "/api/recurrence/exceptions",
+    extract: (response) => response.recurrence_exceptions,
     table: "recurrence_exceptions",
   },
   holiday_exclusion: {
@@ -137,14 +147,15 @@ async function getMeta(userId: string, entityType: SyncMetaEntity) {
   return db.sync_meta.get(getMetaId(userId, entityType));
 }
 
-function getMaxUpdatedAt<T extends { updated_at: string }>(records: T[]) {
+function getMaxUpdatedAt<T extends { updated_at?: string; changed_at?: string }>(records: T[]) {
   if (records.length === 0) {
     return null;
   }
 
   return records.reduce((latest, record) => {
-    return record.updated_at > latest ? record.updated_at : latest;
-  }, records[0].updated_at);
+    const timestamp = record.updated_at ?? record.changed_at ?? latest;
+    return timestamp > latest ? timestamp : latest;
+  }, records[0].updated_at ?? records[0].changed_at ?? new Date(0).toISOString());
 }
 
 async function upsertMeta(record: SyncMetaRecord) {
