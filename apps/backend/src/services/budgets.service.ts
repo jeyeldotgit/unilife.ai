@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Budget, BudgetPeriod } from "@unilife-ai/types";
+import type { Budget, BudgetPeriod, BudgetRevision, BudgetRevisionSnapshot } from "@unilife-ai/types";
 
 import { BudgetsRepository } from "../repositories/budgets.repository.js";
+import { BudgetRevisionsRepository } from "../repositories/budget-revisions.repository.js";
 
 export type ListBudgetsFilters = {
   since?: string;
@@ -20,8 +21,10 @@ export type CreateBudgetInput = {
 export type UpdateBudgetInput = {
   amount?: number;
   period?: BudgetPeriod;
+  start_date?: string;
   end_date?: string;
   updated_at: string;
+  mutation_id: string;
 };
 
 type BudgetUpdateResult =
@@ -41,8 +44,25 @@ export class BudgetsService {
     supabase: SupabaseClient,
     private readonly userId: string,
     repository = new BudgetsRepository(supabase),
+    private readonly revisionsRepository = new BudgetRevisionsRepository(supabase),
   ) {
     this.repository = repository;
+  }
+
+  async listRevisions(id: string) {
+    const budget = await this.repository.findByIdForUser(id, this.userId);
+    if (!budget) {
+      if (await this.repository.existsForOtherUser(id, this.userId)) return { status: "foreign" as const };
+      return { status: "missing" as const };
+    }
+    return {
+      status: "found" as const,
+      records: await this.revisionsRepository.listForBudget(this.userId, id),
+    };
+  }
+
+  async listAllRevisions(since?: string) {
+    return this.revisionsRepository.listForUser(this.userId, since);
   }
 
   async listForUser(filters: ListBudgetsFilters) {
@@ -79,6 +99,15 @@ export class BudgetsService {
       return { status: "stale" };
     }
 
+    const existingRevision = await this.revisionsRepository.findByMutation(
+      this.userId,
+      id,
+      input.mutation_id,
+    );
+    if (existingRevision) {
+      return { status: "updated", record: existingRecord };
+    }
+
     const changes: Partial<Budget> = {
       updated_at: input.updated_at,
     };
@@ -91,6 +120,10 @@ export class BudgetsService {
       changes.period = input.period;
     }
 
+    if (input.start_date !== undefined) {
+      changes.start_date = input.start_date;
+    }
+
     if (input.end_date !== undefined) {
       changes.end_date = input.end_date;
     }
@@ -99,6 +132,31 @@ export class BudgetsService {
 
     if (!updatedRecord) {
       return { status: "missing" };
+    }
+
+    const snapshot = (budget: Budget): BudgetRevisionSnapshot => ({
+      amount: budget.amount,
+      period: budget.period,
+      start_date: budget.start_date,
+      end_date: budget.end_date,
+    });
+    const changed =
+      existingRecord.amount !== updatedRecord.amount ||
+      existingRecord.period !== updatedRecord.period ||
+      existingRecord.start_date !== updatedRecord.start_date ||
+      existingRecord.end_date !== updatedRecord.end_date;
+
+    if (changed) {
+      const revision: BudgetRevision = {
+        id: crypto.randomUUID(),
+        user_id: this.userId,
+        budget_id: id,
+        prior: snapshot(existingRecord),
+        resulting: snapshot(updatedRecord),
+        changed_at: input.updated_at,
+        mutation_id: input.mutation_id,
+      };
+      await this.revisionsRepository.create(revision);
     }
 
     return {
