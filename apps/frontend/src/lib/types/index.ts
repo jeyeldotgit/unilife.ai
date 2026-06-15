@@ -226,6 +226,8 @@ export type ExpenseItem = {
   icon: string;
   description: string | null;
   budgetId: string | null;
+  refundOfExpenseId?: string | null;
+  recurrence?: RecurrenceReference | null;
 };
 
 export type ExpenseDayGroup = {
@@ -257,6 +259,8 @@ export type LogExpenseInput = {
   spentAt?: string;
   description?: string | null;
   icon?: string;
+  refundOfExpenseId?: string | null;
+  recurrence?: RecurrenceReference | null;
 };
 
 export type BudgetCycle = {
@@ -487,6 +491,8 @@ export type UpdateClassInput = {
 export type OnboardingBudgetInput = {
   period: BudgetPeriod;
   amount: number;
+  startDate?: string;
+  endDate?: string;
 };
 
 export type OnboardingStarterClassInput = {

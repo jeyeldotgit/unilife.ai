@@ -1,4 +1,4 @@
-import type { ClassRecord } from "@unilife-ai/types";
+import type { ClassRecord, Expense } from "@unilife-ai/types";
 import type { DuplicateCandidate } from "@/lib/errors/recoverable";
 import type { DayOfWeek, Exam } from "@/lib/types";
 
@@ -66,4 +66,24 @@ export function findLikelyExamDuplicates(records: Exam[], input: ExamDuplicateIn
 
 export function findLikelyProfileDuplicates() {
   return [] as DuplicateCandidate[];
+}
+
+export function findLikelyExpenseDuplicates(
+  records: Expense[],
+  input: { amount: number; category: Expense["category"]; description: string; spentAt: string },
+) {
+  const normalized = input.description.trim().toLowerCase().replace(/\s+/g, " ");
+  return records
+    .filter((record) => {
+      if (record.deleted_at || record.amount !== input.amount || record.category !== input.category) return false;
+      if (Math.abs(Date.parse(record.spent_at) - Date.parse(input.spentAt)) > 2 * 60 * 60 * 1000) return false;
+      const existing = (record.description ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+      return existing === normalized || existing.includes(normalized) || normalized.includes(existing);
+    })
+    .map<DuplicateCandidate>((record) => ({
+      id: record.id,
+      label: record.description ?? "Expense",
+      reason: "Same amount, category, and a similar description within two hours.",
+      href: `/expenses?item=${record.id}`,
+    }));
 }

@@ -21,7 +21,7 @@ import type {
   OnboardingStarterClassInput,
 } from "@/lib/types";
 
-const FREQUENCIES = ["Weekly", "Bi-Weekly", "Monthly"] as const;
+const FREQUENCIES = ["Daily", "Weekly", "Bi-Weekly", "Monthly"] as const;
 
 type Frequency = (typeof FREQUENCIES)[number];
 type Step = "budget" | "academic";
@@ -69,6 +69,9 @@ const dayIndexMap: Record<DayOfWeek, number> = {
 };
 
 function toBudgetPeriod(frequency: Frequency): BudgetPeriod {
+  if (frequency === "Daily") {
+    return "daily";
+  }
   if (frequency === "Weekly") {
     return "weekly";
   }

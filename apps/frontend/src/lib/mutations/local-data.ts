@@ -1,6 +1,7 @@
 import type {
   Assignment as AssignmentRecord,
   Budget,
+  BudgetRevision,
   ClassRecord,
   Exam as ExamRecord,
   Expense as ExpenseRecord,
@@ -10,6 +11,7 @@ import type {
 } from "@unilife-ai/types";
 
 import { calculateBudgetEndDate, inferExpenseCategory } from "@/lib/api/utils";
+import { materializeExpenseOccurrenceDates } from "@/lib/finance/recurring-expenses";
 import { db } from "@/lib/db/dexie";
 import {
   deleteEntityNotifications,
@@ -800,16 +802,35 @@ export async function logExpenseLocal(input: LogExpenseInput) {
   const userId = await getMutationUserId();
   const budgets = await db.budgets.where("user_id").equals(userId).toArray();
   const activeBudget = findActiveBudget(budgets);
+  const original = input.refundOfExpenseId
+    ? await db.expenses.get(input.refundOfExpenseId)
+    : null;
+  if (input.amount < 0) {
+    if (!original || original.user_id !== userId || original.deleted_at || original.amount <= 0 || original.refund_of_expense_id) {
+      throw new Error("Choose an active original expense for this refund.");
+    }
+    const refunds = await db.expenses
+      .where("refund_of_expense_id")
+      .equals(original.id)
+      .and((record) => record.deleted_at === null)
+      .toArray();
+    const remaining = original.amount + refunds.reduce((sum, refund) => sum + refund.amount, 0);
+    if (Math.abs(input.amount) > remaining) throw new Error("Refund exceeds the remaining refundable amount.");
+  } else if (input.refundOfExpenseId) {
+    throw new Error("Positive expenses cannot be linked as refunds.");
+  }
   const timestamp = new Date().toISOString();
   const record: ExpenseRecord = {
     amount: input.amount,
-    budget_id: activeBudget?.id ?? null,
-    category: input.category ?? inferExpenseCategory(input.label),
+    budget_id: original?.budget_id ?? activeBudget?.id ?? null,
+    refund_of_expense_id: input.refundOfExpenseId ?? null,
+    category: original?.category ?? input.category ?? inferExpenseCategory(input.label),
     created_at: timestamp,
     deleted_at: null,
     description: input.label.trim(),
     id: crypto.randomUUID(),
     spent_at: input.spentAt ?? timestamp,
+    recurrence: input.recurrence ?? null,
     updated_at: timestamp,
     user_id: userId,
   };
@@ -821,21 +842,49 @@ export async function logExpenseLocal(input: LogExpenseInput) {
     updated_at: record.updated_at,
   };
   maybeSetNullableString("budget_id", record.budget_id, payload);
+  maybeSetNullableString("refund_of_expense_id", record.refund_of_expense_id, payload);
+  if (record.recurrence) payload.recurrence = record.recurrence;
   if (record.description) {
     payload.description = record.description;
   }
 
+  const records = [record];
+  if (record.recurrence?.rule && record.recurrence.series_id) {
+    for (const occurrenceAt of materializeExpenseOccurrenceDates(record.recurrence.rule).slice(1)) {
+      records.push({
+        ...record,
+        id: crypto.randomUUID(),
+        spent_at: occurrenceAt,
+        created_at: timestamp,
+        updated_at: timestamp,
+        recurrence: {
+          ...record.recurrence,
+          occurrence_id: crypto.randomUUID(),
+          original_start_at: occurrenceAt,
+          effective_start_at: occurrenceAt,
+          effective_end_at: occurrenceAt,
+        },
+      });
+    }
+  }
+
   await db.transaction("rw", db.expenses, db.sync_queue, async () => {
-    await db.expenses.put(record);
-    await db.sync_queue.put(
-      createQueueItem({
-        entityId: record.id,
-        entityType: "expense",
-        operation: "create",
-        payload,
-        userId,
-      }),
-    );
+    for (const expenseRecord of records) {
+      await db.expenses.put(expenseRecord);
+      await db.sync_queue.put(
+        createQueueItem({
+          entityId: expenseRecord.id,
+          entityType: "expense",
+          operation: "create",
+          payload: {
+            ...payload,
+            spent_at: expenseRecord.spent_at,
+            recurrence: expenseRecord.recurrence ?? null,
+          },
+          userId,
+        }),
+      );
+    }
   });
   notifySyncMutationQueued();
 
@@ -876,11 +925,11 @@ export async function deleteExpenseLocal(id: string) {
 async function createBudgetLocal(input: OnboardingBudgetInput) {
   const userId = await getMutationUserId();
   const createdAt = new Date().toISOString();
-  const startDate = new Date().toISOString().slice(0, 10);
+  const startDate = input.startDate ?? new Date().toISOString().slice(0, 10);
   const record: Budget = {
     amount: input.amount,
     created_at: createdAt,
-    end_date: calculateBudgetEndDate(startDate, input.period),
+    end_date: input.endDate ?? calculateBudgetEndDate(startDate, input.period),
     id: crypto.randomUUID(),
     period: input.period,
     start_date: startDate,
@@ -924,7 +973,10 @@ async function updateBudgetLocal(id: string, input: OnboardingBudgetInput) {
   const updatedRecord: Budget = {
     ...existingRecord,
     amount: input.amount,
-    end_date: calculateBudgetEndDate(existingRecord.start_date, input.period),
+    start_date: input.startDate ?? existingRecord.start_date,
+    end_date:
+      input.endDate ??
+      calculateBudgetEndDate(input.startDate ?? existingRecord.start_date, input.period),
     period: input.period,
     updated_at: new Date().toISOString(),
   };
@@ -932,11 +984,34 @@ async function updateBudgetLocal(id: string, input: OnboardingBudgetInput) {
     amount: updatedRecord.amount,
     end_date: updatedRecord.end_date,
     period: updatedRecord.period,
+    start_date: updatedRecord.start_date,
     updated_at: updatedRecord.updated_at,
   };
+  const mutationId = crypto.randomUUID();
+  payload.mutation_id = mutationId;
+  const revision: BudgetRevision = {
+    id: crypto.randomUUID(),
+    user_id: userId,
+    budget_id: id,
+    prior: {
+      amount: existingRecord.amount,
+      period: existingRecord.period,
+      start_date: existingRecord.start_date,
+      end_date: existingRecord.end_date,
+    },
+    resulting: {
+      amount: updatedRecord.amount,
+      period: updatedRecord.period,
+      start_date: updatedRecord.start_date,
+      end_date: updatedRecord.end_date,
+    },
+    changed_at: updatedRecord.updated_at,
+    mutation_id: mutationId,
+  };
 
-  await db.transaction("rw", db.budgets, db.sync_queue, async () => {
+  await db.transaction("rw", db.budgets, db.budget_revisions, db.sync_queue, async () => {
     await db.budgets.put(updatedRecord);
+    await db.budget_revisions.put(revision);
     await db.sync_queue.put(
       createQueueItem({
         entityId: id,

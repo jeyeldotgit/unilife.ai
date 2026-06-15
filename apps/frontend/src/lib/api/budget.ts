@@ -127,8 +127,10 @@ export async function saveBudgetCycle(
         body: {
           amount: input.amount,
           period: input.period,
-          end_date: calculateBudgetEndDate(activeBudget.start_date, input.period),
+          start_date: input.startDate ?? activeBudget.start_date,
+          end_date: input.endDate ?? calculateBudgetEndDate(input.startDate ?? activeBudget.start_date, input.period),
           updated_at: new Date().toISOString(),
+          mutation_id: crypto.randomUUID(),
         },
       },
     );
@@ -147,7 +149,7 @@ export async function saveBudgetCycle(
   }
 
   const createdAt = new Date().toISOString();
-  const startDate = today;
+  const startDate = input.startDate ?? today;
   const response = await requestBackend<BudgetResponse>("/api/budgets", {
     method: "POST",
     body: {
@@ -155,7 +157,7 @@ export async function saveBudgetCycle(
       amount: input.amount,
       period: input.period,
       start_date: startDate,
-      end_date: calculateBudgetEndDate(startDate, input.period),
+      end_date: input.endDate ?? calculateBudgetEndDate(startDate, input.period),
       created_at: createdAt,
       updated_at: createdAt,
     },
