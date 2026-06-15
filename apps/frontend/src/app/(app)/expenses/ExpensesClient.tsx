@@ -1,20 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { BudgetPeriod, BudgetRevision, ExpenseCategory } from "@unilife-ai/types";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
+import { useProfile } from "@/components/profile/ProfileContext";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { useDeleteUndoToast } from "@/components/ui/DeleteUndoToast";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MutationStatus } from "@/components/ui/MutationStatus";
 import { RecoverableError } from "@/components/ui/RecoverableError";
 import { Icon } from "@/components/ui/Icon";
+import { DuplicateWarningSheet } from "@/components/ui/DuplicateWarningSheet";
 import { useExpenses } from "@/hooks/use-expenses";
+import { db } from "@/lib/db/dexie";
 import { normalizeRecoverableError } from "@/lib/errors/recoverable";
+import { resolveExpenseDateRange, type ExpenseDateFilter } from "@/lib/finance/date-ranges";
 import {
   beginDeleteUndoLocal,
   finalizeDeleteUndoLocal,
   undoDeleteUndoLocal,
+  logExpenseLocal,
+  saveBudgetCycleLocal,
 } from "@/lib/mutations/local-data";
+import { findLikelyExpenseDuplicates } from "@/lib/mutations/duplicates";
+import { getLocalDateKey } from "@/lib/api/utils";
 import type {
   BudgetStatus,
   ExpenseCategoryTotal,
@@ -94,7 +103,18 @@ export default function ExpensesClient({
   expensesAvailable,
   budgetAvailable,
 }: ExpensesClientProps) {
-  const expensesState = useExpenses();
+  const { resolvedTimeZone } = useProfile();
+  const [dateFilter, setDateFilter] = useState<ExpenseDateFilter>("month");
+  const [customFrom, setCustomFrom] = useState(getLocalDateKey());
+  const [customTo, setCustomTo] = useState(getLocalDateKey());
+  const range = useMemo(
+    () =>
+      dateFilter === "custom" && customFrom > customTo
+        ? resolveExpenseDateRange("all", resolvedTimeZone)
+        : resolveExpenseDateRange(dateFilter, resolvedTimeZone, new Date(), { from: customFrom, to: customTo }),
+    [customFrom, customTo, dateFilter, resolvedTimeZone],
+  );
+  const expensesState = useExpenses(range);
   const groups = initialGroups.length > 0 ? initialGroups : expensesState.snapshot.groups;
   const resolvedCategoryTotals =
     categoryTotals.length > 0
@@ -111,6 +131,96 @@ export default function ExpensesClient({
     "idle",
   );
   const { showUndo } = useDeleteUndoToast();
+  const [sheet, setSheet] = useState<"expense" | "budget" | "history" | "custom" | null>(null);
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState<ExpenseCategory>("food");
+  const [spentAt, setSpentAt] = useState(new Date().toISOString().slice(0, 16));
+  const [refundOriginalId, setRefundOriginalId] = useState<string | null>(null);
+  const [recurring, setRecurring] = useState(false);
+  const [budgetAmount, setBudgetAmount] = useState(String(expensesState.activeBudget?.amount ?? ""));
+  const [budgetPeriod, setBudgetPeriod] = useState<BudgetPeriod>(expensesState.activeBudget?.period ?? "weekly");
+  const [budgetStart, setBudgetStart] = useState(expensesState.activeBudget?.start_date ?? getLocalDateKey());
+  const [budgetEnd, setBudgetEnd] = useState(expensesState.activeBudget?.end_date ?? getLocalDateKey());
+  const [revisions, setRevisions] = useState<BudgetRevision[]>([]);
+  const [duplicates, setDuplicates] = useState<ReturnType<typeof findLikelyExpenseDuplicates>>([]);
+  const [pendingExpense, setPendingExpense] = useState<Parameters<typeof logExpenseLocal>[0] | null>(null);
+
+  const submitExpense = async (force = false) => {
+    const numericAmount = Number(amount);
+    const input = {
+      amount: refundOriginalId ? -Math.abs(numericAmount) : numericAmount,
+      category,
+      label: description,
+      spentAt: new Date(spentAt).toISOString(),
+      refundOfExpenseId: refundOriginalId,
+      recurrence: recurring
+        ? {
+            series_id: crypto.randomUUID(),
+            occurrence_id: null,
+            original_start_at: new Date(spentAt).toISOString(),
+            effective_start_at: new Date(spentAt).toISOString(),
+            effective_end_at: new Date(spentAt).toISOString(),
+            source_revision: 1,
+            timezone: resolvedTimeZone,
+            rule: {
+              frequency: "weekly" as const,
+              interval: 1,
+              weekdays: [],
+              timezone: resolvedTimeZone,
+              starts_at: new Date(spentAt).toISOString(),
+              ends_at: null,
+            },
+          }
+        : null,
+    };
+    if (!force && !refundOriginalId) {
+      const matches = findLikelyExpenseDuplicates(expensesState.expenses, {
+        amount: input.amount,
+        category,
+        description,
+        spentAt: input.spentAt,
+      });
+      if (matches.length) {
+        setPendingExpense(input);
+        setDuplicates(matches);
+        return;
+      }
+    }
+    try {
+      setMutationState("pending");
+      await logExpenseLocal(input);
+      setSheet(null);
+      setAmount("");
+      setDescription("");
+      setRefundOriginalId(null);
+      setRecurring(false);
+      setMutationState("queued");
+    } catch (error) {
+      setErrorMessage(normalizeRecoverableError(error).message);
+      setMutationState("failed");
+    }
+  };
+
+  const openRefund = (id: string, remaining: number, label: string) => {
+    setRefundOriginalId(id);
+    setAmount(String(remaining));
+    setDescription(`Refund: ${label}`);
+    setSheet("expense");
+  };
+
+  const openHistory = async () => {
+    if (expensesState.activeBudget) {
+      setRevisions(
+        await db.budget_revisions
+          .where("budget_id")
+          .equals(expensesState.activeBudget.id)
+          .reverse()
+          .sortBy("changed_at"),
+      );
+    }
+    setSheet("history");
+  };
 
   const handleDelete = (id: string) => {
     setErrorMessage(null);
@@ -218,6 +328,20 @@ export default function ExpensesClient({
               </div>
               <div className="flex items-center gap-4">
                 <p className="text-sm font-bold">{expense.amountLabel}</p>
+                {!expense.refundOfExpenseId && expense.amount > 0 ? (
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-[#0058be]"
+                    onClick={() => {
+                      const refunded = expensesState.expenses
+                        .filter((record) => record.refund_of_expense_id === expense.id && !record.deleted_at)
+                        .reduce((sum, record) => sum + record.amount, 0);
+                      openRefund(expense.id, expense.amount + refunded, expense.label);
+                    }}
+                  >
+                    Refund
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   aria-label="Delete"
@@ -247,6 +371,28 @@ export default function ExpensesClient({
         ) : (
           <BudgetFallbackCard />
         )}
+
+        <section className="flex flex-wrap gap-2" aria-label="Expense date filters">
+          {([
+            ["today", "Today"],
+            ["yesterday", "Yesterday"],
+            ["week", "This Week"],
+            ["month", "This Month"],
+            ["all", "All"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setDateFilter(value)}
+              className={`rounded-full px-3 py-2 text-xs font-semibold ${dateFilter === value ? "bg-[#0058be] text-white" : "bg-white text-[#424754]"}`}
+            >
+              {label}
+            </button>
+          ))}
+          <button type="button" onClick={() => setSheet("custom")} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-[#424754]">
+            Custom Range
+          </button>
+        </section>
 
         <section>
           <h3 className="mb-3 px-1 text-sm font-semibold text-[#424754]">
@@ -322,12 +468,64 @@ export default function ExpensesClient({
         </section>
       </main>
 
-      <div className="fixed bottom-24 left-0 right-0 z-40 px-4 md:mx-auto md:max-w-md">
-        <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#3B82F6] py-4 text-sm font-semibold text-white shadow-xl transition-transform active:scale-95">
+      <div className="fixed bottom-24 left-0 right-0 z-40 flex gap-2 px-4 md:mx-auto md:max-w-md">
+        <button onClick={() => setSheet("budget")} className="rounded-xl border border-[#0058be] bg-white px-4 py-4 text-sm font-semibold text-[#0058be]">
+          Budget
+        </button>
+        <button onClick={() => setSheet("expense")} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#3B82F6] py-4 text-sm font-semibold text-white shadow-xl transition-transform active:scale-95">
           <Icon name="add" />
           Log Expense
         </button>
       </div>
+
+      {sheet ? (
+        <div className="fixed inset-0 z-[70] flex items-end bg-black/40">
+          <button aria-label="Close sheet" className="absolute inset-0" onClick={() => setSheet(null)} />
+          <section className="relative z-10 max-h-[85vh] w-full overflow-y-auto rounded-t-[28px] bg-white p-5">
+            <div className="mx-auto mb-5 h-1.5 w-14 rounded-full bg-[#c2c6d6]" />
+            {sheet === "custom" ? (
+              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); setDateFilter("custom"); setSheet(null); }}>
+                <h2 className="text-xl font-bold">Custom range</h2>
+                <label className="block text-sm font-semibold">Start date<input className="mt-1 w-full rounded-xl border p-3" type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} /></label>
+                <label className="block text-sm font-semibold">End date<input className="mt-1 w-full rounded-xl border p-3" type="date" min={customFrom} value={customTo} onChange={(e) => setCustomTo(e.target.value)} /></label>
+                <button disabled={customFrom > customTo} className="w-full rounded-xl bg-[#0058be] p-3 font-semibold text-white disabled:opacity-50">Apply range</button>
+              </form>
+            ) : sheet === "budget" ? (
+              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveBudgetCycleLocal({ amount: Number(budgetAmount), period: budgetPeriod, startDate: budgetStart, endDate: budgetEnd }).then(() => setSheet(null)); }}>
+                <div className="flex items-center justify-between"><h2 className="text-xl font-bold">Budget settings</h2><button type="button" onClick={() => void openHistory()} className="text-sm font-semibold text-[#0058be]">Revision history</button></div>
+                <label className="block text-sm font-semibold">Amount<input className="mt-1 w-full rounded-xl border p-3" required min="0.01" step="0.01" type="number" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} /></label>
+                <label className="block text-sm font-semibold">Period<select className="mt-1 w-full rounded-xl border p-3" value={budgetPeriod} onChange={(e) => setBudgetPeriod(e.target.value as BudgetPeriod)}>{["daily", "weekly", "biweekly", "monthly"].map((period) => <option key={period}>{period}</option>)}</select></label>
+                <div className="grid grid-cols-2 gap-3"><label className="text-sm font-semibold">Start<input className="mt-1 w-full rounded-xl border p-3" type="date" value={budgetStart} onChange={(e) => setBudgetStart(e.target.value)} /></label><label className="text-sm font-semibold">End<input className="mt-1 w-full rounded-xl border p-3" type="date" min={budgetStart} value={budgetEnd} onChange={(e) => setBudgetEnd(e.target.value)} /></label></div>
+                <button className="w-full rounded-xl bg-[#0058be] p-3 font-semibold text-white">Save budget</button>
+              </form>
+            ) : sheet === "history" ? (
+              <div className="space-y-3"><h2 className="text-xl font-bold">Budget revision history</h2>{revisions.length ? revisions.map((revision) => <article className="rounded-xl bg-[#f3f4f5] p-4 text-sm" key={revision.id}><p className="font-semibold">{new Date(revision.changed_at).toLocaleString()}</p><p>{revision.prior.amount} {revision.prior.period} to {revision.resulting.amount} {revision.resulting.period}</p></article>) : <p className="text-sm text-[#424754]">No budget changes recorded yet.</p>}</div>
+            ) : (
+              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void submitExpense(); }}>
+                <h2 className="text-xl font-bold">{refundOriginalId ? "Record refund" : "Log expense"}</h2>
+                <label className="block text-sm font-semibold">Amount<input className="mt-1 w-full rounded-xl border p-3" required min="0.01" step="0.01" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
+                <label className="block text-sm font-semibold">Description<input className="mt-1 w-full rounded-xl border p-3" required value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+                {!refundOriginalId ? <label className="block text-sm font-semibold">Category<select className="mt-1 w-full rounded-xl border p-3" value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory)}>{["food", "transportation", "school", "entertainment", "miscellaneous"].map((value) => <option key={value}>{value}</option>)}</select></label> : null}
+                <label className="block text-sm font-semibold">Spent at<input className="mt-1 w-full rounded-xl border p-3" type="datetime-local" value={spentAt} onChange={(e) => setSpentAt(e.target.value)} /></label>
+                {!refundOriginalId ? <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} /> Repeat weekly</label> : null}
+                <button className="w-full rounded-xl bg-[#0058be] p-3 font-semibold text-white">{refundOriginalId ? "Record refund" : "Save expense"}</button>
+              </form>
+            )}
+          </section>
+        </div>
+      ) : null}
+
+      <DuplicateWarningSheet
+        open={duplicates.length > 0}
+        candidates={duplicates}
+        onCancel={() => { setDuplicates([]); setPendingExpense(null); }}
+        onReview={() => setDuplicates([])}
+        onConfirm={() => {
+          if (pendingExpense) void logExpenseLocal(pendingExpense).then(() => setSheet(null));
+          setDuplicates([]);
+          setPendingExpense(null);
+        }}
+      />
     </div>
   );
 }

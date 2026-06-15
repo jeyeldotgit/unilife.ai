@@ -4,6 +4,7 @@ export * from "./assignments.js";
 export * from "./exams.js";
 export * from "./expenses.js";
 export * from "./budgets.js";
+export * from "./budget_revisions.js";
 export * from "./notifications.js";
 export * from "./sync_queue.js";
 export * from "./ai_logs.js";

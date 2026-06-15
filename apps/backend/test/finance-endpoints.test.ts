@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   budgets: [] as Record<string, unknown>[],
+  budgetRevisions: [] as Record<string, unknown>[],
   expenses: [] as Record<string, unknown>[],
 }));
 
@@ -98,6 +99,15 @@ vi.mock("../src/repositories/expenses.repository.js", () => ({
       return record;
     }
 
+    async hasActiveRefunds(userId: string, originalId: string) {
+      return state.expenses.some(
+        (record) =>
+          record.user_id === userId &&
+          record.refund_of_expense_id === originalId &&
+          record.deleted_at === null,
+      );
+    }
+
     async softDeleteForUser(id: string, userId: string, deletedAt: string) {
       const index = state.expenses.findIndex(
         (record) =>
@@ -114,6 +124,31 @@ vi.mock("../src/repositories/expenses.repository.js", () => ({
       };
 
       return true;
+    }
+  },
+}));
+
+vi.mock("../src/repositories/budget-revisions.repository.js", () => ({
+  BudgetRevisionsRepository: class BudgetRevisionsRepository {
+    async findByMutation(userId: string, budgetId: string, mutationId: string) {
+      return state.budgetRevisions.find(
+        (record) =>
+          record.user_id === userId &&
+          record.budget_id === budgetId &&
+          record.mutation_id === mutationId,
+      ) ?? null;
+    }
+    async create(record: Record<string, unknown>) {
+      state.budgetRevisions.push(record);
+      return record;
+    }
+    async listForUser(userId: string) {
+      return state.budgetRevisions.filter((record) => record.user_id === userId);
+    }
+    async listForBudget(userId: string, budgetId: string) {
+      return state.budgetRevisions.filter(
+        (record) => record.user_id === userId && record.budget_id === budgetId,
+      );
     }
   },
 }));
@@ -171,6 +206,7 @@ vi.mock("../src/repositories/budgets.repository.js", () => ({
 import { app } from "../src/app.js";
 
 function seedState() {
+  state.budgetRevisions = [];
   state.expenses = [
     {
       id: "11111111-1111-4111-8111-111111111111",
@@ -426,6 +462,7 @@ describe("finance endpoints", () => {
           amount: 1900,
           end_date: "2026-08-01",
           updated_at: "2026-07-02T00:00:00.000Z",
+          mutation_id: "11111111-2222-4333-8444-555555555555",
         }),
       },
     );
@@ -446,6 +483,7 @@ describe("finance endpoints", () => {
         body: JSON.stringify({
           amount: 1950,
           updated_at: "2026-07-01T12:00:00.000Z",
+          mutation_id: "21111111-2222-4333-8444-555555555555",
         }),
       },
     );
@@ -467,6 +505,7 @@ describe("finance endpoints", () => {
         body: JSON.stringify({
           amount: 950,
           updated_at: "2026-06-11T00:00:00.000Z",
+          mutation_id: "31111111-2222-4333-8444-555555555555",
         }),
       },
     );
@@ -486,6 +525,7 @@ describe("finance endpoints", () => {
         body: JSON.stringify({
           amount: 950,
           updated_at: "2026-06-11T00:00:00.000Z",
+          mutation_id: "41111111-2222-4333-8444-555555555555",
         }),
       },
     );

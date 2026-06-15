@@ -89,7 +89,7 @@ function sortByNewest(items: ExpenseItem[]) {
 }
 
 function buildRecentGroups(items: ExpenseItem[]): ExpenseDayGroup[] {
-  const recentItems = sortByNewest(items).slice(0, 3);
+  const recentItems = sortByNewest(items);
   const groupMap = new Map<string, ExpenseItem[]>();
 
   for (const item of recentItems) {
@@ -152,6 +152,8 @@ export function normalizeExpenseRecord(record: ExpenseRecord): ExpenseItem {
     icon: getExpenseCategoryIcon(record.category),
     description: record.description,
     budgetId: record.budget_id,
+    refundOfExpenseId: record.refund_of_expense_id ?? null,
+    recurrence: record.recurrence ?? null,
   };
 }
 
@@ -192,10 +194,12 @@ export async function logExpense(
     body: {
       id: crypto.randomUUID(),
       budget_id: activeBudget?.id ?? null,
+      refund_of_expense_id: input.refundOfExpenseId ?? null,
       amount: input.amount,
       category,
       description: input.label.trim(),
       spent_at: input.spentAt ?? timestamp,
+      recurrence: input.recurrence ?? null,
       created_at: timestamp,
       updated_at: timestamp,
     },

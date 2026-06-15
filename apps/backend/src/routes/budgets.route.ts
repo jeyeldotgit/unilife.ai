@@ -6,7 +6,7 @@ import type { AppBindings } from "../lib/hono.js";
 import { parseJsonBody, parseParams, parseQuery } from "../lib/validation.js";
 import { requireAuth } from "../middleware/auth.js";
 
-const budgetPeriodSchema = z.enum(["weekly", "biweekly", "monthly"]);
+const budgetPeriodSchema = z.enum(["daily", "weekly", "biweekly", "monthly"]);
 const isoDateTimeSchema = z
   .string()
   .refine((value) => !Number.isNaN(Date.parse(value)), {
@@ -43,8 +43,10 @@ const updateBudgetSchema = z
   .object({
     amount: z.number().positive().optional(),
     period: budgetPeriodSchema.optional(),
+    start_date: isoDateSchema.optional(),
     end_date: isoDateSchema.optional(),
     updated_at: isoDateTimeSchema,
+    mutation_id: z.string().uuid(),
   })
   .strict();
 
@@ -72,4 +74,17 @@ budgetsRouter.patch("/:id", async (c) => {
   const controller = new BudgetsController(c.get("supabase"), c.get("userId"));
 
   return c.json(await controller.update(id, input), 200);
+});
+
+budgetsRouter.get("/revisions", async (c) => {
+  const input = parseQuery(c, listBudgetsQuerySchema);
+  const controller = new BudgetsController(c.get("supabase"), c.get("userId"));
+  return c.json(await controller.listAllRevisions(input.since), 200);
+});
+
+budgetsRouter.get("/:id/revisions", async (c) => {
+  const { id } = parseParams(c, idParamsSchema);
+  const controller = new BudgetsController(c.get("supabase"), c.get("userId"));
+
+  return c.json(await controller.listRevisions(id), 200);
 });

@@ -21,6 +21,8 @@ export async function listExpenseRecords(filters?: {
   category?: ExpenseCategory;
   from?: string;
   to?: string;
+  from_at?: string;
+  to_at?: string;
 }) {
   const response = await requestBackend<ListExpensesResponse>("/api/expenses", {
     query: filters,

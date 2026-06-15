@@ -27,6 +27,17 @@ export class BudgetsController {
     return { budget };
   }
 
+  async listRevisions(id: string) {
+    const result = await this.service.listRevisions(id);
+    if (result.status === "foreign") throw forbidden("Budget does not belong to the authenticated user.");
+    if (result.status === "missing") throw notFound("Budget not found.");
+    return { revisions: result.records };
+  }
+
+  async listAllRevisions(since?: string) {
+    return { revisions: await this.service.listAllRevisions(since) };
+  }
+
   async update(id: string, input: UpdateBudgetInput) {
     const result = await this.service.updateBudget(id, input);
 

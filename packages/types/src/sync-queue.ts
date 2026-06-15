@@ -43,6 +43,7 @@ export type SyncQueueItem = {
 
 export type SyncHydrationRecord =
   | import("./ai-action").AiActionHistory
+  | import("./budget").BudgetRevision
   | RecurrenceException
   | RecurrenceOccurrence
   | RecurrenceSeries;

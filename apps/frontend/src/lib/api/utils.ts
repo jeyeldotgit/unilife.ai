@@ -240,6 +240,9 @@ export function toDateTimeLocalValue(isoDate: string) {
 }
 
 export function getBudgetCycleLabel(period: BudgetPeriod) {
+  if (period === "daily") {
+    return "Daily Budget";
+  }
   if (period === "weekly") {
     return "Weekly Budget";
   }
@@ -257,7 +260,9 @@ export function calculateBudgetEndDate(
 ) {
   const start = new Date(`${startDate}T00:00:00`);
   const end =
-    period === "weekly"
+    period === "daily"
+      ? start
+      : period === "weekly"
       ? addDays(start, 6)
       : period === "biweekly"
         ? addDays(start, 13)

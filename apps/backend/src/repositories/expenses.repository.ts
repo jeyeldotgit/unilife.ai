@@ -29,7 +29,7 @@ export class ExpensesRepository {
 
   async listForUser(
     userId: string,
-    filters: { since?: string; from?: string; to?: string; category?: ExpenseCategory },
+    filters: { since?: string; from?: string; to?: string; from_at?: string; to_at?: string; category?: ExpenseCategory },
   ) {
     let query = this.supabase
       .from("expenses")
@@ -44,6 +44,8 @@ export class ExpensesRepository {
     if (filters.from) {
       query = query.gte("spent_at", toStartOfUtcDay(filters.from));
     }
+    if (filters.from_at) query = query.gte("spent_at", filters.from_at);
+    if (filters.to_at) query = query.lte("spent_at", filters.to_at);
 
     if (filters.to) {
       query = query.lte("spent_at", toEndOfUtcDay(filters.to));
@@ -151,6 +153,44 @@ export class ExpensesRepository {
       throw new Error(error.message);
     }
 
+    return toExpense(data as DatabaseExpenseRow);
+  }
+
+  async getActiveRefundTotal(userId: string, originalId: string) {
+    const { data, error } = await this.supabase
+      .from("expenses")
+      .select("amount")
+      .eq("user_id", userId)
+      .eq("refund_of_expense_id", originalId)
+      .is("deleted_at", null);
+    if (error) throw new Error(error.message);
+    return (data ?? []).reduce((sum, row) => sum + Number(row.amount), 0);
+  }
+
+  async hasActiveRefunds(userId: string, originalId: string) {
+    const { count, error } = await this.supabase
+      .from("expenses")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("refund_of_expense_id", originalId)
+      .is("deleted_at", null);
+    if (error) throw new Error(error.message);
+    return (count ?? 0) > 0;
+  }
+
+  async updateForUser(id: string, userId: string, changes: Partial<Expense>) {
+    const { data, error } = await this.supabase
+      .from("expenses")
+      .update(changes)
+      .eq("id", id)
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .select()
+      .single();
+    if (error) {
+      if (isNotFoundError(error)) return null;
+      throw new Error(error.message);
+    }
     return toExpense(data as DatabaseExpenseRow);
   }
 
