@@ -42,6 +42,7 @@ describe("notification lifecycle", () => {
     await expect(
       showLocalNotification({
         body: "Body",
+        category: "assignment",
         created_at: "2026-06-12T00:00:00.000Z",
         entity_id: "assignment-1",
         entity_type: "assignment",

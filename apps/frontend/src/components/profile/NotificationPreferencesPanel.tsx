@@ -74,18 +74,23 @@ export function NotificationPreferencesPanel({
         <label className="text-sm">End<input className="mt-1 w-full rounded-xl border p-2" type="time" value={settings.quiet_hours_end} onChange={(event) => setSettings({ ...settings, quiet_hours_end: event.target.value })} /></label>
       </div>
       <div className="mt-5 space-y-3">
-        {settings.preferences.map((preference, index) => (
+        {settings.preferences.map((preference, index) => {
+          if (!preference.category) return null;
+          const label = LABELS[preference.category];
+
+          return (
           <div className="rounded-2xl bg-[#f3f4f5] p-4" key={preference.category}>
             <div className="flex items-center justify-between gap-3">
-              <span className="font-semibold">{LABELS[preference.category]}</span>
-              <input type="checkbox" aria-label={`Enable ${LABELS[preference.category]}`} checked={preference.enabled} onChange={(event) => setSettings({ ...settings, preferences: settings.preferences.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: event.target.checked } : item) })} />
+              <span className="font-semibold">{label}</span>
+              <input type="checkbox" aria-label={`Enable ${label}`} checked={preference.enabled} onChange={(event) => setSettings({ ...settings, preferences: settings.preferences.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: event.target.checked } : item) })} />
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
               <label className="flex items-center gap-2"><input type="checkbox" checked={preference.urgent_bypass_enabled} onChange={(event) => setSettings({ ...settings, preferences: settings.preferences.map((item, itemIndex) => itemIndex === index ? { ...item, urgent_bypass_enabled: event.target.checked } : item) })} />Urgent bypass</label>
               <label className="flex items-center gap-2">Reminder limit<select className="rounded-lg border bg-white p-1" value={preference.escalation_limit} onChange={(event) => setSettings({ ...settings, preferences: settings.preferences.map((item, itemIndex) => itemIndex === index ? { ...item, escalation_limit: Number(event.target.value) } : item) })}>{[0, 1, 2, 3].map((limit) => <option key={limit} value={limit}>{limit}</option>)}</select></label>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       <div className="mt-5 flex items-center gap-3">
         <button className="rounded-full bg-[#0058be] px-5 py-3 text-sm font-semibold text-white disabled:opacity-60" disabled={saving} onClick={() => void save()} type="button">{saving ? "Saving..." : "Save notification preferences"}</button>
