@@ -16,6 +16,7 @@ async function refreshQueueSnapshot(userId: string) {
   return {
     failedCount,
     hasPendingWork: pendingCount > 0,
+    pendingCount,
   };
 }
 
@@ -151,6 +152,24 @@ export async function handleQueueRequestFailure(
   await db.transaction("rw", db.sync_queue, async () => {
     for (const item of queueItems) {
       await db.sync_queue.update(item.id, buildFailureQueueUpdate(item));
+    }
+  });
+
+  return refreshQueueSnapshot(userId);
+}
+
+export async function releaseQueueItemsPending(
+  userId: string,
+  queueItems: SyncQueueItem[],
+  message?: string,
+) {
+  await db.transaction("rw", db.sync_queue, async () => {
+    for (const item of queueItems) {
+      await db.sync_queue.update(item.id, {
+        failure_code: message ? "sync_deferred" : null,
+        failure_message: message ?? null,
+        status: "pending",
+      });
     }
   });
 

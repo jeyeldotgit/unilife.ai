@@ -147,6 +147,7 @@ const createExpensePayloadSchema = z.object({
 const createBudgetPayloadSchema = z.object({
   amount: z.number().positive(),
   period: budgetPeriodSchema,
+  is_rolling: z.boolean().optional(),
   start_date: isoDateSchema,
   end_date: isoDateSchema,
   created_at: isoDateTimeSchema,
@@ -155,6 +156,7 @@ const createBudgetPayloadSchema = z.object({
 const updateBudgetPayloadSchema = z.object({
   amount: z.number().positive().optional(),
   period: budgetPeriodSchema.optional(),
+  is_rolling: z.boolean().optional(),
   start_date: isoDateSchema.optional(),
   end_date: isoDateSchema.optional(),
   updated_at: isoDateTimeSchema,
@@ -253,6 +255,30 @@ function toRecordPayload(payload: Record<string, unknown>) {
   return payload;
 }
 
+class SyncItemError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SyncItemError";
+  }
+}
+
+function formatZodIssuePath(path: PropertyKey[]) {
+  const printablePath = path.filter((item) => typeof item === "string" || typeof item === "number");
+  return printablePath.length > 0 ? printablePath.join(".") : "payload";
+}
+
+function formatValidationFailure(entityType: string, error: z.ZodError) {
+  const issues = error.issues
+    .slice(0, 3)
+    .map((issue) => `${formatZodIssuePath(issue.path)}: ${issue.message}`)
+    .join("; ");
+  return `${entityType} payload is invalid${issues ? ` (${issues})` : ""}.`;
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "The server could not apply this change.";
+}
+
 export class SyncService {
   private readonly dependencies: SyncDependencies;
 
@@ -298,19 +324,22 @@ export class SyncService {
           continue;
         }
         const success = await this.processItem(item);
+        const failureReason = success
+          ? null
+          : `${item.entity_type} ${item.operation} is not supported by sync.`;
         (success ? synced : failed).push(item.id);
         results.push({
           id: item.id,
           status: success ? "synced" : "failed",
-          reason: success ? null : "The server could not apply this change.",
+          reason: failureReason,
           winning_snapshot: null,
         });
-      } catch {
+      } catch (error) {
         failed.push(item.id);
         results.push({
           id: item.id,
           status: "failed",
-          reason: "The server could not apply this change.",
+          reason: getErrorMessage(error),
           winning_snapshot: null,
         });
       }
@@ -647,7 +676,7 @@ export class SyncService {
   private async createExam(item: SyncPushItem) {
     const parsed = createExamPayloadSchema.safeParse(toRecordPayload(item.payload));
     if (!parsed.success) {
-      return false;
+      throw new SyncItemError(formatValidationFailure("Exam", parsed.error));
     }
 
     const incoming = parsed.data;
@@ -667,7 +696,7 @@ export class SyncService {
         this.userId,
       ))
     ) {
-      return false;
+      throw new SyncItemError("An exam with this local id belongs to another user.");
     }
 
     const record: Exam = {
@@ -783,6 +812,7 @@ export class SyncService {
       user_id: this.userId,
       amount: incoming.amount,
       period: incoming.period,
+      is_rolling: incoming.is_rolling ?? false,
       start_date: incoming.start_date,
       end_date: incoming.end_date,
       created_at: incoming.created_at,

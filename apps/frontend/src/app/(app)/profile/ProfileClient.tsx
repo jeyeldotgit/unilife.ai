@@ -22,13 +22,19 @@ const COMMON_TIME_ZONES = [
   "America/New_York",
 ] as const;
 
-export default function ProfileClient() {
+export default function ProfileClient({
+  pageTitle = "Profile",
+  showOperationalPanels = true,
+}: {
+  pageTitle?: string;
+  showOperationalPanels?: boolean;
+} = {}) {
   const { profile, refreshProfile, resolvedTimeZone, setProfile } = useProfile();
 
   if (!profile) {
     return (
       <div className="min-h-screen bg-[#f8f9fa] pb-32 font-sans text-[#191c1d]">
-        <AuthenticatedPageHeader pageTitle="Profile" />
+        <AuthenticatedPageHeader pageTitle={pageTitle} />
         <main className="mx-auto max-w-2xl px-4 pt-6">
           <RecoverableError
             tone="warning"
@@ -55,6 +61,8 @@ export default function ProfileClient() {
       refreshProfile={refreshProfile}
       resolvedTimeZone={resolvedTimeZone}
       setProfile={setProfile}
+      pageTitle={pageTitle}
+      showOperationalPanels={showOperationalPanels}
     />
   );
 }
@@ -64,11 +72,15 @@ function ProfileFormContent({
   refreshProfile,
   resolvedTimeZone,
   setProfile,
+  pageTitle,
+  showOperationalPanels,
 }: {
   profile: UserProfile;
   refreshProfile: () => Promise<void>;
   resolvedTimeZone: string;
   setProfile: (profile: UserProfile | null) => void;
+  pageTitle: string;
+  showOperationalPanels: boolean;
 }) {
   const [displayName, setDisplayName] = useState(profile.display_name ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url ?? null);
@@ -142,7 +154,7 @@ function ProfileFormContent({
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] pb-32 font-sans text-[#191c1d]">
-      <AuthenticatedPageHeader pageTitle="Profile" />
+      <AuthenticatedPageHeader pageTitle={pageTitle} />
 
       <main className="mx-auto max-w-2xl space-y-6 px-4 pt-6">
         <section className="rounded-3xl border border-[#c2c6d6]/40 bg-white p-6 shadow-sm">
@@ -236,8 +248,12 @@ function ProfileFormContent({
             </button>
           </div>
         </section>
-        <NotificationPreferencesPanel userId={profile.id} timezone={timezone} />
-        <SyncRecoveryPanel userId={profile.id} />
+        {showOperationalPanels ? (
+          <>
+            <NotificationPreferencesPanel userId={profile.id} timezone={timezone} />
+            <SyncRecoveryPanel userId={profile.id} />
+          </>
+        ) : null}
       </main>
     </div>
   );

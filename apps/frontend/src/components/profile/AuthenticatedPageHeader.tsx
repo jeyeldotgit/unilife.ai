@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { logout } from "@/actions/auth";
+import { NotificationDrawer } from "@/components/layout/NotificationDrawer";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { NotificationPermissionButton } from "@/components/notifications/NotificationPermissionButton";
 import { Icon } from "@/components/ui/Icon";
 import { useProfile } from "@/components/profile/ProfileContext";
 import { UserAvatar } from "@/components/profile/UserAvatar";
@@ -80,12 +80,29 @@ export function AuthenticatedPageHeader({
             >
               <Link
                 className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[#191c1d] hover:bg-[#f3f4f5]"
-                href="/profile"
+                href="/settings/account"
                 role="menuitem"
               >
                 <Icon name="person" size={18} />
-                Profile
+                Account Settings
               </Link>
+              <Link
+                className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[#191c1d] hover:bg-[#f3f4f5]"
+                href="/settings/notifications"
+                role="menuitem"
+              >
+                <Icon name="notifications" size={18} />
+                Notifications
+              </Link>
+              <Link
+                className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[#191c1d] hover:bg-[#f3f4f5]"
+                href="/settings/sync"
+                role="menuitem"
+              >
+                <Icon name="sync" size={18} />
+                Sync Status
+              </Link>
+              <div className="my-1 border-t border-[#c2c6d6]/50" />
               <form action={logout}>
                 <button
                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-[#ba1a1a] hover:bg-[#fff8f7]"
@@ -102,7 +119,7 @@ export function AuthenticatedPageHeader({
       }
       trailing={
         <div className="flex items-center gap-2">
-          <NotificationPermissionButton className="rounded-full p-2 text-[#424754] transition-opacity hover:opacity-80" />
+          <NotificationDrawer className="rounded-full p-2 text-[#424754] transition-opacity hover:opacity-80" />
           {error ? (
             <button
               className="rounded-full border border-[#c2c6d6] px-3 py-2 text-xs font-semibold text-[#424754]"

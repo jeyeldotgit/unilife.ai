@@ -1,6 +1,6 @@
 import type { SyncItemResult, SyncQueueItem } from "@unilife-ai/types";
 
-import { requestBackendClient } from "@/lib/api/client-browser";
+import { BrowserBackendApiError, requestBackendClient } from "@/lib/api/client-browser";
 import { hydrateAllEntities, markHydrationSuccess } from "@/lib/sync/hydration";
 import {
   getPendingQueueItems,
@@ -8,9 +8,11 @@ import {
   handleQueueRequestFailure,
   markQueueItemsSyncing,
   reconcileQueueResults,
+  releaseQueueItemsPending,
   resetSyncingQueueItems,
 } from "@/lib/sync/queue";
 import { SYNC_MUTATION_QUEUED_EVENT } from "@/lib/sync/mutation-signal";
+import { emitSyncFailed, emitSyncPending, emitSyncSuccess } from "@/lib/sync/sync-events";
 import { setSyncStatusState } from "@/lib/sync/sync-status";
 
 type SyncPushResponse = {
@@ -66,17 +68,35 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
       ...current,
       failedCount: snapshot.failedCount,
       hasPendingWork: snapshot.hasPendingWork,
+      pendingCount: snapshot.pendingCount,
     }));
 
     return snapshot;
   }
 
   async function runHydration(forceFull = false) {
-    await hydrateAll({
-      forceFull,
-      userId: options.userId,
-    });
-    await markHydrationSuccess(options.userId);
+    setSyncStatusState((current) => ({
+      ...current,
+      hydrationPhase: "hydrating",
+    }));
+    try {
+      await hydrateAll({
+        forceFull,
+        userId: options.userId,
+      });
+      await markHydrationSuccess(options.userId);
+      setSyncStatusState((current) => ({
+        ...current,
+        hydrationPhase: "hydrated",
+      }));
+    } catch (error) {
+      setSyncStatusState((current) => ({
+        ...current,
+        hydrationPhase: "failed",
+        phase: "failed",
+      }));
+      throw error;
+    }
   }
 
   async function initialize() {
@@ -85,15 +105,20 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
       ...current,
       failedCount: snapshot.failedCount,
       hasPendingWork: snapshot.hasPendingWork,
+      pendingCount: snapshot.pendingCount,
     }));
 
-    if (typeof navigator === "undefined" || navigator.onLine) {
-      if (snapshot.hasPendingWork) {
-        await flush();
-      } else {
-        await runHydration(true);
-        await syncQueueSnapshot();
+    try {
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        if (snapshot.hasPendingWork) {
+          await flush();
+        } else {
+          await runHydration(true);
+          await syncQueueSnapshot();
+        }
       }
+    } catch {
+      await syncQueueSnapshot();
     }
 
     setSyncStatusState((current) => ({
@@ -115,6 +140,7 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
     }
 
     isFlushing = true;
+    emitSyncPending({ count: pendingQueueItems.length });
     setSyncStatusState((current) => ({
       ...current,
       phase: "syncing",
@@ -129,11 +155,20 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
         response,
       );
       await runHydration(response.synced.length > 0);
+      if (snapshot.failedCount > 0 || response.failed.length > 0) {
+        emitSyncFailed({
+          count: snapshot.failedCount || response.failed.length,
+          items: pendingQueueItems.filter((item) => response.failed.includes(item.id)),
+        });
+      } else if (response.synced.length > 0) {
+        emitSyncSuccess({ count: response.synced.length });
+      }
 
       setSyncStatusState((current) => ({
         ...current,
         failedCount: snapshot.failedCount,
         hasPendingWork: snapshot.hasPendingWork,
+        pendingCount: snapshot.pendingCount,
         lastSyncedAt:
           response.synced.length > 0 ? new Date().toISOString() : current.lastSyncedAt,
         phase:
@@ -143,13 +178,32 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
               ? "synced"
               : "idle",
       }));
-    } catch {
-      const snapshot = await handleQueueRequestFailure(options.userId, pendingQueueItems);
+    } catch (error) {
+      const authOrTransportFailure =
+        error instanceof BrowserBackendApiError &&
+        (error.code === "UNAUTHENTICATED" || error.status === 401);
+      const offlineFailure =
+        error instanceof TypeError ||
+        (typeof navigator !== "undefined" && !navigator.onLine);
+      const snapshot =
+        authOrTransportFailure || offlineFailure
+          ? await releaseQueueItemsPending(
+              options.userId,
+              pendingQueueItems,
+              authOrTransportFailure
+                ? "Sign in again to sync this local change."
+                : "Waiting for a stable connection.",
+            )
+          : await handleQueueRequestFailure(options.userId, pendingQueueItems);
+      if (!authOrTransportFailure && !offlineFailure) {
+        emitSyncFailed({ count: snapshot.failedCount, items: pendingQueueItems });
+      }
 
       setSyncStatusState((current) => ({
         ...current,
         failedCount: snapshot.failedCount,
         hasPendingWork: snapshot.hasPendingWork,
+        pendingCount: snapshot.pendingCount,
         phase: snapshot.failedCount > 0 ? "failed" : "idle",
       }));
     } finally {
@@ -165,10 +219,10 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
     void flush().then(async () => {
       const snapshot = await getQueueSnapshot(options.userId);
       if (!snapshot.hasPendingWork) {
-        await runHydration();
+        await runHydration(true);
         await syncQueueSnapshot();
       }
-    });
+    }).catch(() => null);
   };
 
   const handleOffline = () => {
@@ -183,6 +237,7 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
     setSyncStatusState((current) => ({
       ...current,
       hasPendingWork: true,
+      pendingCount: Math.max(1, current.pendingCount + 1),
     }));
     void flush();
   };
@@ -195,6 +250,7 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
     isStarted = true;
     setSyncStatusState({
       isOnline: typeof navigator === "undefined" ? true : navigator.onLine,
+      hydrationPhase: "idle",
       ready: false,
     });
 
