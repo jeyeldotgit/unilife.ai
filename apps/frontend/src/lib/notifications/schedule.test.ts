@@ -4,6 +4,8 @@ import {
   buildAssignmentNotifications,
   buildClassNotifications,
   buildExamNotifications,
+  buildBudgetAlertNotifications,
+  buildDailyBriefingNotification,
   computeNotificationSchedule,
   getClassOccurrences,
 } from "@/lib/notifications/schedule";
@@ -96,6 +98,42 @@ describe("notification schedules", () => {
         NOW,
       ),
     ).toEqual([]);
+  });
+
+  it("materializes budget thresholds without duplicating logical alerts", () => {
+    const budget = {
+      id: "budget-1",
+      user_id: "user-1",
+      amount: 100,
+      period: "monthly" as const,
+      start_date: "2026-06-01",
+      end_date: "2026-06-30",
+      created_at: NOW.toISOString(),
+      updated_at: NOW.toISOString(),
+    };
+    const expense = {
+      id: "expense-1",
+      user_id: "user-1",
+      budget_id: "budget-1",
+      amount: 100,
+      category: "food" as const,
+      description: null,
+      spent_at: "2026-06-10T00:00:00.000Z",
+      created_at: NOW.toISOString(),
+      updated_at: NOW.toISOString(),
+      deleted_at: null,
+    };
+
+    expect(buildBudgetAlertNotifications(budget, [expense], NOW).map((item) => item.id)).toEqual([
+      "budget_alert:budget-1:80",
+      "budget_alert:budget-1:100",
+    ]);
+  });
+
+  it("schedules one timezone-aware daily briefing", () => {
+    const [briefing] = buildDailyBriefingNotification("user-1", "Asia/Manila", NOW);
+    expect(briefing.id).toMatch(/^daily_briefing:/);
+    expect(briefing.category).toBe("daily_briefing");
   });
 
   it("materializes recurring assignments with deterministic IDs per due date", () => {

@@ -1,8 +1,11 @@
 import type {
   Assignment,
+  Budget,
   ClassRecord,
   Exam,
+  Expense,
   Notification,
+  NotificationCategory,
   NotificationEntityType,
 } from "@unilife-ai/types";
 
@@ -12,6 +15,7 @@ import {
 } from "@/lib/schedule/recurrence";
 
 const MINUTE_MS = 60 * 1000;
+type AcademicNotificationCategory = "class" | "assignment" | "exam";
 
 export const NOTIFICATION_OFFSETS = {
   class: [30],
@@ -20,11 +24,11 @@ export const NOTIFICATION_OFFSETS = {
 } as const;
 
 function notificationId(
-  entityType: NotificationEntityType,
-  entityId: string,
+  category: NotificationCategory,
+  logicalItemId: string,
   scheduledAt: string,
 ) {
-  return `${entityType}:${entityId}:${scheduledAt}`;
+  return `${category}:${logicalItemId}:${scheduledAt}`;
 }
 
 function offsetLabel(minutes: number) {
@@ -46,6 +50,9 @@ function createNotification(input: {
   createdAt: string;
   entityId: string;
   entityType: NotificationEntityType;
+  category?: NotificationCategory;
+  id?: string;
+  logicalItemId?: string;
   scheduledAt: Date;
   title: string;
   userId: string;
@@ -54,10 +61,18 @@ function createNotification(input: {
 
   return {
     body: input.body,
+    category: input.category ?? input.entityType,
     created_at: input.createdAt,
     entity_id: input.entityId,
     entity_type: input.entityType,
-    id: notificationId(input.entityType, input.entityId, scheduledAt),
+    id:
+      input.id ??
+      notificationId(
+        input.category ?? input.entityType,
+        input.logicalItemId ?? input.entityId,
+        scheduledAt,
+      ),
+    logical_item_id: input.logicalItemId ?? input.entityId,
     scheduled_at: scheduledAt,
     status: "pending",
     title: input.title,
@@ -66,7 +81,7 @@ function createNotification(input: {
 }
 
 export function computeNotificationSchedule(
-  entityType: NotificationEntityType,
+  entityType: AcademicNotificationCategory,
   scheduledDate: Date,
 ) {
   return NOTIFICATION_OFFSETS[entityType].map(
@@ -80,6 +95,38 @@ export function getClassOccurrences(record: ClassRecord, now = new Date(), horiz
   }
 
   return getClassOccurrencesForNotifications(record, now, horizonDays);
+}
+
+function zonedTimeToDate(dateKey: string, time: string, timeZone: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  const desired = Date.UTC(year, month - 1, day, hour, minute);
+  const guess = new Date(desired);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(guess)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const observed = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+  return new Date(desired + (desired - observed));
+}
+
+function dateKeyInTimeZone(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 export function buildClassNotifications(
@@ -129,6 +176,77 @@ export function buildAssignmentNotifications(
     );
 }
 
+export function buildBudgetAlertNotifications(
+  budget: Budget,
+  expenses: Expense[],
+  now = new Date(),
+  timeZone = "UTC",
+): Notification[] {
+  const today = dateKeyInTimeZone(now, timeZone);
+  if (today < budget.start_date || today > budget.end_date || budget.amount <= 0) {
+    return [];
+  }
+  const spent = expenses
+    .filter(
+      (expense) =>
+        !expense.deleted_at &&
+        expense.budget_id === budget.id &&
+        expense.spent_at >= `${budget.start_date}T00:00:00` &&
+        expense.spent_at <= `${budget.end_date}T23:59:59.999`,
+    )
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const percent = (spent / budget.amount) * 100;
+
+  return [80, 100]
+    .filter((threshold) => percent >= threshold)
+    .map((threshold) =>
+      createNotification({
+        body:
+          threshold === 100
+            ? "You have reached your current budget limit."
+            : "You have used at least 80% of your current budget.",
+        category: "budget_alert",
+        createdAt: now.toISOString(),
+        entityId: budget.id,
+        entityType: "budget_alert",
+        id: `budget_alert:${budget.id}:${threshold}`,
+        logicalItemId: `${budget.id}:${threshold}`,
+        scheduledAt: now,
+        title: threshold === 100 ? "Budget limit reached" : "Budget is running low",
+        userId: budget.user_id,
+      }),
+    );
+}
+
+export function buildDailyBriefingNotification(
+  userId: string,
+  timeZone: string,
+  now = new Date(),
+): Notification[] {
+  const currentKey = dateKeyInTimeZone(now, timeZone);
+  let scheduledAt = zonedTimeToDate(currentKey, "07:00", timeZone);
+  if (scheduledAt.getTime() <= now.getTime()) {
+    const tomorrow = new Date(zonedTimeToDate(currentKey, "12:00", timeZone).getTime() + 86400000);
+    scheduledAt = zonedTimeToDate(dateKeyInTimeZone(tomorrow, timeZone), "07:00", timeZone);
+  }
+  const dateKey = dateKeyInTimeZone(scheduledAt, timeZone);
+
+  return [
+    createNotification({
+      body: "Open UniLife to review your schedule, deadlines, and budget.",
+      category: "daily_briefing",
+      createdAt: now.toISOString(),
+      entityId: dateKey,
+      entityType: "daily_briefing",
+      id: `daily_briefing:${dateKey}`,
+      logicalItemId: dateKey,
+      scheduledAt,
+      title: "Your daily briefing is ready",
+      userId,
+    }),
+  ];
+}
+
 export function buildExamNotifications(
   record: Exam,
   now = new Date(),
@@ -156,7 +274,7 @@ export function buildExamNotifications(
 }
 
 export function buildEntityNotifications(
-  entityType: NotificationEntityType,
+  entityType: AcademicNotificationCategory,
   record: Assignment | ClassRecord | Exam,
   now = new Date(),
 ) {
@@ -168,4 +286,3 @@ export function buildEntityNotifications(
   }
   return buildClassNotifications(record as ClassRecord, now);
 }
-

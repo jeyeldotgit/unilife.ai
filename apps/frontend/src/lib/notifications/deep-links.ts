@@ -4,6 +4,8 @@ const ROUTES: Record<NotificationEntityType, string> = {
   assignment: "/assignments",
   class: "/schedule",
   exam: "/exams",
+  budget_alert: "/expenses",
+  daily_briefing: "/dashboard",
 };
 
 export function buildNotificationDeepLink(input: {

@@ -80,7 +80,7 @@ describe("sync service", () => {
       },
     ]);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       synced: [
         "11111111-1111-4111-8111-111111111111",
         "33333333-3333-4333-8333-333333333333",
@@ -130,9 +130,14 @@ describe("sync service", () => {
       },
     ]);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       synced: ["11111111-1111-4111-8111-111111111111"],
       failed: [],
+    });
+    expect(result.results[0]).toMatchObject({
+      status: "replaced",
+      reason: "A newer remote revision replaced this local change.",
+      winning_snapshot: { title: "Server copy" },
     });
     expect(upsert).not.toHaveBeenCalled();
   });
@@ -180,7 +185,7 @@ describe("sync service", () => {
       },
     ]);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       synced: ["11111111-1111-4111-8111-111111111111"],
       failed: [],
     });
@@ -223,7 +228,7 @@ describe("sync service", () => {
       },
     ]);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       synced: [],
       failed: ["11111111-1111-4111-8111-111111111111"],
     });

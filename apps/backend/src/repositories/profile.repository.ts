@@ -26,7 +26,7 @@ export class ProfileRepository {
     return data as UserProfile;
   }
 
-  async updateById(userId: string, changes: Partial<UserProfile>) {
+  async updateById(userId: string, changes: Partial<UserProfile> | Record<string, unknown>) {
     const { data, error } = await this.supabase
       .from("users")
       .update(changes)

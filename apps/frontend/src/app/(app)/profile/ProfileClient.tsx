@@ -11,6 +11,8 @@ import { MutationStatus } from "@/components/ui/MutationStatus";
 import { RecoverableError } from "@/components/ui/RecoverableError";
 import { fieldErrorMessage, normalizeRecoverableError } from "@/lib/errors/recoverable";
 import { deleteAvatarByUrl, isUserOwnedAvatarUrl } from "@/lib/profile/avatar-storage";
+import { NotificationPreferencesPanel } from "@/components/profile/NotificationPreferencesPanel";
+import { SyncRecoveryPanel } from "@/components/profile/SyncRecoveryPanel";
 
 const COMMON_TIME_ZONES = [
   "Asia/Manila",
@@ -234,6 +236,8 @@ function ProfileFormContent({
             </button>
           </div>
         </section>
+        <NotificationPreferencesPanel userId={profile.id} timezone={timezone} />
+        <SyncRecoveryPanel userId={profile.id} />
       </main>
     </div>
   );

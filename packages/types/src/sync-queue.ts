@@ -38,7 +38,29 @@ export type SyncQueueItem = {
   retry_count: number;
   created_at: string;
   last_attempted_at: string | null;
+  failure_code?: string | null;
+  failure_message?: string | null;
   mutation_meta?: SyncQueueMutationMeta;
+};
+
+export type SyncItemResult = {
+  id: string;
+  status: "synced" | "replaced" | "failed";
+  reason: string | null;
+  winning_snapshot: Record<string, unknown> | null;
+};
+
+export type SyncRecoverySnapshot = {
+  id: string;
+  user_id: string;
+  queue_item_id: string;
+  entity_type: SyncEntityType;
+  entity_id: string;
+  local_payload: Record<string, unknown>;
+  winning_snapshot: Record<string, unknown>;
+  replacement_reason: string;
+  created_at: string;
+  restored_at: string | null;
 };
 
 export type SyncHydrationRecord =
