@@ -45,10 +45,13 @@ export function ClassBlock({
     <button
       type="button"
       onClick={handleClick}
-      className={`absolute inset-1 ${colors.bg} ${colors.border} ${colors.text} z-10 flex cursor-pointer flex-col items-start justify-center overflow-hidden rounded-md border-l-4 px-2 text-left transition-transform ${className}`.trim()}
+      className={`absolute inset-1 ${colors.bg} ${colors.border} ${colors.text} z-10 flex min-h-11 cursor-pointer flex-col items-start justify-center overflow-hidden rounded-md border-l-4 px-2 text-left transition-transform ${className}`.trim()}
       style={{ transform: pressed ? "scale(0.95)" : "scale(1)" }}
     >
-      <span className="truncate text-[10px] font-medium">{classItem.label}</span>
+      <span className="w-full truncate text-[10px] font-semibold">{classItem.subject}</span>
+      {classItem.room ? (
+        <span className="w-full truncate text-[9px] font-medium opacity-80">{classItem.room}</span>
+      ) : null}
     </button>
   );
 }

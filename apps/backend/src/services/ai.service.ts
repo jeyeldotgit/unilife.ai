@@ -455,6 +455,14 @@ function buildProposal(
   };
 }
 
+function requiresChatConfirmation(intent: GeminiIntent) {
+  if (intent === "log_expense" || intent === "create_assignment") {
+    return false;
+  }
+
+  return isStructuredIntent(intent);
+}
+
 export class AIService {
   private readonly logsRepository: AILogsRepository;
   private readonly geminiCaller: GeminiCaller;
@@ -492,7 +500,7 @@ export class AIService {
         message: raw.message,
         ...(forecast ? { forecast } : {}),
         ...(freeTime ? { free_time: freeTime } : {}),
-        requires_confirmation: isStructuredIntent(raw.intent),
+        requires_confirmation: requiresChatConfirmation(raw.intent),
         proposal: buildProposal(raw.intent, normalizedAction, raw.confidence),
       });
 

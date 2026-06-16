@@ -33,6 +33,7 @@ const createBudgetSchema = z
     id: z.string().uuid(),
     amount: z.number().positive(),
     period: budgetPeriodSchema,
+    is_rolling: z.boolean().optional().default(false),
     start_date: isoDateSchema,
     end_date: isoDateSchema,
     created_at: isoDateTimeSchema,
@@ -43,6 +44,7 @@ const updateBudgetSchema = z
   .object({
     amount: z.number().positive().optional(),
     period: budgetPeriodSchema.optional(),
+    is_rolling: z.boolean().optional(),
     start_date: isoDateSchema.optional(),
     end_date: isoDateSchema.optional(),
     updated_at: isoDateTimeSchema,

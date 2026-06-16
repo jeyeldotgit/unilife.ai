@@ -53,24 +53,46 @@ export async function getCachedNotificationSettings(userId: string, timezone = "
 }
 
 export async function fetchNotificationSettings(userId: string, fallbackTimeZone?: string) {
-  const response = await requestBackendClient<{ settings: NotificationSettings }>(
-    "/api/notification-preferences",
-  );
-  const settings =
-    response.settings.timezone === "UTC" && fallbackTimeZone
-      ? { ...response.settings, timezone: fallbackTimeZone }
-      : response.settings;
-  await db.notification_settings.put(settings);
-  return settings;
+  try {
+    const response = await requestBackendClient<{ settings: NotificationSettings }>(
+      "/api/notification-preferences",
+    );
+    const settings =
+      response.settings.timezone === "UTC" && fallbackTimeZone
+        ? { ...response.settings, timezone: fallbackTimeZone }
+        : response.settings;
+    await db.notification_settings.put(settings);
+    return settings;
+  } catch {
+    return getCachedNotificationSettings(userId, fallbackTimeZone);
+  }
 }
 
 export async function updateNotificationSettings(
-  input: Partial<Omit<NotificationSettings, "user_id" | "timezone" | "updated_at">>,
+  input: Partial<Omit<NotificationSettings, "user_id" | "timezone" | "updated_at">> & {
+    userId: string;
+    timezone: string;
+  },
 ) {
-  const response = await requestBackendClient<{ settings: NotificationSettings }>(
-    "/api/notification-preferences",
-    { method: "PATCH", body: input },
-  );
-  await db.notification_settings.put(response.settings);
-  return response.settings;
+  const { timezone, userId, ...settingsInput } = input;
+  const current = await getCachedNotificationSettings(userId, timezone);
+  const localSettings: NotificationSettings = {
+    ...current,
+    ...settingsInput,
+    timezone: current.timezone || timezone,
+    updated_at: new Date().toISOString(),
+  };
+
+  await db.notification_settings.put(localSettings);
+
+  try {
+    const response = await requestBackendClient<{ settings: NotificationSettings }>(
+      "/api/notification-preferences",
+      { method: "PATCH", body: settingsInput },
+    );
+    await db.notification_settings.put(response.settings);
+    return response.settings;
+  } catch {
+    return localSettings;
+  }
 }

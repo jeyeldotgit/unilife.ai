@@ -295,6 +295,7 @@ export type ChatQuickActionKind =
   | "create_assignment"
   | "log_expense"
   | "create_class"
+  | "create_exam"
   | "ask_due"
   | "free_time";
 
@@ -493,6 +494,7 @@ export type UpdateClassInput = {
 export type OnboardingBudgetInput = {
   period: BudgetPeriod;
   amount: number;
+  isRolling?: boolean;
   startDate?: string;
   endDate?: string;
 };

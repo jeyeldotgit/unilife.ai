@@ -106,7 +106,7 @@ export function OfflineBanner() {
                 ? "Back online - syncing changes"
                 : "Offline - changes saved"}
         </span>
-        {failed ? <Link className="ml-1 underline" href="/profile#sync-recovery">Review</Link> : null}
+        {failed ? <Link className="ml-1 underline" href="/settings/sync">Review</Link> : null}
       </div>
     </div>
   );

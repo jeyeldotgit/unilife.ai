@@ -40,3 +40,19 @@ export type Notification = {
   status: NotificationStatus;
   created_at: string;
 };
+
+export type BellItemKind = "reminder" | "sync_failure" | "ai_result";
+
+export type BellItem = {
+  id: string;
+  user_id: string;
+  kind: BellItemKind;
+  title: string;
+  body: string;
+  entity_type?: string | null;
+  entity_id?: string | null;
+  retry_queue_item_id?: string | null;
+  read_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+};

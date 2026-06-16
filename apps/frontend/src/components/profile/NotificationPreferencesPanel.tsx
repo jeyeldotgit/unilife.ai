@@ -44,6 +44,8 @@ export function NotificationPreferencesPanel({
     try {
       setSettings(
         await updateNotificationSettings({
+          userId,
+          timezone,
           preferences: settings.preferences,
           quiet_hours_enabled: settings.quiet_hours_enabled,
           quiet_hours_start: settings.quiet_hours_start,

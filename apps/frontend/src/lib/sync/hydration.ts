@@ -47,6 +47,7 @@ type HydrationResponseMap = {
 };
 
 type HydratableEntity = keyof EntityRecordMap;
+type EntityRecord = EntityRecordMap[HydratableEntity];
 
 type HydrationOptions = {
   forceFull?: boolean;
@@ -172,6 +173,99 @@ async function upsertMeta(record: SyncMetaRecord) {
   await db.sync_meta.put(record);
 }
 
+async function getProtectedEntityIds(userId: string, entityType: HydratableEntity) {
+  if (entityType === "budget_revision") {
+    return new Set<string>();
+  }
+
+  const queueItems = await db.sync_queue
+    .where("user_id")
+    .equals(userId)
+    .and(
+      (item) =>
+        item.entity_type === entityType &&
+        (item.status === "pending" || item.status === "syncing" || item.status === "failed"),
+    )
+    .toArray();
+
+  return new Set(queueItems.map((item) => item.entity_id));
+}
+
+async function reconcileFullHydration<T extends HydratableEntity>(
+  entityType: T,
+  tableName: (typeof entityConfig)[T]["table"],
+  userId: string,
+  records: EntityRecordMap[T][],
+) {
+  const protectedEntityIds = await getProtectedEntityIds(userId, entityType);
+  const serverIds = new Set(records.map((record) => record.id));
+  const table = db.table(tableName);
+  const localRecords = (await table
+    .where("user_id")
+    .equals(userId)
+    .toArray()) as EntityRecord[];
+  const staleIds = localRecords
+    .filter((record) => !serverIds.has(record.id) && !protectedEntityIds.has(record.id))
+    .map((record) => record.id);
+
+  if (staleIds.length > 0) {
+    await table.bulkDelete(staleIds);
+  }
+}
+
+function normalizeClassKeyPart(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function getClassDuplicateKey(record: ClassRecord) {
+  return [
+    record.user_id,
+    record.term_id ?? "",
+    normalizeClassKeyPart(record.subject),
+    record.day_of_week,
+    record.start_time,
+    record.end_time,
+    normalizeClassKeyPart(record.room),
+    normalizeClassKeyPart(record.instructor),
+  ].join("|");
+}
+
+async function pruneDuplicateClasses(userId: string) {
+  const protectedEntityIds = await getProtectedEntityIds(userId, "class");
+  const records = await db.classes
+    .where("user_id")
+    .equals(userId)
+    .and((record) => record.deleted_at === null && record.is_active)
+    .toArray();
+  const groups = new Map<string, ClassRecord[]>();
+
+  for (const record of records) {
+    const key = getClassDuplicateKey(record);
+    groups.set(key, [...(groups.get(key) ?? []), record]);
+  }
+
+  const duplicateIds: string[] = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+
+    const keep =
+      group.find((record) => protectedEntityIds.has(record.id)) ??
+      group
+        .slice()
+        .sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0];
+
+    duplicateIds.push(
+      ...group
+        .filter((record) => record.id !== keep.id && !protectedEntityIds.has(record.id))
+        .map((record) => record.id),
+    );
+  }
+
+  if (duplicateIds.length > 0) {
+    await db.classes.bulkDelete(duplicateIds);
+  }
+}
+
 async function hydrateEntity<T extends HydratableEntity>(
   entityType: T,
   options: HydrationOptions,
@@ -192,6 +286,13 @@ async function hydrateEntity<T extends HydratableEntity>(
 
   if (records.length > 0) {
     await db.table(config.table).bulkPut(records);
+  }
+
+  if (options.forceFull) {
+    await reconcileFullHydration(entityType, config.table, options.userId, records);
+    if (entityType === "class") {
+      await pruneDuplicateClasses(options.userId);
+    }
   }
 
   const lastHydratedAt = getMaxUpdatedAt(records) ?? new Date().toISOString();

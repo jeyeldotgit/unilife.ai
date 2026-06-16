@@ -16,10 +16,12 @@ import { useClasses } from "@/hooks/use-classes";
 import { requestDailyBriefing } from "@/lib/api/briefing";
 import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
 import { getLocalDateKey } from "@/lib/api/utils";
+import { normalizeRecoverableError } from "@/lib/errors/recoverable";
 import { buildDailyBriefing } from "@/lib/planning/deterministic";
 import { getTime24InTimeZone } from "@/lib/profile/time";
 import type { Assignment } from "@/lib/types";
 import { dismissNotification } from "@/lib/notifications/runtime";
+import { updateAssignmentLocal } from "@/lib/mutations/local-data";
 
 type FilterTab = "All" | "Pending" | "Done";
 
@@ -42,7 +44,7 @@ export default function AssignmentsClient({
   const resolvedAssignmentsAvailable =
     assignmentsAvailable ?? assignmentsState.available;
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [pendingToggleIds, setPendingToggleIds] = useState<Set<string>>(new Set());
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(
     null,
   );
@@ -57,6 +59,7 @@ export default function AssignmentsClient({
     contextKey: string;
     message: string;
   } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const handledNotificationIdRef = useRef<string | null>(null);
   const selectedAssignment =
     assignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null;
@@ -101,7 +104,7 @@ export default function AssignmentsClient({
     (canRequestAiInsight ? aiInsightMessage : null) ?? deterministicInsight.message;
 
   useEffect(() => {
-    const itemId = searchParams.get("item");
+    const itemId = searchParams.get("item") ?? searchParams.get("highlight");
     if (!itemId) return;
     const assignment = assignments.find((item) => item.id === itemId);
     if (assignment && selectedAssignmentId !== itemId) {
@@ -178,17 +181,24 @@ export default function AssignmentsClient({
   }, [canRequestAiInsight, planningContextKey]);
 
   const toggleCheck = (id: string) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
+    const assignment = assignments.find((item) => item.id === id);
+    if (!assignment || pendingToggleIds.has(id)) return;
+    const nextStatus = assignment.status === "completed" ? "pending" : "completed";
 
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+    setPendingToggleIds((prev) => new Set(prev).add(id));
+    setErrorMessage(null);
 
-      return next;
-    });
+    void updateAssignmentLocal(id, { status: nextStatus })
+      .catch((error) => {
+        setErrorMessage(normalizeRecoverableError(error).message);
+      })
+      .finally(() => {
+        setPendingToggleIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      });
   };
 
   const filtered = assignments.filter((assignment) => {
@@ -235,7 +245,7 @@ export default function AssignmentsClient({
               key={assignment.id}
               variant="list"
               assignment={assignment}
-              checked={checkedIds.has(assignment.id)}
+              checked={assignment.status === "completed" || pendingToggleIds.has(assignment.id)}
               onToggleChecked={toggleCheck}
               onSelect={(assignment) => setSelectedAssignmentId(assignment.id)}
             />
@@ -378,6 +388,14 @@ export default function AssignmentsClient({
               </div>
             </div>
           </section>
+
+          {errorMessage ? (
+            <RecoverableError
+              className="mb-4"
+              title="Assignment update failed"
+              message={errorMessage}
+            />
+          ) : null}
 
           {renderAssignmentsContent()}
 

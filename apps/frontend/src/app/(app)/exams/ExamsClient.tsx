@@ -87,7 +87,7 @@ export default function ExamsClient({
   const { showUndo } = useDeleteUndoToast();
 
   useEffect(() => {
-    const itemId = searchParams.get("item");
+    const itemId = searchParams.get("item") ?? searchParams.get("highlight");
     if (!itemId) return;
     const exam = resolvedExams.find((item) => item.id === itemId);
     if (exam && selectedExam?.id !== itemId) {

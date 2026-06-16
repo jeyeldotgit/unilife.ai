@@ -67,7 +67,7 @@ function BudgetFallbackCard() {
   );
 }
 
-function NoBudgetCard() {
+function NoBudgetCard({ onSetBudget }: { onSetBudget: () => void }) {
   return (
     <section
       className="rounded-xl p-5 shadow-sm"
@@ -78,8 +78,8 @@ function NoBudgetCard() {
         border: "1px solid rgba(229,231,235,0.5)",
       }}
     >
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-[#d8e2ff] text-[#0058be]">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#d8e2ff] text-[#0058be]">
           <Icon name="account_balance_wallet" />
         </div>
         <div>
@@ -87,10 +87,16 @@ function NoBudgetCard() {
             No budget set yet
           </h2>
           <p className="mt-1 text-sm font-medium text-[#424754]">
-            You can still browse expenses now. Your allowance summary will appear
-            after you create an active budget cycle.
+            Your allowance summary will appear after you create a rolling budget.
           </p>
         </div>
+        <button
+          className="rounded-full bg-[#0058be] px-4 py-2 text-sm font-semibold text-white"
+          onClick={onSetBudget}
+          type="button"
+        >
+          Set up your budget
+        </button>
       </div>
     </section>
   );
@@ -119,9 +125,7 @@ export default function ExpensesClient({
   const resolvedCategoryTotals =
     categoryTotals.length > 0
       ? categoryTotals
-      : expensesState.snapshot.categoryTotals.filter((categoryTotal) =>
-          ["food", "school", "transportation"].includes(categoryTotal.category),
-        );
+      : expensesState.snapshot.categoryTotals;
   const resolvedBudget = budget ?? expensesState.budgetStatus;
   const resolvedExpensesAvailable = expensesAvailable ?? expensesState.available;
   const resolvedBudgetAvailable = budgetAvailable ?? expensesState.budgetAvailable;
@@ -141,7 +145,6 @@ export default function ExpensesClient({
   const [budgetAmount, setBudgetAmount] = useState(String(expensesState.activeBudget?.amount ?? ""));
   const [budgetPeriod, setBudgetPeriod] = useState<BudgetPeriod>(expensesState.activeBudget?.period ?? "weekly");
   const [budgetStart, setBudgetStart] = useState(expensesState.activeBudget?.start_date ?? getLocalDateKey());
-  const [budgetEnd, setBudgetEnd] = useState(expensesState.activeBudget?.end_date ?? getLocalDateKey());
   const [revisions, setRevisions] = useState<BudgetRevision[]>([]);
   const [duplicates, setDuplicates] = useState<ReturnType<typeof findLikelyExpenseDuplicates>>([]);
   const [pendingExpense, setPendingExpense] = useState<Parameters<typeof logExpenseLocal>[0] | null>(null);
@@ -365,9 +368,13 @@ export default function ExpensesClient({
 
       <main className="mx-auto max-w-2xl space-y-6 px-4 pt-4">
         {resolvedBudgetAvailable && resolvedBudget ? (
-          <BudgetProgressCard variant="expenses" budget={resolvedBudget} />
+          <BudgetProgressCard
+            variant="expenses"
+            budget={resolvedBudget}
+            onEdit={() => setSheet("budget")}
+          />
         ) : resolvedBudgetAvailable ? (
-          <NoBudgetCard />
+          <NoBudgetCard onSetBudget={() => setSheet("budget")} />
         ) : (
           <BudgetFallbackCard />
         )}
@@ -468,13 +475,14 @@ export default function ExpensesClient({
         </section>
       </main>
 
-      <div className="fixed bottom-24 left-0 right-0 z-40 flex gap-2 px-4 md:mx-auto md:max-w-md">
-        <button onClick={() => setSheet("budget")} className="rounded-xl border border-[#0058be] bg-white px-4 py-4 text-sm font-semibold text-[#0058be]">
-          Budget
-        </button>
-        <button onClick={() => setSheet("expense")} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#3B82F6] py-4 text-sm font-semibold text-white shadow-xl transition-transform active:scale-95">
+      <div className="fixed bottom-24 right-6 z-40">
+        <button
+          aria-label="Log Expense"
+          onClick={() => setSheet("expense")}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0058be] text-white shadow-[0_8px_24px_rgba(0,88,190,0.35)] transition-transform active:scale-95"
+          type="button"
+        >
           <Icon name="add" />
-          Log Expense
         </button>
       </div>
 
@@ -491,11 +499,12 @@ export default function ExpensesClient({
                 <button disabled={customFrom > customTo} className="w-full rounded-xl bg-[#0058be] p-3 font-semibold text-white disabled:opacity-50">Apply range</button>
               </form>
             ) : sheet === "budget" ? (
-              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveBudgetCycleLocal({ amount: Number(budgetAmount), period: budgetPeriod, startDate: budgetStart, endDate: budgetEnd }).then(() => setSheet(null)); }}>
+              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (expensesState.activeBudget && !window.confirm("You already have an active budget. Replace it?")) return; void saveBudgetCycleLocal({ amount: Number(budgetAmount), period: budgetPeriod, startDate: budgetStart, isRolling: true }).then(() => setSheet(null)); }}>
                 <div className="flex items-center justify-between"><h2 className="text-xl font-bold">Budget settings</h2><button type="button" onClick={() => void openHistory()} className="text-sm font-semibold text-[#0058be]">Revision history</button></div>
+                <p className="text-sm font-medium text-[#424754]">Set the allowance amount for each rolling period. The end date is calculated automatically.</p>
                 <label className="block text-sm font-semibold">Amount<input className="mt-1 w-full rounded-xl border p-3" required min="0.01" step="0.01" type="number" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} /></label>
                 <label className="block text-sm font-semibold">Period<select className="mt-1 w-full rounded-xl border p-3" value={budgetPeriod} onChange={(e) => setBudgetPeriod(e.target.value as BudgetPeriod)}>{["daily", "weekly", "biweekly", "monthly"].map((period) => <option key={period}>{period}</option>)}</select></label>
-                <div className="grid grid-cols-2 gap-3"><label className="text-sm font-semibold">Start<input className="mt-1 w-full rounded-xl border p-3" type="date" value={budgetStart} onChange={(e) => setBudgetStart(e.target.value)} /></label><label className="text-sm font-semibold">End<input className="mt-1 w-full rounded-xl border p-3" type="date" min={budgetStart} value={budgetEnd} onChange={(e) => setBudgetEnd(e.target.value)} /></label></div>
+                <label className="block text-sm font-semibold">Starts on<input className="mt-1 w-full rounded-xl border p-3" type="date" value={budgetStart} onChange={(e) => setBudgetStart(e.target.value)} /></label>
                 <button className="w-full rounded-xl bg-[#0058be] p-3 font-semibold text-white">Save budget</button>
               </form>
             ) : sheet === "history" ? (

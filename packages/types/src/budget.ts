@@ -5,6 +5,7 @@ export type Budget = {
   user_id: string;
   amount: number; // total allowance
   period: BudgetPeriod;
+  is_rolling?: boolean;
   start_date: string; // ISO 8601 date
   end_date: string; // ISO 8601 date
   created_at: string;

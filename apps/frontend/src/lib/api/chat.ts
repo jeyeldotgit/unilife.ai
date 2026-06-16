@@ -8,7 +8,6 @@ import { getClasses } from "@/lib/api/schedule";
 import {
   inferExpenseCategory,
   formatTimeLabel,
-  getDayIndex as getScheduleDayIndex,
   titleCase,
 } from "@/lib/api/utils";
 import type {
@@ -25,7 +24,6 @@ import type {
   ChatSendResult,
   ChatState,
   ChatTextMessage,
-  DayOfWeek,
   ExpenseCategory,
   SendChatMessageInput,
 } from "@/lib/types";
@@ -35,6 +33,7 @@ type AiChatIntent =
   | "update_assignment"
   | "delete_assignment"
   | "create_class"
+  | "create_exam"
   | "update_class"
   | "delete_class"
   | "create_exam"
@@ -81,6 +80,13 @@ const quickActions: ChatQuickAction[] = [
     icon: "calendar_add_on",
     prompt: "add class Physics monday 8am to 10am",
     kind: "create_class",
+  },
+  {
+    id: "quick-exam",
+    label: "+ Exam",
+    icon: "quiz",
+    prompt: "add exam",
+    kind: "create_exam",
   },
   {
     id: "quick-due",
@@ -212,20 +218,6 @@ function normalizeExpenseLabelFromMessage(text: string) {
   return titleCase(match[1].trim());
 }
 
-function getDayIndex(dayOfWeek: DayOfWeek) {
-  return getScheduleDayIndex(dayOfWeek);
-}
-
-function normalizeTimeValue(value: string) {
-  const withSecondsMatch = /^(\d{2}):(\d{2})(?::\d{2})$/.exec(value.trim());
-
-  if (withSecondsMatch) {
-    return `${withSecondsMatch[1]}:${withSecondsMatch[2]}`;
-  }
-
-  return value.trim();
-}
-
 function getAssignmentAction(action: Record<string, unknown> | null) {
   if (
     !action ||
@@ -265,68 +257,6 @@ function getExpenseAction(action: Record<string, unknown> | null) {
   return {
     amount: action.amount,
     category,
-  };
-}
-
-function getClassAction(action: Record<string, unknown> | null) {
-  const resolvedDay =
-    typeof action?.day_of_week === "string"
-      ? action.day_of_week
-      : typeof action?.day === "string"
-        ? action.day
-        : null;
-
-  if (
-    !action ||
-    typeof action.subject !== "string" ||
-    typeof resolvedDay !== "string" ||
-    typeof action.start_time !== "string" ||
-    typeof action.end_time !== "string"
-  ) {
-    return null;
-  }
-
-  const dayOfWeek = resolvedDay as DayOfWeek;
-  const dayIndex = getDayIndex(dayOfWeek);
-
-  if (dayIndex < 0) {
-    return null;
-  }
-
-  return {
-    color: undefined,
-    dayIndex,
-    dayOfWeek,
-    endTime: normalizeTimeValue(action.end_time),
-    startTime: normalizeTimeValue(action.start_time),
-    subject: action.subject,
-  };
-}
-
-function getExamAction(action: Record<string, unknown> | null) {
-  if (
-    !action ||
-    typeof action.exam_date !== "string" ||
-    typeof action.title !== "string"
-  ) {
-    return null;
-  }
-
-  return {
-    title: action.title,
-    examAt: action.exam_date,
-    classId:
-      typeof action.class_id === "string" || action.class_id === null
-        ? action.class_id
-        : null,
-    description:
-      typeof action.description === "string" || action.description === null
-        ? action.description
-        : undefined,
-    location:
-      typeof action.location === "string" || action.location === null
-        ? action.location
-        : undefined,
   };
 }
 
@@ -410,28 +340,6 @@ export function getClientEffect(
           dueAt: action.dueAt,
           title: action.title,
         },
-      };
-    }
-  }
-
-  if (response.intent === "create_class" && !response.requires_confirmation) {
-    const action = getClassAction(response.action);
-
-    if (action) {
-      return {
-        kind: "create_class",
-        payload: action,
-      };
-    }
-  }
-
-  if (response.intent === "create_exam" && !response.requires_confirmation) {
-    const action = getExamAction(response.action);
-
-    if (action) {
-      return {
-        kind: "create_exam",
-        payload: action,
       };
     }
   }
@@ -540,6 +448,15 @@ export async function sendMessage(
     if (forecast) {
       return { userMessage, responseMessage: forecast };
     }
+  }
+
+  const clientEffect = getClientEffect(input.text, response);
+  if (clientEffect) {
+    return {
+      clientEffect,
+      userMessage,
+      responseMessage: buildTextMessage(response.message),
+    };
   }
 
   if (response.proposal) {

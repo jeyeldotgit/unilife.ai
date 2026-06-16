@@ -240,7 +240,7 @@ describe("chat adapter", () => {
     });
   });
 
-  it("does not auto-save expenses when AI omits the category", async () => {
+  it("auto-saves expenses with an inferred category when AI omits the category", async () => {
     mocks.requestBackend.mockResolvedValue({
       intent: "log_expense",
       action: {
@@ -253,8 +253,14 @@ describe("chat adapter", () => {
     const { sendMessage } = await import("@/lib/api/chat");
     const result = await sendMessage({ text: "transpo 120" });
 
-    expect(result.clientEffect).toBeUndefined();
-    expect(result.responseMessage.kind).toBe("text");
+    expect(result.clientEffect).toMatchObject({
+      kind: "log_expense",
+      payload: {
+        amount: 120,
+        category: "transportation",
+        label: "Transpo",
+      },
+    });
   });
 
   it("returns a specific class clarification instead of a generic fallback", async () => {

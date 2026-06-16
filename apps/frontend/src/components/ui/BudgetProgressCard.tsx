@@ -5,6 +5,7 @@ type BudgetProgressCardProps = {
   variant: "dashboard" | "expenses";
   budget: BudgetStatus;
   className?: string;
+  onEdit?: () => void;
 };
 
 function getToneClasses(tone: BudgetStatus["tone"]) {
@@ -35,6 +36,7 @@ export function BudgetProgressCard({
   variant,
   budget,
   className = "",
+  onEdit,
 }: BudgetProgressCardProps) {
   const tone = getToneClasses(budget.tone);
   const remainingPercent = Math.max(0, 100 - budget.progressPercent);
@@ -168,13 +170,24 @@ export function BudgetProgressCard({
             </span>
           </p>
         </div>
-        <div
-          className="rounded-full px-3 py-1"
-          style={{ backgroundColor: tone.pillBg }}
-        >
-          <span className="text-xs font-medium" style={{ color: tone.text }}>
-            {budget.progressLabel}
-          </span>
+        <div className="flex flex-col items-end gap-2">
+          <div
+            className="rounded-full px-3 py-1"
+            style={{ backgroundColor: tone.pillBg }}
+          >
+            <span className="text-xs font-medium" style={{ color: tone.text }}>
+              {budget.progressLabel}
+            </span>
+          </div>
+          {onEdit ? (
+            <button
+              className="text-xs font-semibold text-[#0058be] underline-offset-2 hover:underline"
+              onClick={onEdit}
+              type="button"
+            >
+              Edit Budget
+            </button>
+          ) : null}
         </div>
       </div>
 

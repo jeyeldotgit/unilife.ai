@@ -116,6 +116,36 @@ vi.mock("../src/repositories/classes.repository.js", () => ({
   },
 }));
 
+vi.mock("../src/repositories/academic-terms.repository.js", () => ({
+  AcademicTermsRepository: class AcademicTermsRepository {
+    async findByIdForUser(id: string, userId: string) {
+      return {
+        id,
+        user_id: userId,
+        name: "Current Schedule",
+        status: "active",
+        created_at: "2026-06-01T00:00:00.000Z",
+        updated_at: "2026-06-01T00:00:00.000Z",
+        archived_at: null,
+        deleted_at: null,
+      };
+    }
+
+    async findActiveForUser(userId: string) {
+      return {
+        id: "99999999-9999-4999-8999-999999999999",
+        user_id: userId,
+        name: "Current Schedule",
+        status: "active",
+        created_at: "2026-06-01T00:00:00.000Z",
+        updated_at: "2026-06-01T00:00:00.000Z",
+        archived_at: null,
+        deleted_at: null,
+      };
+    }
+  },
+}));
+
 vi.mock("../src/repositories/assignments.repository.js", () => ({
   AssignmentsRepository: class AssignmentsRepository {
     async listForUser(userId: string, filters: { since?: string; status?: string }) {

@@ -23,6 +23,13 @@ const quickActions: ChatQuickAction[] = [
     kind: "create_class",
   },
   {
+    id: "quick-exam",
+    label: "+ Exam",
+    icon: "quiz",
+    prompt: "add exam",
+    kind: "create_exam",
+  },
+  {
     id: "quick-due",
     label: "What's due?",
     icon: "event_upcoming",

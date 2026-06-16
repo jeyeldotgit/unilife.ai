@@ -144,6 +144,32 @@ function maybeSetNullableString(
   target[key] = value;
 }
 
+function normalizeClassDuplicatePart(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function isSameClassBlock(
+  record: ClassRecord,
+  input: CreateClassInput,
+  userId: string,
+) {
+  return (
+    record.user_id === userId &&
+    record.deleted_at === null &&
+    record.is_active &&
+    (record.term_id ?? null) === (input.termId ?? null) &&
+    record.day_of_week === input.dayOfWeek &&
+    record.start_time === input.startTime &&
+    record.end_time === input.endTime &&
+    normalizeClassDuplicatePart(record.subject) ===
+      normalizeClassDuplicatePart(input.subject) &&
+    normalizeClassDuplicatePart(record.room) ===
+      normalizeClassDuplicatePart(input.room) &&
+    normalizeClassDuplicatePart(record.instructor) ===
+      normalizeClassDuplicatePart(input.instructor)
+  );
+}
+
 async function getClassSubjectById(userId: string) {
   const classes = await db.classes
     .where("user_id")
@@ -319,6 +345,16 @@ export async function undoDeleteUndoLocal(
 
 export async function createClassLocal(input: CreateClassInput) {
   const userId = await getMutationUserId();
+  const existingDuplicate = await db.classes
+    .where("user_id")
+    .equals(userId)
+    .and((record) => isSameClassBlock(record, input, userId))
+    .first();
+
+  if (existingDuplicate) {
+    return existingDuplicate;
+  }
+
   const timestamp = new Date().toISOString();
   const record: ClassRecord = {
     color: input.color ?? null,
@@ -1052,6 +1088,7 @@ async function createBudgetLocal(input: OnboardingBudgetInput) {
     created_at: createdAt,
     end_date: input.endDate ?? calculateBudgetEndDate(startDate, input.period),
     id: crypto.randomUUID(),
+    is_rolling: input.isRolling ?? true,
     period: input.period,
     start_date: startDate,
     updated_at: createdAt,
@@ -1061,6 +1098,7 @@ async function createBudgetLocal(input: OnboardingBudgetInput) {
     amount: record.amount,
     created_at: record.created_at,
     end_date: record.end_date,
+    is_rolling: record.is_rolling,
     period: record.period,
     start_date: record.start_date,
     updated_at: record.updated_at,
@@ -1098,12 +1136,14 @@ async function updateBudgetLocal(id: string, input: OnboardingBudgetInput) {
     end_date:
       input.endDate ??
       calculateBudgetEndDate(input.startDate ?? existingRecord.start_date, input.period),
+    is_rolling: input.isRolling ?? existingRecord.is_rolling ?? true,
     period: input.period,
     updated_at: new Date().toISOString(),
   };
   const payload: Record<string, unknown> = {
     amount: updatedRecord.amount,
     end_date: updatedRecord.end_date,
+    is_rolling: updatedRecord.is_rolling,
     period: updatedRecord.period,
     start_date: updatedRecord.start_date,
     updated_at: updatedRecord.updated_at,
@@ -1152,9 +1192,25 @@ export async function saveBudgetCycleLocal(input: OnboardingBudgetInput) {
   const userId = await getMutationUserId();
   const budgets = await db.budgets.where("user_id").equals(userId).toArray();
   const activeBudget = findActiveBudget(budgets);
-  const budget = activeBudget
-    ? await updateBudgetLocal(activeBudget.id, input)
-    : await createBudgetLocal(input);
+  let budget: Budget | null;
+
+  if (activeBudget && input.isRolling) {
+    const replacementStart = input.startDate ?? new Date().toISOString().slice(0, 10);
+    const previousEnd = new Date(`${replacementStart}T00:00:00`);
+    previousEnd.setDate(previousEnd.getDate() - 1);
+    await updateBudgetLocal(activeBudget.id, {
+      amount: activeBudget.amount,
+      endDate: previousEnd.toISOString().slice(0, 10),
+      isRolling: false,
+      period: activeBudget.period,
+      startDate: activeBudget.start_date,
+    });
+    budget = await createBudgetLocal(input);
+  } else {
+    budget = activeBudget
+      ? await updateBudgetLocal(activeBudget.id, input)
+      : await createBudgetLocal(input);
+  }
 
   if (!budget) {
     throw new Error("We couldn't update the active budget.");
@@ -1172,6 +1228,29 @@ export async function saveBudgetCycleLocal(input: OnboardingBudgetInput) {
     .toArray();
 
   return buildBudgetStatusSnapshot(budget, expenses);
+}
+
+export async function rolloverExpiredRollingBudgetLocal(today = new Date().toISOString().slice(0, 10)) {
+  const userId = await getMutationUserId();
+  const budgets = await db.budgets.where("user_id").equals(userId).toArray();
+  const latestRolling = budgets
+    .filter((budget) => budget.is_rolling)
+    .sort((left, right) => right.end_date.localeCompare(left.end_date))[0];
+
+  if (!latestRolling || latestRolling.end_date >= today) {
+    return null;
+  }
+
+  const nextStart = new Date(`${latestRolling.end_date}T00:00:00`);
+  nextStart.setDate(nextStart.getDate() + 1);
+  const nextStartDate = nextStart.toISOString().slice(0, 10);
+
+  return createBudgetLocal({
+    amount: latestRolling.amount,
+    isRolling: true,
+    period: latestRolling.period,
+    startDate: nextStartDate,
+  });
 }
 
 export async function getBudgetStatusLocal() {
