@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type {
   Assignment,
+  AcademicTerm,
   AiActionHistory,
   Budget,
   BudgetRevision,
@@ -18,6 +19,7 @@ import type {
 } from "@unilife-ai/types";
 
 export type SyncMetaEntity =
+  | "academic_term"
   | "class"
   | "assignment"
   | "exam"
@@ -40,6 +42,7 @@ export type SyncMetaRecord = {
 
 export class UniLifeDB extends Dexie {
   classes!: Table<ClassRecord, string>;
+  academic_terms!: Table<AcademicTerm, string>;
   assignments!: Table<Assignment, string>;
   exams!: Table<Exam, string>;
   expenses!: Table<Expense, string>;
@@ -162,6 +165,26 @@ export class UniLifeDB extends Dexie {
 
     this.version(7).stores({
       classes: "id, user_id, day_of_week, is_active, deleted_at, updated_at",
+      assignments: "id, user_id, class_id, due_date, status, deleted_at, updated_at",
+      exams: "id, user_id, class_id, exam_date, deleted_at, updated_at",
+      expenses: "id, user_id, budget_id, refund_of_expense_id, category, spent_at, deleted_at, updated_at",
+      budgets: "id, user_id, start_date, end_date, updated_at",
+      budget_revisions: "id, user_id, budget_id, mutation_id, changed_at",
+      recurrence_series: "id, user_id, entity_type, updated_at, deleted_at",
+      recurrence_occurrences: "id, user_id, series_id, entity_id, effective_start_at, updated_at, deleted_at",
+      recurrence_exceptions: "id, user_id, series_id, original_start_at, updated_at, deleted_at",
+      holiday_exclusions: "id, user_id, date, updated_at, deleted_at",
+      notifications: "id, user_id, category, logical_item_id, entity_type, entity_id, scheduled_at, status",
+      notification_settings: "user_id, updated_at",
+      sync_queue: "id, user_id, entity_type, entity_id, status, created_at, [user_id+status+created_at], [entity_type+entity_id+status]",
+      sync_recovery: "id, user_id, queue_item_id, entity_type, entity_id, created_at, restored_at",
+      sync_meta: "id, user_id, entity_type",
+      ai_actions: "id, user_id, status, processing_layer, created_at, updated_at",
+    });
+
+    this.version(8).stores({
+      academic_terms: "id, user_id, status, updated_at, deleted_at",
+      classes: "id, user_id, term_id, day_of_week, is_active, deleted_at, updated_at",
       assignments: "id, user_id, class_id, due_date, status, deleted_at, updated_at",
       exams: "id, user_id, class_id, exam_date, deleted_at, updated_at",
       expenses: "id, user_id, budget_id, refund_of_expense_id, category, spent_at, deleted_at, updated_at",

@@ -1,4 +1,5 @@
 export * from "./users.js";
+export * from "./academic_terms.js";
 export * from "./classes.js";
 export * from "./assignments.js";
 export * from "./exams.js";
@@ -14,3 +15,4 @@ export * from "./recurrence_series.js";
 export * from "./recurrence_occurrences.js";
 export * from "./recurrence_exceptions.js";
 export * from "./holiday_exclusions.js";
+export * from "./schedule_imports.js";

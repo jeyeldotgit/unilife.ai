@@ -13,6 +13,10 @@ describe("academic services", () => {
       {
         create,
       } as never,
+      {
+        findActiveForUser: vi.fn(async () => null),
+        findByIdForUser: vi.fn(async () => null),
+      } as never,
     );
 
     const record = await service.createClass({
@@ -28,6 +32,7 @@ describe("academic services", () => {
     expect(create).toHaveBeenCalledWith({
       id: "11111111-1111-4111-8111-111111111111",
       user_id: "user-1",
+      term_id: null,
       subject: "Algorithms",
       room: null,
       instructor: null,
@@ -42,6 +47,56 @@ describe("academic services", () => {
       deleted_at: null,
     });
     expect(record.user_id).toBe("user-1");
+  });
+
+  it("replaces an archived class term with the current active term on create", async () => {
+    const create = vi.fn(async (record) => record);
+    const service = new ClassesService(
+      {} as never,
+      "user-1",
+      {
+        create,
+      } as never,
+      {
+        findByIdForUser: vi.fn(async () => ({
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          user_id: "user-1",
+          name: "Current Schedule",
+          status: "archived",
+          created_at: "2026-06-01T08:00:00.000Z",
+          updated_at: "2026-06-01T08:00:00.000Z",
+          archived_at: "2026-06-02T08:00:00.000Z",
+          deleted_at: null,
+        })),
+        findActiveForUser: vi.fn(async () => ({
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          user_id: "user-1",
+          name: "Current Schedule",
+          status: "active",
+          created_at: "2026-06-03T08:00:00.000Z",
+          updated_at: "2026-06-03T08:00:00.000Z",
+          archived_at: null,
+          deleted_at: null,
+        })),
+      } as never,
+    );
+
+    await service.createClass({
+      id: "11111111-1111-4111-8111-111111111111",
+      term_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      subject: "Algorithms",
+      day_of_week: "monday",
+      start_time: "09:00",
+      end_time: "10:00",
+      created_at: "2026-06-01T08:00:00.000Z",
+      updated_at: "2026-06-01T08:00:00.000Z",
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        term_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      }),
+    );
   });
 
   it("injects assignment defaults on create", async () => {

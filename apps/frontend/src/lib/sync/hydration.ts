@@ -1,5 +1,6 @@
 import type {
   Assignment,
+  AcademicTerm,
   AiActionHistory,
   Budget,
   BudgetRevision,
@@ -17,6 +18,7 @@ import { db, type SyncMetaEntity, type SyncMetaRecord } from "@/lib/db/dexie";
 
 type EntityRecordMap = {
   ai_action: AiActionHistory;
+  academic_term: AcademicTerm;
   assignment: Assignment;
   budget: Budget;
   budget_revision: BudgetRevision;
@@ -31,6 +33,7 @@ type EntityRecordMap = {
 
 type HydrationResponseMap = {
   ai_action: { actions: AiActionHistory[] };
+  academic_term: { terms: AcademicTerm[] };
   assignment: { assignments: Assignment[] };
   budget: { budgets: Budget[] };
   budget_revision: { revisions: BudgetRevision[] };
@@ -52,6 +55,7 @@ type HydrationOptions = {
 
 const HYDRATION_ENTITIES: HydratableEntity[] = [
   "ai_action",
+  "academic_term",
   "class",
   "assignment",
   "exam",
@@ -70,6 +74,7 @@ const entityConfig: {
     extract: (response: HydrationResponseMap[T]) => EntityRecordMap[T][];
     table:
       | "classes"
+      | "academic_terms"
       | "assignments"
       | "exams"
       | "budgets"
@@ -86,6 +91,11 @@ const entityConfig: {
     endpoint: "/api/ai/actions",
     extract: (response) => response.actions,
     table: "ai_actions",
+  },
+  academic_term: {
+    endpoint: "/api/academic-terms",
+    extract: (response) => response.terms,
+    table: "academic_terms",
   },
   class: {
     endpoint: "/api/classes",

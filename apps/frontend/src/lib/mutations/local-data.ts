@@ -1,5 +1,6 @@
 import type {
   Assignment as AssignmentRecord,
+  AcademicTerm,
   Budget,
   BudgetRevision,
   ClassRecord,
@@ -332,6 +333,7 @@ export async function createClassLocal(input: CreateClassInput) {
     room: input.room ?? null,
     start_time: input.startTime,
     subject: input.subject,
+    term_id: input.termId ?? null,
     updated_at: timestamp,
     user_id: userId,
   };
@@ -341,6 +343,7 @@ export async function createClassLocal(input: CreateClassInput) {
     end_time: record.end_time,
     start_time: record.start_time,
     subject: record.subject,
+    term_id: record.term_id,
     updated_at: record.updated_at,
   };
 
@@ -398,6 +401,7 @@ export async function updateClassLocal(id: string, input: UpdateClassInput) {
     start_time:
       input.startTime !== undefined ? input.startTime : existingRecord.start_time,
     subject: input.subject !== undefined ? input.subject : existingRecord.subject,
+    term_id: input.termId !== undefined ? input.termId : existingRecord.term_id,
     updated_at: new Date().toISOString(),
   };
   const payload: Record<string, unknown> = {
@@ -406,6 +410,9 @@ export async function updateClassLocal(id: string, input: UpdateClassInput) {
 
   if (input.subject !== undefined) {
     payload.subject = input.subject;
+  }
+  if (input.termId !== undefined) {
+    payload.term_id = input.termId;
   }
   if (input.dayOfWeek !== undefined) {
     payload.day_of_week = input.dayOfWeek;
@@ -478,6 +485,120 @@ export async function deleteClassLocal(id: string) {
   notifySyncMutationQueued();
 
   return true;
+}
+
+export async function getOrCreateActiveAcademicTermLocal(name = "Current Schedule") {
+  const userId = await getMutationUserId();
+  const existingTerms = await db.academic_terms
+    .where("user_id")
+    .equals(userId)
+    .and((term) => term.status === "active" && term.deleted_at === null)
+    .toArray();
+  const existing =
+    existingTerms
+      .sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0] ?? null;
+
+  if (existing) return existing;
+
+  const timestamp = new Date().toISOString();
+  const term: AcademicTerm = {
+    id: crypto.randomUUID(),
+    user_id: userId,
+    name,
+    status: "active",
+    created_at: timestamp,
+    updated_at: timestamp,
+    archived_at: null,
+    deleted_at: null,
+  };
+  await db.transaction("rw", db.academic_terms, db.sync_queue, async () => {
+    await db.academic_terms.put(term);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: term.id,
+        entityType: "academic_term",
+        operation: "create",
+        payload: {
+          name: term.name,
+          status: term.status,
+          created_at: term.created_at,
+          updated_at: term.updated_at,
+          archived_at: term.archived_at,
+          deleted_at: term.deleted_at,
+        },
+        userId,
+      }),
+    );
+  });
+  notifySyncMutationQueued();
+  return term;
+}
+
+export async function archiveAcademicTermLocal(termId: string) {
+  const userId = await getMutationUserId();
+  const existing = await db.academic_terms.get(termId);
+  if (!existing || existing.user_id !== userId || existing.deleted_at) return null;
+
+  const timestamp = new Date().toISOString();
+  const term: AcademicTerm = {
+    ...existing,
+    status: "archived",
+    archived_at: timestamp,
+    updated_at: timestamp,
+  };
+  await db.transaction("rw", db.academic_terms, db.sync_queue, async () => {
+    await db.academic_terms.put(term);
+    await db.sync_queue.put(
+      createQueueItem({
+        entityId: term.id,
+        entityType: "academic_term",
+        operation: "update",
+        payload: {
+          name: term.name,
+          status: term.status,
+          updated_at: term.updated_at,
+          archived_at: term.archived_at,
+          deleted_at: term.deleted_at,
+        },
+        userId,
+      }),
+    );
+  });
+  notifySyncMutationQueued();
+  return term;
+}
+
+export async function clearAcademicTermScheduleLocal(termId: string) {
+  const userId = await getMutationUserId();
+  const timestamp = new Date().toISOString();
+  const records = await db.classes
+    .where("user_id")
+    .equals(userId)
+    .and((record) => record.term_id === termId && record.deleted_at === null)
+    .toArray();
+
+  await db.transaction("rw", db.classes, db.notifications, db.sync_queue, async () => {
+    for (const record of records) {
+      await db.classes.put({
+        ...record,
+        deleted_at: timestamp,
+        is_active: false,
+        updated_at: timestamp,
+      });
+      await deleteEntityNotifications("class", record.id);
+      await db.sync_queue.put(
+        createQueueItem({
+          entityId: record.id,
+          entityType: "class",
+          operation: "delete",
+          payload: { deleted_at: timestamp },
+          userId,
+        }),
+      );
+    }
+  });
+  if (records.length > 0) notifySyncMutationQueued();
+  return records.length;
 }
 
 export async function createAssignmentLocal(input: CreateAssignmentInput) {

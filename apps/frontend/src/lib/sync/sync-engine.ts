@@ -128,7 +128,7 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
         pendingQueueItems,
         response,
       );
-      await runHydration();
+      await runHydration(response.synced.length > 0);
 
       setSyncStatusState((current) => ({
         ...current,

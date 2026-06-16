@@ -7,6 +7,7 @@ import type {
 export type SyncOperation = "create" | "update" | "delete";
 
 export type SyncEntityType =
+  | "academic_term"
   | "class"
   | "assignment"
   | "exam"
@@ -64,6 +65,7 @@ export type SyncRecoverySnapshot = {
 };
 
 export type SyncHydrationRecord =
+  | import("./academic-term").AcademicTerm
   | import("./ai-action").AiActionHistory
   | import("./budget").BudgetRevision
   | RecurrenceException

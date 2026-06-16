@@ -20,12 +20,18 @@ import { FieldErrorMessage, FormErrorSummary } from "@/components/ui/FormErrorSu
 import { Icon } from "@/components/ui/Icon";
 import { MutationStatus } from "@/components/ui/MutationStatus";
 import { RecoverableError } from "@/components/ui/RecoverableError";
+import { ScheduleImportSheet } from "./ScheduleImportSheet";
 import { useClasses } from "@/hooks/use-classes";
 import { requestScheduleInsight } from "@/lib/api/briefing";
 import { getLocalDateKey } from "@/lib/api/utils";
 import { normalizeRecoverableError, fieldErrorMessage, type DuplicateCandidate } from "@/lib/errors/recoverable";
 import { findLikelyClassDuplicates } from "@/lib/mutations/duplicates";
-import { createClassLocal } from "@/lib/mutations/local-data";
+import {
+  archiveAcademicTermOnline,
+  clearAcademicTermScheduleOnline,
+  createClassOnline,
+  getOrCreateActiveAcademicTermOnline,
+} from "@/lib/api/schedule-online";
 import { buildScheduleInsight } from "@/lib/planning/deterministic";
 import { getTime24InTimeZone } from "@/lib/profile/time";
 import type {
@@ -400,6 +406,7 @@ export default function ScheduleClient({
   const [selectedDetail, setSelectedDetail] =
     useState<ScheduleClassDetail | null>(null);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [importSheetOpen, setImportSheetOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]> | undefined>();
   const [mutationState, setMutationState] = useState<"idle" | "pending" | "queued" | "failed">(
@@ -594,6 +601,7 @@ export default function ScheduleClient({
 
     const payload: CreateClassInput = {
       subject: formState.subject.trim(),
+      termId: classesState.activeTerm?.id ?? null,
       dayOfWeek: formState.dayOfWeek,
       dayIndex: selectedDay.dayIndex,
       startTime: formState.startTime,
@@ -617,7 +625,9 @@ export default function ScheduleClient({
       startTransition(() => {
       void (async () => {
         try {
-          await createClassLocal(payload);
+          const term = classesState.activeTerm ?? await getOrCreateActiveAcademicTermOnline();
+          await createClassOnline({ ...payload, termId: term.id });
+          await classesState.refresh();
         } catch (error) {
           const recoverable = normalizeRecoverableError(error);
           setSubmitError(recoverable.message);
@@ -637,6 +647,46 @@ export default function ScheduleClient({
     });
 
     runSave();
+  };
+
+  const handleArchiveSchedule = () => {
+    if (!classesState.activeTerm) return;
+    if (!window.confirm("Archive this schedule? Archived classes stay saved but will be hidden from the default schedule.")) {
+      return;
+    }
+    setMutationState("pending");
+    startTransition(() => {
+      void archiveAcademicTermOnline(classesState.activeTerm!)
+        .then(() => {
+          void classesState.refresh();
+          setMutationState("queued");
+          window.setTimeout(() => setMutationState("idle"), 1500);
+        })
+        .catch((error) => {
+          setSubmitError(normalizeRecoverableError(error).message);
+          setMutationState("failed");
+        });
+    });
+  };
+
+  const handleClearSchedule = () => {
+    if (!classesState.activeTerm) return;
+    if (!window.confirm("Clear this schedule? This soft-deletes classes in the active schedule only.")) {
+      return;
+    }
+    setMutationState("pending");
+    startTransition(() => {
+      void clearAcademicTermScheduleOnline(classesState.activeTerm!.id)
+        .then(() => {
+          void classesState.refresh();
+          setMutationState("queued");
+          window.setTimeout(() => setMutationState("idle"), 1500);
+        })
+        .catch((error) => {
+          setSubmitError(normalizeRecoverableError(error).message);
+          setMutationState("failed");
+        });
+    });
   };
 
   const renderScheduleContent = () => {
@@ -775,6 +825,35 @@ export default function ScheduleClient({
               <Icon name="arrow_forward" className="text-[#3B82F6]" />
             </button>
           </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#c2c6d6]/30 bg-white p-3 shadow-sm">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6B7280]">
+                Active Schedule
+              </p>
+              <p className="text-sm font-semibold text-[#191c1d]">
+                {classesState.activeTerm?.name ?? "Unassigned classes"}
+              </p>
+            </div>
+            {classesState.activeTerm ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleArchiveSchedule}
+                  className="rounded-full border border-[#c2c6d6] px-4 py-2 text-xs font-semibold text-[#424754] transition-colors hover:bg-[#f3f4f5]"
+                >
+                  Archive
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearSchedule}
+                  className="rounded-full border border-[#ffdad6] px-4 py-2 text-xs font-semibold text-[#ba1a1a] transition-colors hover:bg-[#fff8f7]"
+                >
+                  Clear
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {renderScheduleContent()}
@@ -784,13 +863,24 @@ export default function ScheduleClient({
             state={mutationState}
             label={
               mutationState === "queued"
-                ? "Class saved locally and queued to sync."
+                ? "Schedule saved online."
                 : undefined
             }
           />
         </div>
 
-        <div className="mt-8 flex justify-center">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedDetail(null);
+              setImportSheetOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-full border border-[#3B82F6] bg-white px-6 py-4 text-sm font-semibold text-[#3B82F6] shadow-sm transition-all hover:bg-[#eef5ff] active:scale-95"
+          >
+            <Icon name="upload_file" className="text-sm" />
+            Import Schedule
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -871,6 +961,18 @@ export default function ScheduleClient({
         }}
         onChange={handleFormChange}
         onSubmit={handleSubmit}
+      />
+
+      <ScheduleImportSheet
+        open={importSheetOpen}
+        timezone={resolvedTimeZone}
+        classRecords={classesState.records}
+        onClose={() => setImportSheetOpen(false)}
+        onApplied={() => {
+          void classesState.refresh();
+          setMutationState("queued");
+          window.setTimeout(() => setMutationState("idle"), 1500);
+        }}
       />
 
       <DuplicateWarningSheet

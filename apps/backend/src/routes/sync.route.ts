@@ -14,6 +14,7 @@ const syncPushSchema = z
           id: z.string().uuid(),
           entity_type: z.enum([
             "class",
+            "academic_term",
             "assignment",
             "exam",
             "expense",

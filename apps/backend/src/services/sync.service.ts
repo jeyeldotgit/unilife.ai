@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Assignment,
+  AcademicTerm,
   Budget,
   ClassRecord,
   Exam,
@@ -27,6 +28,7 @@ import { ExamsRepository } from "../repositories/exams.repository.js";
 import { ExpensesRepository } from "../repositories/expenses.repository.js";
 import { RecurrenceRepository, type RecurrenceSyncEntity } from "../repositories/recurrence.repository.js";
 import { AIActionsRepository } from "../repositories/ai-actions.repository.js";
+import { AcademicTermsRepository } from "../repositories/academic-terms.repository.js";
 
 const assignmentStatusSchema = z.enum(["pending", "in_progress", "completed"]);
 const budgetPeriodSchema = z.enum(["daily", "weekly", "biweekly", "monthly"]);
@@ -65,6 +67,7 @@ const nullableTrimmedString = (max: number) =>
 const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
 
 const createClassPayloadSchema = z.object({
+  term_id: z.string().uuid().nullable().optional(),
   subject: z.string().trim().min(1).max(255),
   room: optionalTrimmedString(255),
   instructor: optionalTrimmedString(255),
@@ -78,6 +81,7 @@ const createClassPayloadSchema = z.object({
   updated_at: isoDateTimeSchema,
 });
 const updateClassPayloadSchema = z.object({
+  term_id: z.string().uuid().nullable().optional(),
   subject: z.string().trim().min(1).max(255).optional(),
   room: nullableTrimmedString(255),
   instructor: nullableTrimmedString(255),
@@ -163,8 +167,17 @@ const aiActionPayloadSchema = z.object({
   created_at: isoDateTimeSchema,
   updated_at: isoDateTimeSchema,
 });
+const academicTermPayloadSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  status: z.enum(["active", "archived"]),
+  created_at: isoDateTimeSchema.optional(),
+  updated_at: isoDateTimeSchema,
+  archived_at: isoDateTimeSchema.nullable().optional(),
+  deleted_at: isoDateTimeSchema.nullable().optional(),
+});
 
 export type SyncEntityType =
+  | "academic_term"
   | "class"
   | "assignment"
   | "exam"
@@ -192,6 +205,7 @@ type SyncPushResult = {
 
 type SyncDependencies = {
   aiActionsRepository: Pick<AIActionsRepository, "upsert">;
+  academicTermsRepository: Pick<AcademicTermsRepository, "upsert">;
   assignmentsRepository: Pick<
     AssignmentsRepository,
     "findByIdIncludingDeletedForUser" | "existsForOtherUserIncludingDeleted" | "upsert"
@@ -246,6 +260,8 @@ export class SyncService {
     this.dependencies = {
       aiActionsRepository:
         dependencies?.aiActionsRepository ?? new AIActionsRepository(supabase),
+      academicTermsRepository:
+        dependencies?.academicTermsRepository ?? new AcademicTermsRepository(supabase),
       classesService: dependencies?.classesService ?? new ClassesService(supabase, userId),
       assignmentsService:
         dependencies?.assignmentsService ?? new AssignmentsService(supabase, userId),
@@ -363,6 +379,8 @@ export class SyncService {
     switch (item.entity_type) {
       case "class":
         return this.processClassItem(item);
+      case "academic_term":
+        return this.processAcademicTerm(item);
       case "assignment":
         return this.processAssignmentItem(item);
       case "exam":
@@ -473,6 +491,28 @@ export class SyncService {
     return true;
   }
 
+  private async processAcademicTerm(item: SyncPushItem) {
+    if (item.operation !== "create" && item.operation !== "update") {
+      return false;
+    }
+    const parsed = academicTermPayloadSchema.safeParse(toRecordPayload(item.payload));
+    if (!parsed.success) return false;
+
+    const timestamp = parsed.data.updated_at;
+    const record: AcademicTerm = {
+      id: item.entity_id,
+      user_id: this.userId,
+      name: parsed.data.name,
+      status: parsed.data.status,
+      created_at: parsed.data.created_at ?? timestamp,
+      updated_at: timestamp,
+      archived_at: parsed.data.archived_at ?? null,
+      deleted_at: parsed.data.deleted_at ?? null,
+    };
+    await this.dependencies.academicTermsRepository.upsert(record);
+    return true;
+  }
+
   private async createClass(item: SyncPushItem) {
     const parsed = createClassPayloadSchema.safeParse(toRecordPayload(item.payload));
     if (!parsed.success) {
@@ -501,6 +541,7 @@ export class SyncService {
     const record: ClassRecord = {
       id: item.entity_id,
       user_id: this.userId,
+      term_id: incoming.term_id ?? null,
       subject: incoming.subject,
       room: normalizeOptionalString(incoming.room),
       instructor: normalizeOptionalString(incoming.instructor),

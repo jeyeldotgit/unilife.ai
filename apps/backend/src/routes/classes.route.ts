@@ -52,6 +52,7 @@ const listClassesQuerySchema = z.object({
 const createClassSchema = z
   .object({
     id: z.string().uuid(),
+    term_id: z.string().uuid().nullable().optional(),
     subject: z.string().trim().min(1).max(255),
     room: z.string().trim().min(1).max(255).optional(),
     instructor: z.string().trim().min(1).max(255).optional(),
@@ -67,6 +68,7 @@ const createClassSchema = z
 const updateClassSchema = z
   .object({
     subject: z.string().trim().min(1).max(255).optional(),
+    term_id: z.string().uuid().nullable().optional(),
     room: z.string().trim().min(1).max(255).optional(),
     instructor: z.string().trim().min(1).max(255).optional(),
     day_of_week: dayOfWeekSchema.optional(),

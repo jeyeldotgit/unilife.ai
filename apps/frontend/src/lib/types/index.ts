@@ -465,6 +465,7 @@ export type ChatSendResult = {
 
 export type CreateClassInput = {
   subject: string;
+  termId?: string | null;
   dayOfWeek: DayOfWeek;
   dayIndex: number;
   startTime: string;
@@ -484,6 +485,7 @@ export type UpdateClassInput = {
   room?: string | null;
   startTime?: string;
   subject?: string;
+  termId?: string | null;
   recurrence?: RecurrenceReference | null;
   editScope?: RecurrenceEditScope;
 };
