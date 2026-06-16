@@ -10,6 +10,7 @@ describe("notification reconciliation", () => {
   it("preserves lifecycle status for unchanged deterministic reminders", () => {
     const desired = {
       body: "Updated copy",
+      category: "assignment" as const,
       created_at: "2026-06-12T00:00:00.000Z",
       entity_id: "assignment-1",
       entity_type: "assignment" as const,
@@ -44,6 +45,7 @@ describe("notification reconciliation", () => {
   it("drops obsolete reminders when the desired schedule changes", () => {
     const existing = {
       body: "Old",
+      category: "exam" as const,
       created_at: "2026-06-01T00:00:00.000Z",
       entity_id: "exam-1",
       entity_type: "exam" as const,
