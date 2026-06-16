@@ -4,6 +4,7 @@ import type {
   AiActionHistory,
   AiProposal,
   AiProposedOperation,
+  RecurrenceReference,
   SyncEntityType,
 } from "@unilife-ai/types";
 
@@ -24,7 +25,7 @@ import {
   updateExamLocal,
 } from "@/lib/mutations/local-data";
 import { notifySyncMutationQueued } from "@/lib/sync/mutation-signal";
-import type { DayOfWeek, ExpenseCategory } from "@/lib/types";
+import type { DayOfWeek, ExpenseCategory, ScheduleColor } from "@/lib/types";
 
 type AiDomainEntity = Exclude<SyncEntityType, "ai_action">;
 type DomainRecord = Record<string, unknown> & {
@@ -149,6 +150,14 @@ async function applyCreate(operation: AiProposedOperation) {
         dayIndex: days.indexOf(dayOfWeek),
         startTime: String(input.start_time ?? ""),
         endTime: String(input.end_time ?? ""),
+        termId: typeof input.term_id === "string" ? input.term_id : null,
+        room: typeof input.room === "string" ? input.room : null,
+        instructor: typeof input.instructor === "string" ? input.instructor : null,
+        color: typeof input.color === "string" ? (input.color as ScheduleColor) : undefined,
+        recurrence:
+          typeof input.recurrence === "object" && input.recurrence !== null
+            ? (input.recurrence as RecurrenceReference)
+            : null,
       });
     }
     case "exam":

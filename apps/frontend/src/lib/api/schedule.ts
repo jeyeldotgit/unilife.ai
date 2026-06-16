@@ -26,6 +26,7 @@ export type UpdateClassInput = {
   room?: string | null;
   startTime?: string;
   subject?: string;
+  termId?: string | null;
 };
 
 export async function listClassRecords() {
@@ -51,6 +52,7 @@ export async function createClass(
     method: "POST",
     body: {
       id: crypto.randomUUID(),
+      term_id: input.termId ?? null,
       subject: input.subject,
       room: input.room ?? undefined,
       instructor: input.instructor ?? undefined,
@@ -75,6 +77,7 @@ export async function updateClass(
     method: "PATCH",
     body: {
       ...(input.subject !== undefined ? { subject: input.subject } : {}),
+      ...(input.termId !== undefined ? { term_id: input.termId } : {}),
       ...(input.room !== undefined ? { room: input.room } : {}),
       ...(input.instructor !== undefined
         ? { instructor: input.instructor }
