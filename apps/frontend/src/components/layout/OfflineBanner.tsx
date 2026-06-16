@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { useSyncStatus } from "@/hooks/use-sync-status";
 import { Icon } from "@/components/ui/Icon";
+import Link from "next/link";
 
 type BannerState = "hidden" | "offline" | "syncing" | "synced" | "failed";
 
@@ -77,7 +78,7 @@ export function OfflineBanner() {
   const failed = bannerState === "failed";
 
   return (
-    <div className="pointer-events-none fixed left-1/2 top-4 z-[60] -translate-x-1/2">
+    <div className="fixed left-1/2 top-4 z-[60] -translate-x-1/2">
       <div
         className={
           synced
@@ -105,6 +106,7 @@ export function OfflineBanner() {
                 ? "Back online - syncing changes"
                 : "Offline - changes saved"}
         </span>
+        {failed ? <Link className="ml-1 underline" href="/profile#sync-recovery">Review</Link> : null}
       </div>
     </div>
   );

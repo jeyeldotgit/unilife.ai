@@ -6,8 +6,14 @@ import { liveQuery } from "dexie";
 import { db } from "@/lib/db/dexie";
 import { buildNotificationDeepLink } from "@/lib/notifications/deep-links";
 import { reconcileAllNotifications } from "@/lib/notifications/store";
+import {
+  getCachedNotificationSettings,
+  getCategoryPreference,
+} from "@/lib/notifications/preferences";
+import { getTime24InTimeZone } from "@/lib/profile/time";
 
 const MAX_TIMEOUT_MS = 2_147_000_000;
+const QUIET_HOURS_RECHECK_MS = 60 * 1000;
 
 export type NotificationPermissionState =
   | NotificationPermission
@@ -70,6 +76,16 @@ export async function dismissNotification(notificationId: string) {
   }
 }
 
+export function isWithinQuietHours(
+  time: string,
+  start: string,
+  end: string,
+) {
+  if (start === end) return true;
+  if (start < end) return time >= start && time < end;
+  return time >= start || time < end;
+}
+
 export function createReminderRuntime(userId: string) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let subscription: { unsubscribe: () => void } | null = null;
@@ -88,7 +104,10 @@ export function createReminderRuntime(userId: string) {
       return;
     }
 
-    const now = new Date().toISOString();
+    const currentDate = new Date();
+    const now = currentDate.toISOString();
+    const settings = await getCachedNotificationSettings(userId);
+    const localTime = getTime24InTimeZone(settings.timezone, currentDate);
     const due = await db.notifications
       .where("user_id")
       .equals(userId)
@@ -99,6 +118,25 @@ export function createReminderRuntime(userId: string) {
       .sortBy("scheduled_at");
 
     for (const notification of due) {
+      const preference = getCategoryPreference(
+        settings,
+        notification.category ?? notification.entity_type,
+      );
+      if (!preference.enabled) {
+        await db.notifications.delete(notification.id);
+        continue;
+      }
+      if (
+        settings.quiet_hours_enabled &&
+        !preference.urgent_bypass_enabled &&
+        isWithinQuietHours(
+          localTime,
+          settings.quiet_hours_start,
+          settings.quiet_hours_end,
+        )
+      ) {
+        continue;
+      }
       await showLocalNotification(notification);
     }
   }
@@ -121,9 +159,20 @@ export function createReminderRuntime(userId: string) {
       return;
     }
 
+    const settings = await getCachedNotificationSettings(userId);
+    const quiet =
+      settings.quiet_hours_enabled &&
+      isWithinQuietHours(
+        getTime24InTimeZone(settings.timezone),
+        settings.quiet_hours_start,
+        settings.quiet_hours_end,
+      );
     const delay = Math.min(
       MAX_TIMEOUT_MS,
-      Math.max(0, new Date(next.scheduled_at).getTime() - Date.now()),
+      Math.max(
+        quiet ? QUIET_HOURS_RECHECK_MS : 0,
+        new Date(next.scheduled_at).getTime() - Date.now(),
+      ),
     );
     timer = setTimeout(() => void armNext(), delay);
   }
@@ -160,6 +209,9 @@ export function createReminderRuntime(userId: string) {
         db.classes.where("user_id").equals(userId).toArray(),
         db.assignments.where("user_id").equals(userId).toArray(),
         db.exams.where("user_id").equals(userId).toArray(),
+        db.budgets.where("user_id").equals(userId).toArray(),
+        db.expenses.where("user_id").equals(userId).toArray(),
+        db.notification_settings.where("user_id").equals(userId).toArray(),
       ]),
     ).subscribe(() => void reconcile());
     window.addEventListener("focus", handleResume);

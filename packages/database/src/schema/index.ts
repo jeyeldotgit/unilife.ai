@@ -6,6 +6,7 @@ export * from "./expenses.js";
 export * from "./budgets.js";
 export * from "./budget_revisions.js";
 export * from "./notifications.js";
+export * from "./notification_preferences.js";
 export * from "./sync_queue.js";
 export * from "./ai_logs.js";
 export * from "./ai_action_history.js";

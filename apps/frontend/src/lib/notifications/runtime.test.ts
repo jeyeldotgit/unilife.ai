@@ -18,6 +18,7 @@ import {
   dismissNotification,
   getNotificationPermission,
   showLocalNotification,
+  isWithinQuietHours,
 } from "@/lib/notifications/runtime";
 
 describe("notification lifecycle", () => {
@@ -62,5 +63,12 @@ describe("notification lifecycle", () => {
     expect(updateMock).toHaveBeenCalledWith("notification-1", {
       status: "dismissed",
     });
+  });
+
+  it("handles overnight and same-day quiet-hour ranges", () => {
+    expect(isWithinQuietHours("23:00", "22:00", "07:00")).toBe(true);
+    expect(isWithinQuietHours("06:59", "22:00", "07:00")).toBe(true);
+    expect(isWithinQuietHours("12:00", "22:00", "07:00")).toBe(false);
+    expect(isWithinQuietHours("13:00", "12:00", "14:00")).toBe(true);
   });
 });

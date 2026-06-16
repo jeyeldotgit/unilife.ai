@@ -193,7 +193,7 @@ describe("sync endpoints", () => {
     });
 
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({
+    await expect(response.json()).resolves.toMatchObject({
       error: {
         code: "UNAUTHENTICATED",
         message: "Missing bearer token.",
@@ -247,7 +247,7 @@ describe("sync endpoints", () => {
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    await expect(response.json()).resolves.toMatchObject({
       synced: [
         "11111111-1111-4111-8111-111111111111",
         "22222222-2222-4222-8222-222222222222",

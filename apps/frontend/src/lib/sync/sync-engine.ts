@@ -1,4 +1,4 @@
-import type { SyncQueueItem } from "@unilife-ai/types";
+import type { SyncItemResult, SyncQueueItem } from "@unilife-ai/types";
 
 import { requestBackendClient } from "@/lib/api/client-browser";
 import { hydrateAllEntities, markHydrationSuccess } from "@/lib/sync/hydration";
@@ -16,6 +16,7 @@ import { setSyncStatusState } from "@/lib/sync/sync-status";
 type SyncPushResponse = {
   failed: string[];
   synced: string[];
+  results?: SyncItemResult[];
 };
 
 type WindowLike = Pick<Window, "addEventListener" | "removeEventListener">;

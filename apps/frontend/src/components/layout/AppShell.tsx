@@ -9,6 +9,8 @@ import { DeleteUndoToastProvider } from "@/components/ui/DeleteUndoToast";
 import { setCurrentUserId } from "@/lib/session/current-user";
 import { createSyncEngine } from "@/lib/sync/sync-engine";
 import { createReminderRuntime } from "@/lib/notifications/runtime";
+import { fetchNotificationSettings } from "@/lib/notifications/preferences";
+import { resolveProfileTimeZone } from "@/lib/profile/time";
 
 export function AppShell({
   children,
@@ -25,13 +27,15 @@ export function AppShell({
     const engine = createSyncEngine({ userId });
     const reminderRuntime = createReminderRuntime(userId);
     engine.start();
-    reminderRuntime.start();
+    void fetchNotificationSettings(userId, resolveProfileTimeZone(initialProfile?.timezone))
+      .catch(() => null)
+      .finally(() => reminderRuntime.start());
 
     return () => {
       engine.stop();
       reminderRuntime.stop();
     };
-  }, [userId]);
+  }, [initialProfile?.timezone, userId]);
 
   return (
     <ProfileProvider initialProfile={initialProfile}>

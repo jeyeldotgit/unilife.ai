@@ -7,6 +7,7 @@ import type {
   Expense,
   AiActionHistory,
   RecurrenceReference,
+  SyncItemResult,
 } from "@unilife-ai/types";
 import { z } from "zod";
 
@@ -186,6 +187,7 @@ export type SyncPushItem = {
 type SyncPushResult = {
   synced: string[];
   failed: string[];
+  results: SyncItemResult[];
 };
 
 type SyncDependencies = {
@@ -264,17 +266,97 @@ export class SyncService {
   async push(items: SyncPushItem[]): Promise<SyncPushResult> {
     const synced: string[] = [];
     const failed: string[] = [];
+    const results: SyncItemResult[] = [];
 
     for (const item of items) {
       try {
+        const winningSnapshot = await this.findNewerWinningSnapshot(item);
+        if (winningSnapshot) {
+          synced.push(item.id);
+          results.push({
+            id: item.id,
+            status: "replaced",
+            reason: "A newer remote revision replaced this local change.",
+            winning_snapshot: winningSnapshot,
+          });
+          continue;
+        }
         const success = await this.processItem(item);
         (success ? synced : failed).push(item.id);
+        results.push({
+          id: item.id,
+          status: success ? "synced" : "failed",
+          reason: success ? null : "The server could not apply this change.",
+          winning_snapshot: null,
+        });
       } catch {
         failed.push(item.id);
+        results.push({
+          id: item.id,
+          status: "failed",
+          reason: "The server could not apply this change.",
+          winning_snapshot: null,
+        });
       }
     }
 
-    return { synced, failed };
+    return { synced, failed, results };
+  }
+
+  private async findNewerWinningSnapshot(item: SyncPushItem) {
+    const localTimestamp =
+      typeof item.payload.updated_at === "string"
+        ? item.payload.updated_at
+        : typeof item.payload.deleted_at === "string"
+          ? item.payload.deleted_at
+          : null;
+    if (!localTimestamp) {
+      return null;
+    }
+
+    let current: { updated_at: string } | null = null;
+    try {
+      switch (item.entity_type) {
+        case "class":
+          current = await this.dependencies.classesRepository.findByIdIncludingDeletedForUser(
+            item.entity_id,
+            this.userId,
+          );
+          break;
+        case "assignment":
+          current = await this.dependencies.assignmentsRepository.findByIdIncludingDeletedForUser(
+            item.entity_id,
+            this.userId,
+          );
+          break;
+        case "exam":
+          current = await this.dependencies.examsRepository.findByIdIncludingDeletedForUser(
+            item.entity_id,
+            this.userId,
+          );
+          break;
+        case "expense":
+          current = await this.dependencies.expensesRepository.findByIdIncludingDeletedForUser(
+            item.entity_id,
+            this.userId,
+          );
+          break;
+        case "budget":
+          current = await this.dependencies.budgetsRepository.findByIdForUser(
+            item.entity_id,
+            this.userId,
+          );
+          break;
+        default:
+          return null;
+      }
+    } catch {
+      return null;
+    }
+
+    return current && isOlderTimestamp(localTimestamp, current.updated_at)
+      ? (current as unknown as Record<string, unknown>)
+      : null;
   }
 
   private async processItem(item: SyncPushItem) {

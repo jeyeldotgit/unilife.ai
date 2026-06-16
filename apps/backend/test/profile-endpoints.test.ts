@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   profiles: [] as Record<string, unknown>[],
+  notificationPreferences: [] as Record<string, unknown>[],
 }));
 
 vi.mock("../src/repositories/health.repository.js", () => ({
@@ -55,6 +56,26 @@ vi.mock("../src/repositories/profile.repository.js", () => ({
   },
 }));
 
+vi.mock("../src/repositories/notification-preferences.repository.js", () => ({
+  NotificationPreferencesRepository: class NotificationPreferencesRepository {
+    async listForUser(userId: string) {
+      return state.notificationPreferences.filter((item) => item.user_id === userId);
+    }
+
+    async upsertForUser(userId: string, preferences: Record<string, unknown>[]) {
+      for (const preference of preferences) {
+        const index = state.notificationPreferences.findIndex(
+          (item) => item.user_id === userId && item.category === preference.category,
+        );
+        const next = { ...preference, user_id: userId };
+        if (index === -1) state.notificationPreferences.push(next);
+        else state.notificationPreferences[index] = next;
+      }
+      return preferences;
+    }
+  },
+}));
+
 import { app } from "../src/app.js";
 
 beforeEach(() => {
@@ -69,6 +90,7 @@ beforeEach(() => {
       updated_at: "2026-06-01T08:00:00.000Z",
     },
   ];
+  state.notificationPreferences = [];
 });
 
 describe("profile endpoints", () => {
@@ -152,5 +174,58 @@ describe("profile endpoints", () => {
 
     expect(invalidResponse.status).toBe(400);
     expect(invalidBody.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("notification preference endpoints", () => {
+  it("rejects unauthenticated requests and returns authenticated defaults", async () => {
+    expect((await app.request("http://localhost/api/notification-preferences")).status).toBe(401);
+
+    const response = await app.request("http://localhost/api/notification-preferences", {
+      headers: { Authorization: "Bearer valid-token" },
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.settings.preferences).toHaveLength(5);
+    expect(body.settings).toMatchObject({
+      user_id: "user-1",
+      quiet_hours_enabled: true,
+      quiet_hours_start: "22:00",
+      quiet_hours_end: "07:00",
+    });
+  });
+
+  it("validates and updates user-scoped preferences", async () => {
+    const invalid = await app.request("http://localhost/api/notification-preferences", {
+      method: "PATCH",
+      headers: { Authorization: "Bearer valid-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ quiet_hours_start: "25:00" }),
+    });
+    expect(invalid.status).toBe(400);
+
+    const response = await app.request("http://localhost/api/notification-preferences", {
+      method: "PATCH",
+      headers: { Authorization: "Bearer valid-token", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quiet_hours_enabled: false,
+        preferences: [{
+          category: "exam",
+          enabled: false,
+          urgent_bypass_enabled: false,
+          escalation_limit: 0,
+        }],
+      }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.settings.quiet_hours_enabled).toBe(false);
+    expect(body.settings.preferences.find((item: { category: string }) => item.category === "exam")).toMatchObject({
+      category: "exam",
+      enabled: false,
+      urgent_bypass_enabled: false,
+      escalation_limit: 0,
+    });
   });
 });
