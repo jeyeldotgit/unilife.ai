@@ -8,12 +8,14 @@ import {
   jsonb,
 } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
+import { academicTerms } from "./academic_terms.js";
 
 export const classes = pgTable("classes", {
   id: uuid("id").primaryKey(),
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  termId: uuid("term_id").references(() => academicTerms.id, { onDelete: "set null" }),
   subject: text("subject").notNull(),
   room: text("room"),
   instructor: text("instructor"),

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 
+import { academicTermsRouter } from "./routes/academic-terms.route.js";
 import { aiRouter } from "./routes/ai.route.js";
 import type { AppBindings } from "./lib/hono.js";
 import { assignmentsRouter } from "./routes/assignments.route.js";
@@ -11,10 +12,12 @@ import { healthRouter } from "./routes/health.route.js";
 import { profileRouter } from "./routes/profile.route.js";
 import { notificationPreferencesRouter } from "./routes/notification-preferences.route.js";
 import { recurrenceRouter } from "./routes/recurrence.route.js";
+import { scheduleImportsRouter } from "./routes/schedule-imports.route.js";
 import { syncRouter } from "./routes/sync.route.js";
 
 export const apiRouter = new Hono<AppBindings>();
 
+apiRouter.route("/academic-terms", academicTermsRouter);
 apiRouter.route("/classes", classesRouter);
 apiRouter.route("/assignments", assignmentsRouter);
 apiRouter.route("/exams", examsRouter);
@@ -23,6 +26,7 @@ apiRouter.route("/budgets", budgetsRouter);
 apiRouter.route("/profile", profileRouter);
 apiRouter.route("/notification-preferences", notificationPreferencesRouter);
 apiRouter.route("/recurrence", recurrenceRouter);
+apiRouter.route("/schedule-imports", scheduleImportsRouter);
 apiRouter.route("/sync", syncRouter);
 apiRouter.route("/ai", aiRouter);
 

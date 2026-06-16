@@ -1,3 +1,4 @@
+export type * from "./academic-term";
 export type * from "./ai-log";
 export type * from "./ai-action";
 export type * from "./assignment";
@@ -10,3 +11,4 @@ export type * from "./expense";
 export type * from "./budget";
 export type * from "./planning";
 export type * from "./recurrence";
+export type * from "./schedule-import";

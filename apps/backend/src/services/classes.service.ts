@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  AcademicTerm,
   RecurrenceEditScope,
   ClassRecord,
   DayOfWeek,
@@ -7,6 +8,7 @@ import type {
 } from "@unilife-ai/types";
 
 import { ClassesRepository } from "../repositories/classes.repository.js";
+import { AcademicTermsRepository } from "../repositories/academic-terms.repository.js";
 
 export type ListClassesFilters = {
   since?: string;
@@ -14,6 +16,7 @@ export type ListClassesFilters = {
 
 export type CreateClassInput = {
   id: string;
+  term_id?: string | null;
   subject: string;
   room?: string;
   instructor?: string;
@@ -27,6 +30,7 @@ export type CreateClassInput = {
 };
 
 export type UpdateClassInput = {
+  term_id?: string | null;
   subject?: string;
   room?: string;
   instructor?: string;
@@ -59,13 +63,16 @@ function isOlderTimestamp(incomingUpdatedAt: string, currentUpdatedAt: string) {
 
 export class ClassesService {
   private readonly repository: ClassesRepository;
+  private readonly termsRepository: AcademicTermsRepository;
 
   constructor(
     supabase: SupabaseClient,
     private readonly userId: string,
     repository = new ClassesRepository(supabase),
+    termsRepository = new AcademicTermsRepository(supabase),
   ) {
     this.repository = repository;
+    this.termsRepository = termsRepository;
   }
 
   async listForUser(filters: ListClassesFilters) {
@@ -90,9 +97,11 @@ export class ClassesService {
   }
 
   async createClass(input: CreateClassInput) {
+    const termId = await this.resolveActiveTermId(input.term_id);
     const record: ClassRecord = {
       id: input.id,
       user_id: this.userId,
+      term_id: termId,
       subject: input.subject,
       room: input.room ?? null,
       instructor: input.instructor ?? null,
@@ -108,6 +117,19 @@ export class ClassesService {
     };
 
     return this.repository.create(record);
+  }
+
+  private async resolveActiveTermId(termId: string | null | undefined) {
+    let term: AcademicTerm | null = null;
+    if (termId) {
+      term = await this.termsRepository.findByIdForUser(termId, this.userId);
+      if (term?.status === "active") {
+        return term.id;
+      }
+    }
+
+    term = await this.termsRepository.findActiveForUser(this.userId);
+    return term?.id ?? null;
   }
 
   async updateClass(id: string, input: UpdateClassInput): Promise<ClassUpdateResult> {
@@ -131,6 +153,10 @@ export class ClassesService {
 
     if (input.subject !== undefined) {
       changes.subject = input.subject;
+    }
+
+    if (input.term_id !== undefined) {
+      changes.term_id = input.term_id;
     }
 
     if (input.room !== undefined) {

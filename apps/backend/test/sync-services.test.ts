@@ -192,6 +192,7 @@ describe("sync service", () => {
     expect(upsert).toHaveBeenCalledWith({
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       user_id: "user-1",
+      term_id: null,
       subject: "Revived subject",
       room: null,
       instructor: null,

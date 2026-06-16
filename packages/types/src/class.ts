@@ -12,6 +12,7 @@ export type DayOfWeek =
 export type ClassRecord = {
   id: string; // UUID (client-generated)
   user_id: string;
+  term_id?: string | null;
   subject: string;
   room: string | null;
   instructor: string | null;

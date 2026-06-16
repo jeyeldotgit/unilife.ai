@@ -20,6 +20,8 @@
 | Expenses    | `/api/expenses/*`     | Yes           |
 | Budgets     | `/api/budgets/*`      | Yes           |
 | AI          | `/api/ai/*`           | Yes           |
+| Academic Terms | `/api/academic-terms/*` | Yes       |
+| Schedule Imports | `/api/schedule-imports/*` | Yes     |
 
 ---
 
@@ -897,6 +899,139 @@ AI action-history writes are produced locally after review/apply/undo and synchr
 
 ---
 
+## GET /api/academic-terms
+
+**Type:** Protected REST endpoint  
+**Responsibility:** Returns user-scoped academic terms for schedule grouping and manual archive behavior.
+
+### Response
+
+```ts
+{
+  terms: AcademicTerm[];
+}
+```
+
+---
+
+## POST /api/academic-terms
+
+**Type:** Protected REST endpoint  
+**Responsibility:** Upserts a user-owned academic term created or archived through the local-first schedule flow.
+
+### Request
+
+```ts
+{
+  id: string;
+  name: string;
+  status: "active" | "archived";
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  deleted_at: string | null;
+}
+```
+
+### Response
+
+```ts
+{
+  term: AcademicTerm;
+}
+```
+
+---
+
+## POST /api/schedule-imports
+
+**Type:** Protected REST endpoint  
+**Responsibility:** Creates a review-first schedule import from one image or ICS file. Image files are OCRed with backend-local Tesseract.js and parsed deterministically; PDF OCR is deferred. The endpoint fingerprints file content for idempotency and returns a proposal; it does not write class records.
+
+### Request
+
+```ts
+{
+  source_type: "image" | "pdf" | "ics";
+  source_name: string;
+  timezone: string;
+  content_base64: string; // max 5 MB decoded
+  term_id?: string | null;
+  source_path?: string | null;
+}
+```
+
+### Response
+
+```ts
+{
+  import: ScheduleImportHistory;
+  idempotent: boolean;
+}
+```
+
+Unchanged re-imports return the previous user-scoped import with `idempotent: true`.
+
+---
+
+## GET /api/schedule-imports/:id
+
+**Type:** Protected REST endpoint  
+**Responsibility:** Returns user-scoped import history and proposal state.
+
+### Response
+
+```ts
+{
+  import: ScheduleImportHistory;
+}
+```
+
+---
+
+## POST /api/schedule-imports/:id/confirm
+
+**Type:** Protected REST endpoint  
+**Responsibility:** Confirms selected, edited import entries and converts them into standard AI proposal operations. The frontend applies the returned proposal through the local mutation/sync path.
+
+### Request
+
+```ts
+{
+  entries: ScheduleImportEntry[];
+}
+```
+
+### Response
+
+```ts
+{
+  import: ScheduleImportHistory;
+  proposal: AiProposal;
+}
+```
+
+Selected entries require `subject`, `day_of_week`, `start_time`, and `end_time`. Confirmation marks temporary source/extracted content as deleted and returns class-create proposal operations with the import term ID; it does not bypass review or local sync.
+
+---
+
+## DELETE /api/schedule-imports/:id/source
+
+**Type:** Protected REST endpoint  
+**Responsibility:** Deletes retained source/extracted import content where available while preserving metadata needed for idempotency and audit.
+
+### Response
+
+```ts
+{
+  import: ScheduleImportHistory;
+}
+```
+
+---
+
+---
+
 ## Error Shapes
 
 All REST errors use the same JSON envelope:
@@ -941,5 +1076,7 @@ All REST errors use the same JSON envelope:
 | exams       | 5         | 2 GET, 1 POST, 1 PATCH, 1 DELETE |
 | expenses    | 3         | 1 GET, 1 POST, 1 DELETE         |
 | budgets     | 3         | 1 GET, 1 POST, 1 PATCH          |
-| ai          | 1         | 1 POST                          |
-| **Total**   | **24**    | **9 GET, 7 POST, 4 PATCH, 4 DELETE** |
+| ai          | 2         | 1 GET, 1 POST                   |
+| academic terms | 2     | 1 GET, 1 POST                   |
+| schedule imports | 4   | 1 GET, 2 POST, 1 DELETE         |
+| **Total**   | **31**    | **12 GET, 10 POST, 4 PATCH, 5 DELETE** |

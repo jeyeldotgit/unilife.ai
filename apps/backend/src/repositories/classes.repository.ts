@@ -11,9 +11,12 @@ export class ClassesRepository {
   async listForUser(userId: string, filters: { since?: string }) {
     let query = this.supabase
       .from("classes")
-      .select("*")
+      .select("*, academic_terms!inner(id, user_id, status, deleted_at)")
       .eq("user_id", userId)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .eq("academic_terms.user_id", userId)
+      .eq("academic_terms.status", "active")
+      .is("academic_terms.deleted_at", null);
 
     if (filters.since) {
       query = query.gt("updated_at", filters.since);
@@ -25,7 +28,12 @@ export class ClassesRepository {
       throw new Error(error.message);
     }
 
-    return (data ?? []) as ClassRecord[];
+    return (data ?? []).map((record) => {
+      const { academic_terms: _term, ...classRecord } = record as ClassRecord & {
+        academic_terms?: unknown;
+      };
+      return classRecord;
+    }) as ClassRecord[];
   }
 
   async findByIdForUser(id: string, userId: string) {
