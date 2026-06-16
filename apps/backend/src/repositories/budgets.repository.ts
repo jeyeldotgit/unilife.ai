@@ -13,6 +13,7 @@ function toBudget(record: DatabaseBudgetRow): Budget {
   return {
     ...record,
     amount: Number(record.amount),
+    is_rolling: Boolean(record.is_rolling),
   };
 }
 

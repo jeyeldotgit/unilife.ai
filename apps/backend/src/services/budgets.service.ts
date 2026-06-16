@@ -12,6 +12,7 @@ export type CreateBudgetInput = {
   id: string;
   amount: number;
   period: BudgetPeriod;
+  is_rolling?: boolean;
   start_date: string;
   end_date: string;
   created_at: string;
@@ -21,6 +22,7 @@ export type CreateBudgetInput = {
 export type UpdateBudgetInput = {
   amount?: number;
   period?: BudgetPeriod;
+  is_rolling?: boolean;
   start_date?: string;
   end_date?: string;
   updated_at: string;
@@ -35,6 +37,30 @@ type BudgetUpdateResult =
 
 function isOlderTimestamp(incomingUpdatedAt: string, currentUpdatedAt: string) {
   return Date.parse(incomingUpdatedAt) < Date.parse(currentUpdatedAt);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function formatDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function calculateBudgetEndDate(startDate: string, period: BudgetPeriod) {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const end =
+    period === "daily"
+      ? start
+      : period === "weekly"
+        ? addDays(start, 6)
+        : period === "biweekly"
+          ? addDays(start, 13)
+          : addDays(start, 29);
+
+  return formatDateKey(end);
 }
 
 export class BudgetsService {
@@ -66,7 +92,30 @@ export class BudgetsService {
   }
 
   async listForUser(filters: ListBudgetsFilters) {
-    return this.repository.listForUser(this.userId, filters);
+    const records = await this.repository.listForUser(this.userId, filters);
+    const today = formatDateKey(new Date());
+    const latestRolling = records
+      .filter((budget) => budget.is_rolling)
+      .sort((left, right) => right.end_date.localeCompare(left.end_date))[0];
+
+    if (!latestRolling || latestRolling.end_date >= today || filters.since) {
+      return records;
+    }
+
+    const nextStartDate = formatDateKey(addDays(new Date(`${latestRolling.end_date}T00:00:00.000Z`), 1));
+    const timestamp = new Date().toISOString();
+    const nextBudget = await this.createBudget({
+      id: crypto.randomUUID(),
+      amount: latestRolling.amount,
+      period: latestRolling.period,
+      is_rolling: true,
+      start_date: nextStartDate,
+      end_date: calculateBudgetEndDate(nextStartDate, latestRolling.period),
+      created_at: timestamp,
+      updated_at: timestamp,
+    });
+
+    return [nextBudget, ...records];
   }
 
   async createBudget(input: CreateBudgetInput) {
@@ -75,6 +124,7 @@ export class BudgetsService {
       user_id: this.userId,
       amount: input.amount,
       period: input.period,
+      is_rolling: input.is_rolling ?? false,
       start_date: input.start_date,
       end_date: input.end_date,
       created_at: input.created_at,
@@ -120,6 +170,10 @@ export class BudgetsService {
       changes.period = input.period;
     }
 
+    if (input.is_rolling !== undefined) {
+      changes.is_rolling = input.is_rolling;
+    }
+
     if (input.start_date !== undefined) {
       changes.start_date = input.start_date;
     }
@@ -143,6 +197,7 @@ export class BudgetsService {
     const changed =
       existingRecord.amount !== updatedRecord.amount ||
       existingRecord.period !== updatedRecord.period ||
+      existingRecord.is_rolling !== updatedRecord.is_rolling ||
       existingRecord.start_date !== updatedRecord.start_date ||
       existingRecord.end_date !== updatedRecord.end_date;
 

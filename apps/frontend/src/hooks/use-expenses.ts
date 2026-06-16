@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { db } from "@/lib/db/dexie";
 import {
   buildBudgetStatusSnapshot,
@@ -9,6 +10,7 @@ import {
 import { useCurrentUserId } from "@/hooks/use-current-user-id";
 import { useLiveQueryValue } from "@/hooks/use-live-query";
 import { useSyncStatus } from "@/hooks/use-sync-status";
+import { rolloverExpiredRollingBudgetLocal } from "@/lib/mutations/local-data";
 
 export function useExpenses(range?: { fromAt: string | null; toAt: string | null }) {
   const syncStatus = useSyncStatus();
@@ -53,6 +55,14 @@ export function useExpenses(range?: { fromAt: string | null; toAt: string | null
       (!range?.toAt || expense.spent_at <= range.toAt),
   );
   const expensesSnapshot = buildExpensesSnapshot(filteredExpenses);
+
+  useEffect(() => {
+    if (!userId || !budgetsQuery.loaded) {
+      return;
+    }
+
+    void rolloverExpiredRollingBudgetLocal().catch(() => null);
+  }, [budgetsQuery.loaded, userId]);
 
   return {
     activeBudget,

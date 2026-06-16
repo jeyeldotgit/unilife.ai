@@ -145,6 +145,50 @@ function calculateAverageDailySpend(
   return elapsedDays === 0 ? 0 : totalSpent / elapsedDays;
 }
 
+function diffCalendarDays(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / 86_400_000);
+}
+
+function getBudgetEstimate(
+  cycle: Pick<Budget, "end_date" | "start_date">,
+  spentAmount: number,
+  remainingAmount: number,
+) {
+  const today = getLocalDateKey();
+  const daysElapsedInCycle = Math.max(1, diffCalendarDays(cycle.start_date, today) + 1);
+  const daysRemainingInCycle = Math.max(0, diffCalendarDays(today, cycle.end_date));
+
+  if (remainingAmount <= 0) {
+    return { estimatedDaysLeft: 0, estimateLabel: "Over budget" };
+  }
+
+  if (spentAmount === 0 && daysElapsedInCycle <= 1) {
+    return { estimatedDaysLeft: daysRemainingInCycle, estimateLabel: "Budget just started" };
+  }
+
+  if (spentAmount === 0) {
+    return {
+      estimatedDaysLeft: daysRemainingInCycle,
+      estimateLabel: "No spending recorded yet",
+    };
+  }
+
+  const averageDailySpend = calculateAverageDailySpend(cycle.start_date, [
+    { amount: spentAmount },
+  ]);
+  const estimatedDaysLeft = Math.min(
+    daysRemainingInCycle,
+    Math.max(0, Math.floor(remainingAmount / averageDailySpend)),
+  );
+
+  return {
+    estimatedDaysLeft,
+    estimateLabel: `Est. lasts ${estimatedDaysLeft} more day${estimatedDaysLeft === 1 ? "" : "s"}`,
+  };
+}
+
 export function normalizeExpenseRecord(record: ExpenseRecord): ExpenseItem {
   const label = record.description?.trim()
     ? titleCase(record.description.trim())
@@ -194,19 +238,13 @@ export function buildBudgetStatusSnapshot(
   expenses: Array<{ amount: number }>,
 ): BudgetStatus {
   const spentAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const remainingAmount = Math.max(cycle.amount - spentAmount, 0);
+  const rawRemainingAmount = cycle.amount - spentAmount;
+  const remainingAmount = Math.max(rawRemainingAmount, 0);
   const progressPercent =
     cycle.amount === 0 ? 0 : Math.round((spentAmount / cycle.amount) * 100);
-  const averageDailySpend = Math.max(
-    calculateAverageDailySpend(cycle.start_date, expenses),
-    1,
-  );
-  const estimatedDaysLeft = Math.max(
-    0,
-    Math.round(remainingAmount / averageDailySpend),
-  );
+  const estimate = getBudgetEstimate(cycle, spentAmount, rawRemainingAmount);
   const tone =
-    remainingAmount <= cycle.amount * 0.15
+    rawRemainingAmount <= 0 || remainingAmount <= cycle.amount * 0.15
       ? "danger"
       : remainingAmount <= cycle.amount * 0.35
         ? "warning"
@@ -224,8 +262,8 @@ export function buildBudgetStatusSnapshot(
     remainingLabel: formatAmount(remainingAmount),
     progressPercent,
     progressLabel: `${progressPercent}% used`,
-    estimatedDaysLeft,
-    estimateLabel: `Est. lasts ${estimatedDaysLeft} more days`,
+    estimatedDaysLeft: estimate.estimatedDaysLeft,
+    estimateLabel: estimate.estimateLabel,
     tone,
   };
 }
