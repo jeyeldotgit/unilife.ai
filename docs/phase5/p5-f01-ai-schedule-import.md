@@ -8,6 +8,8 @@
 
 **Implementation Status:** Future specification only. This document establishes requirements and integration boundaries but must not be treated as an active Phase 5 implementation deliverable.
 
+**Approved Future Defaults:** Version one uses deterministic ICS parsing and backend-local Tesseract.js OCR for image schedules, validates one file per import with a 5 MB limit, defers PDF OCR, and deletes uploaded source files plus extracted text after confirmation, unrecoverable failure, or cancellation while retaining user-scoped metadata needed for idempotency and audit.
+
 ## II. System Dependencies & Architectural Context
 
 **Required Upstream Dependencies Before Implementation:**
@@ -25,7 +27,11 @@
 - `docs/core/ENDPOINT_REF.md`
 
 **Resolved Gaps:**
-- Version one explicitly supports images, PDFs, and ICS files.
+- Version one explicitly supports image OCR and ICS files; PDF OCR is deferred.
+- Version one uses no AI for schedule import parsing. ICS is deterministic, and image text extraction uses backend-local Tesseract.js plus deterministic restructuring rules.
+- Version one accepts one file per import with a 5 MB maximum.
+- Version one deletes source files and extracted text after confirmation, unrecoverable failure, or cancellation.
+- Semester ending is not inferred automatically; users manually archive or clear schedules.
 - No imported record may write silently or bypass review.
 - Parsed entries use the same recurrence, conflict, duplicate, AI proposal, mutation, and sync contracts as manually created records.
 - Repeated import of the same source must be idempotent.
@@ -34,13 +40,14 @@
 
 ### A. In-Scope Elements For Future Implementation
 
-- Upload and validation for image, PDF, and ICS schedule files.
-- Text/table/calendar extraction and normalization into proposed schedule entries.
+- Upload and validation for image and ICS schedule files, with PDF OCR deferred.
+- Tesseract text extraction and deterministic restructuring into proposed schedule entries.
 - Confidence and uncertain-field presentation.
 - Duplicate and conflict detection.
 - Entry-by-entry selection, editing, rejection, and approval.
 - Explicit confirmation before any persistence.
 - Import history, source fingerprinting, and idempotent repeated imports.
+- Manual schedule archive/clear behavior for semester-like schedule grouping.
 - Privacy, retention, deletion, and failure behavior for uploaded source files and extracted text.
 
 ### B. Out-of-Scope Elements
@@ -101,10 +108,12 @@ The eventual implementation may refine wire shapes but must preserve the review,
 
 ### C. Parsing And Review Rules
 
-- ICS parsing is deterministic where the source is valid; image and PDF parsing may use OCR/AI.
+- ICS parsing is deterministic where the source is valid; image parsing uses backend-local Tesseract.js and deterministic restructuring without AI.
+- PDF OCR is deferred in version one.
 - Rotated images should be normalized when possible.
 - Blurry images, ambiguous times, missing AM/PM, conflicting timezone information, malformed ICS, and unrecognized layouts produce reviewable uncertainty or a recoverable failure.
 - Multiple schedules or terms in one source must be separated or clearly presented for selection.
+- Imported schedules attach to the active academic term; users archive or clear terms manually.
 - Missing required fields remain unresolved until the user supplies them; the system must not invent values silently.
 - Duplicate detection compares both existing schedule data and other entries in the same import.
 - Conflicts warn without automatically blocking confirmation.
@@ -125,7 +134,7 @@ The eventual implementation may refine wire shapes but must preserve the review,
 - Uploaded sources and extracted text are user-scoped and unavailable to other users.
 - Define and display a retention period before future implementation; temporary sources should be deleted as soon as no longer required.
 - Users can delete retained source files and import-history content where product/legal requirements permit.
-- Source files and extracted text must not be reused for model training without explicit separate consent.
+- Source files and extracted text must not be sent to AI providers or reused for model training.
 - Logs must not contain full schedule source files or unnecessary extracted personal data.
 
 ## V. Validation & Exit Criteria
