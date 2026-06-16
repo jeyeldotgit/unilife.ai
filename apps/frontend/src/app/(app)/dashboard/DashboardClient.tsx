@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { useProfile } from "@/components/profile/ProfileContext";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
+import { ClassDetailSheet } from "@/components/ui/ClassDetailSheet";
 import { Icon } from "@/components/ui/Icon";
 import { RecoverableError } from "@/components/ui/RecoverableError";
 import { useAssignments } from "@/hooks/use-assignments";
@@ -18,10 +19,12 @@ import { getChatUpcomingDeadlines } from "@/lib/api/deadlines";
 import { formatAmount, getLocalDateKey } from "@/lib/api/utils";
 import { getTime24InTimeZone } from "@/lib/profile/time";
 import { buildDailyBriefing } from "@/lib/planning/deterministic";
+import { deleteClassLocal } from "@/lib/mutations/local-data";
 import type {
   BudgetStatus,
   DashboardDeadlinePreview,
   ScheduleAgendaItem,
+  ScheduleClassDetail,
 } from "@/lib/types";
 
 export interface DashboardClientProps {
@@ -140,6 +143,7 @@ export default function DashboardClient({
   });
   const [pressedClassId, setPressedClassId] = useState<string | null>(null);
   const [pressedDeadlineId, setPressedDeadlineId] = useState<string | null>(null);
+  const [selectedClassDetail, setSelectedClassDetail] = useState<ScheduleClassDetail | null>(null);
   const [aiBriefingMessage, setAiBriefingMessage] = useState<string | null>(null);
   const canRequestAiBriefing =
     isOnline &&
@@ -255,13 +259,13 @@ export default function DashboardClient({
 
   const handleNavigate = (
     targetId: string,
-    route: "/schedule" | "/assignments" | "/exams",
+    route: "/assignments" | "/exams",
     setPressedId: (value: string | null) => void,
   ) => {
     setPressedId(targetId);
     window.setTimeout(() => {
       setPressedId(null);
-      router.push(route);
+      router.push(`${route}?highlight=${targetId}`);
     }, 100);
   };
 
@@ -457,7 +461,9 @@ export default function DashboardClient({
                       key={id}
                       type="button"
                       onClick={() => {
-                        handleNavigate(id, "/schedule", setPressedClassId);
+                        setPressedClassId(id);
+                        window.setTimeout(() => setPressedClassId(null), 100);
+                        setSelectedClassDetail(classesState.scheduleWeek.classDetails[id] ?? null);
                       }}
                       style={{
                         display: "flex",
@@ -659,7 +665,9 @@ export default function DashboardClient({
                     </button>
                   ))}
 
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => router.push("/chat?prompt=add+assignment")}
                     style={{
                       height: "48px",
                       border: "2px dashed rgba(194, 198, 214, 0.3)",
@@ -668,6 +676,8 @@ export default function DashboardClient({
                       alignItems: "center",
                       justifyContent: "center",
                       cursor: "pointer",
+                      width: "100%",
+                      background: "transparent",
                     }}
                   >
                     <span
@@ -680,7 +690,7 @@ export default function DashboardClient({
                     >
                       + Add Task
                     </span>
-                  </div>
+                  </button>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -847,6 +857,7 @@ export default function DashboardClient({
 
         <button
           type="button"
+          onClick={() => router.push("/chat?prompt=add+assignment")}
           style={{
             position: "fixed",
             bottom: "96px",
@@ -880,6 +891,19 @@ export default function DashboardClient({
         >
           <Icon name="add" className="text-[28px] text-white" />
         </button>
+        <ClassDetailSheet
+          open={selectedClassDetail !== null}
+          detail={selectedClassDetail}
+          onClose={() => setSelectedClassDetail(null)}
+          onEdit={(detail) => router.push(`/schedule?item=${detail.id}`)}
+          onDelete={(detail) => {
+            if (!window.confirm(`Remove ${detail.subject} from this schedule?`)) {
+              return;
+            }
+
+            void deleteClassLocal(detail.id).then(() => setSelectedClassDetail(null));
+          }}
+        />
       </div>
     </>
   );

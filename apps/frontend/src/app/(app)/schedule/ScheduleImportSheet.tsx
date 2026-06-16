@@ -19,10 +19,11 @@ import {
   readFileAsBase64,
   validateScheduleImportFile,
 } from "@/lib/api/schedule-imports";
+import { getOrCreateActiveAcademicTermOnline } from "@/lib/api/schedule-online";
 import {
-  createClassOnline,
-  getOrCreateActiveAcademicTermOnline,
-} from "@/lib/api/schedule-online";
+  createClassLocal,
+  getOrCreateActiveAcademicTermLocal,
+} from "@/lib/mutations/local-data";
 import type { DayOfWeek } from "@/lib/types";
 
 const DAY_OPTIONS: DayOfWeek[] = [
@@ -88,7 +89,7 @@ function updateEntry(
   return entries.map((entry) => (entry.id === id ? { ...entry, ...changes } : entry));
 }
 
-async function applyScheduleImportProposalOnline(
+async function applyScheduleImportProposalLocal(
   proposal: AiProposal,
   activeTermId: string,
 ) {
@@ -103,7 +104,7 @@ async function applyScheduleImportProposalOnline(
     const input = operation.approved_payload ?? operation.proposed;
     const dayOfWeek = String(input.day_of_week ?? "") as DayOfWeek;
     try {
-      const record = await createClassOnline({
+      const record = await createClassLocal({
         subject: String(input.subject ?? ""),
         termId: activeTermId,
         dayOfWeek,
@@ -167,14 +168,18 @@ export function ScheduleImportSheet({
 
   useEffect(() => {
     if (!open) {
-      setFile(null);
-      setImportRecord(null);
-      setEntries([]);
-      setError(null);
-      setPending(false);
-      setTermLabel(null);
-      setOcrStatus(null);
-      setSaveStatus(null);
+      const timeoutId = window.setTimeout(() => {
+        setFile(null);
+        setImportRecord(null);
+        setEntries([]);
+        setError(null);
+        setPending(false);
+        setTermLabel(null);
+        setOcrStatus(null);
+        setSaveStatus(null);
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
   }, [open]);
 
@@ -222,7 +227,7 @@ export function ScheduleImportSheet({
     );
     try {
       const contentBase64 = await readFileAsBase64(selectedFile);
-      const term = await getOrCreateActiveAcademicTermOnline();
+      const term = await getOrCreateActiveAcademicTermLocal();
       setTermLabel(term.name);
       setOcrStatus(
         nextSourceType === "image"
@@ -299,7 +304,7 @@ export function ScheduleImportSheet({
         })),
         status: "approved" as const,
       };
-      const appliedProposal = await applyScheduleImportProposalOnline(
+      const appliedProposal = await applyScheduleImportProposalLocal(
         approvedProposal,
         term.id,
       );

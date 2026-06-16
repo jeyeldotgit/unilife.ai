@@ -27,11 +27,13 @@ import { getLocalDateKey } from "@/lib/api/utils";
 import { normalizeRecoverableError, fieldErrorMessage, type DuplicateCandidate } from "@/lib/errors/recoverable";
 import { findLikelyClassDuplicates } from "@/lib/mutations/duplicates";
 import {
-  archiveAcademicTermOnline,
-  clearAcademicTermScheduleOnline,
-  createClassOnline,
-  getOrCreateActiveAcademicTermOnline,
-} from "@/lib/api/schedule-online";
+  archiveAcademicTermLocal,
+  clearAcademicTermScheduleLocal,
+  createClassLocal,
+  deleteClassLocal,
+  getOrCreateActiveAcademicTermLocal,
+  updateClassLocal,
+} from "@/lib/mutations/local-data";
 import { buildScheduleInsight } from "@/lib/planning/deterministic";
 import { getTime24InTimeZone } from "@/lib/profile/time";
 import type {
@@ -46,6 +48,7 @@ import type {
 import { dismissNotification } from "@/lib/notifications/runtime";
 
 type DayOption = Pick<ScheduleDay, "dayIndex" | "dayOfWeek" | "shortLabel" | "dateLabel">;
+type ScheduleViewMode = "day" | "week";
 
 type AddClassFormState = {
   subject: string;
@@ -405,6 +408,13 @@ export default function ScheduleClient({
       : FALLBACK_DAY_OPTIONS;
   const [selectedDetail, setSelectedDetail] =
     useState<ScheduleClassDetail | null>(null);
+  const [editingDetail, setEditingDetail] =
+    useState<ScheduleClassDetail | null>(null);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(() => new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>(() => {
+    if (typeof window === "undefined") return "day";
+    return (window.localStorage.getItem("unilife:schedule-view") as ScheduleViewMode | null) ?? "day";
+  });
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [importSheetOpen, setImportSheetOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -625,8 +635,21 @@ export default function ScheduleClient({
       startTransition(() => {
       void (async () => {
         try {
-          const term = classesState.activeTerm ?? await getOrCreateActiveAcademicTermOnline();
-          await createClassOnline({ ...payload, termId: term.id });
+          const term = classesState.activeTerm ?? await getOrCreateActiveAcademicTermLocal();
+          if (editingDetail) {
+            await updateClassLocal(editingDetail.id, {
+              color: payload.color,
+              dayOfWeek: payload.dayOfWeek,
+              endTime: payload.endTime,
+              instructor: payload.instructor,
+              room: payload.room,
+              startTime: payload.startTime,
+              subject: payload.subject,
+              termId: term.id,
+            });
+          } else {
+            await createClassLocal({ ...payload, termId: term.id });
+          }
           await classesState.refresh();
         } catch (error) {
           const recoverable = normalizeRecoverableError(error);
@@ -638,6 +661,7 @@ export default function ScheduleClient({
 
         setAddSheetOpen(false);
         setSelectedDetail(null);
+        setEditingDetail(null);
         setSubmitError(null);
         setFieldErrors(undefined);
         setAllowDuplicateSave(false);
@@ -649,6 +673,11 @@ export default function ScheduleClient({
     runSave();
   };
 
+  const setPersistedViewMode = (mode: ScheduleViewMode) => {
+    setViewMode(mode);
+    window.localStorage.setItem("unilife:schedule-view", mode);
+  };
+
   const handleArchiveSchedule = () => {
     if (!classesState.activeTerm) return;
     if (!window.confirm("Archive this schedule? Archived classes stay saved but will be hidden from the default schedule.")) {
@@ -656,7 +685,7 @@ export default function ScheduleClient({
     }
     setMutationState("pending");
     startTransition(() => {
-      void archiveAcademicTermOnline(classesState.activeTerm!)
+      void archiveAcademicTermLocal(classesState.activeTerm!.id)
         .then(() => {
           void classesState.refresh();
           setMutationState("queued");
@@ -676,8 +705,47 @@ export default function ScheduleClient({
     }
     setMutationState("pending");
     startTransition(() => {
-      void clearAcademicTermScheduleOnline(classesState.activeTerm!.id)
+      void clearAcademicTermScheduleLocal(classesState.activeTerm!.id)
         .then(() => {
+          void classesState.refresh();
+          setMutationState("queued");
+          window.setTimeout(() => setMutationState("idle"), 1500);
+        })
+        .catch((error) => {
+          setSubmitError(normalizeRecoverableError(error).message);
+          setMutationState("failed");
+        });
+    });
+  };
+
+  const openEditSheet = (detail: ScheduleClassDetail) => {
+    setEditingDetail(detail);
+    setSelectedDetail(null);
+    setFormState({
+      color: detail.color,
+      dayOfWeek: detail.dayOfWeek,
+      endTime: detail.endTime,
+      instructor: detail.instructor ?? "",
+      room: detail.locationLabel === "Room TBD" ? "" : detail.locationLabel,
+      startTime: detail.startTime,
+      subject: detail.subject,
+    });
+    setSubmitError(null);
+    setFieldErrors(undefined);
+    setAllowDuplicateSave(true);
+    setAddSheetOpen(true);
+  };
+
+  const handleDeleteClass = (detail: ScheduleClassDetail) => {
+    if (!window.confirm(`Remove ${detail.subject} from this schedule?`)) {
+      return;
+    }
+
+    setMutationState("pending");
+    startTransition(() => {
+      void deleteClassLocal(detail.id)
+        .then(() => {
+          setSelectedDetail(null);
           void classesState.refresh();
           setMutationState("queued");
           window.setTimeout(() => setMutationState("idle"), 1500);
@@ -719,8 +787,63 @@ export default function ScheduleClient({
       );
     }
 
+    const selectedDay = scheduleWeek.days[selectedDayIndex] ?? scheduleWeek.days[0];
+    const mobileClasses = scheduleWeek.classes.filter(
+      (classItem) => classItem.dayIndex === selectedDay.dayIndex,
+    );
+
     return (
-      <div className="overflow-hidden rounded-xl border border-[#c2c6d6]/50 bg-white shadow-sm">
+      <>
+      <div className="mb-3 flex items-center gap-2 sm:hidden">
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          {scheduleWeek.days.map((day) => (
+            <button
+              className={`h-11 min-w-11 rounded-full text-xs font-bold ${selectedDay.dayIndex === day.dayIndex ? "bg-[#0058be] text-white" : "bg-white text-[#424754]"}`}
+              key={day.dayOfWeek}
+              onClick={() => setSelectedDayIndex(day.dayIndex)}
+              type="button"
+            >
+              {day.shortLabel.slice(0, 1)}
+            </button>
+          ))}
+        </div>
+        <button
+          className="h-11 rounded-full border border-[#c2c6d6] bg-white px-4 text-xs font-bold text-[#0058be]"
+          onClick={() => setPersistedViewMode(viewMode === "day" ? "week" : "day")}
+          type="button"
+        >
+          {viewMode === "day" ? "Week" : "Day"}
+        </button>
+      </div>
+
+      {viewMode === "day" ? (
+        <div className="overflow-hidden rounded-xl border border-[#c2c6d6]/50 bg-white shadow-sm sm:hidden">
+          <div className="border-b border-[#c2c6d6]/20 p-3 text-center">
+            <p className="text-xs font-semibold uppercase text-[#6B7280]">{selectedDay.shortLabel}</p>
+            <p className="text-sm font-bold">{selectedDay.dateLabel}</p>
+          </div>
+          <div>
+            {scheduleWeek.hours.map((hour) => {
+              const classBlock = mobileClasses.find((classItem) => classItem.gridHour === hour);
+              const free = isFreeWindow(selectedDay.dayIndex, hour);
+
+              return (
+                <div className="grid min-h-12 grid-cols-[64px_1fr] border-b border-[#c2c6d6]/10" key={hour}>
+                  <div className="pt-2 text-center text-[10px] font-medium text-[#6B7280]">
+                    {`${String(hour).padStart(2, "0")}:00`}
+                  </div>
+                  <div className="relative min-h-12 p-1">
+                    {classBlock ? <ClassBlock classItem={classBlock} onSelect={handleSelectClass} /> : null}
+                    {free ? <FreeWindowInner /> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className={`${viewMode === "day" ? "hidden sm:block" : ""} overflow-hidden rounded-xl border border-[#c2c6d6]/50 bg-white shadow-sm`}>
         <div
           className="text-center"
           style={{
@@ -801,6 +924,7 @@ export default function ScheduleClient({
           })}
         </div>
       </div>
+      </>
     );
   };
 
@@ -869,7 +993,7 @@ export default function ScheduleClient({
           />
         </div>
 
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <div className="mt-8 hidden flex-wrap justify-center gap-3 sm:flex">
           <button
             type="button"
             onClick={() => {
@@ -885,6 +1009,7 @@ export default function ScheduleClient({
             type="button"
             onClick={() => {
               setSelectedDetail(null);
+              setEditingDetail(null);
               setFormState(getInitialFormState(dayOptions));
               setSubmitError(null);
               setFieldErrors(undefined);
@@ -938,10 +1063,28 @@ export default function ScheduleClient({
         </div>
       </main>
 
+      <button
+        type="button"
+        onClick={() => {
+          setSelectedDetail(null);
+          setEditingDetail(null);
+          setFormState(getInitialFormState(dayOptions));
+          setSubmitError(null);
+          setFieldErrors(undefined);
+          setAllowDuplicateSave(false);
+          setAddSheetOpen(true);
+        }}
+        className="fixed bottom-24 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0058be] text-white shadow-[0_8px_24px_rgba(0,88,190,0.35)] sm:hidden"
+      >
+        <Icon name="add" filled className="text-[28px]" />
+      </button>
+
       <ClassDetailSheet
         open={displayedSelectedDetail !== null}
         detail={displayedSelectedDetail}
         onClose={() => setSelectedDetail(null)}
+        onEdit={openEditSheet}
+        onDelete={handleDeleteClass}
       />
 
       <AddClassSheet
@@ -954,6 +1097,7 @@ export default function ScheduleClient({
         onClose={() => {
           if (!isPending) {
             setAddSheetOpen(false);
+            setEditingDetail(null);
             setSubmitError(null);
             setFieldErrors(undefined);
             setAllowDuplicateSave(false);

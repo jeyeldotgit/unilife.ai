@@ -1,16 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { AcademicTerm, ClassRecord } from "@unilife-ai/types";
+import { useCallback } from "react";
 
-import {
-  listAcademicTermsOnline,
-  listClassRecordsOnline,
-} from "@/lib/api/schedule-online";
 import { db } from "@/lib/db/dexie";
 import { buildClassOptions, buildScheduleWeekSnapshot } from "@/lib/selectors/schedule";
 import { useCurrentUserId } from "@/hooks/use-current-user-id";
 import { useLiveQueryValue } from "@/hooks/use-live-query";
+import { useSyncStatus } from "@/hooks/use-sync-status";
+import { notifySyncMutationQueued } from "@/lib/sync/mutation-signal";
 
 function getActiveTerm<T extends { status: string; deleted_at: string | null; updated_at: string }>(
   terms: T[],
@@ -23,41 +20,39 @@ function getActiveTerm<T extends { status: string; deleted_at: string | null; up
 }
 
 export function useClasses() {
+  const syncStatus = useSyncStatus();
   const userId = useCurrentUserId();
-  const [terms, setTerms] = useState<AcademicTerm[]>([]);
-  const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
-  const [loadedOnline, setLoadedOnline] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(async () => {
-    if (!userId) {
-      setTerms([]);
-      setClassRecords([]);
-      setLoadedOnline(false);
-      return;
-    }
-
-    try {
-      const [nextTerms, nextClassRecords] = await Promise.all([
-        listAcademicTermsOnline(),
-        listClassRecordsOnline(),
-      ]);
-      setTerms(nextTerms);
-      setClassRecords(nextClassRecords);
-      setError(null);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Schedule data could not be loaded.",
-      );
-    } finally {
-      setLoadedOnline(true);
+    if (userId) {
+      notifySyncMutationQueued();
     }
   }, [userId]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const termsQuery = useLiveQueryValue(
+    async () => {
+      if (!userId) return [];
+      return db.academic_terms
+        .where("user_id")
+        .equals(userId)
+        .and((term) => term.deleted_at === null)
+        .toArray();
+    },
+    [],
+    [userId],
+  );
+  const classesQuery = useLiveQueryValue(
+    async () => {
+      if (!userId) return [];
+      return db.classes
+        .where("user_id")
+        .equals(userId)
+        .and((record) => record.deleted_at === null && record.is_active)
+        .toArray();
+    },
+    [],
+    [userId],
+  );
+  const terms = termsQuery.value;
+  const classRecords = classesQuery.value;
 
   const activeTerms = terms.filter(
     (term) => term.status === "active" && term.deleted_at === null,
@@ -104,11 +99,12 @@ export function useClasses() {
   return {
     activeTerm,
     activeTerms,
-    available: loadedOnline || visibleClassRecords.length > 0,
+    available: syncStatus.ready || visibleClassRecords.length > 0,
     classOptions: buildClassOptions(visibleClassRecords),
-    error,
+    error: syncStatus.phase === "failed" ? "Schedule changes are saved locally, but sync needs attention." : null,
     loaded:
-      loadedOnline &&
+      termsQuery.loaded &&
+      classesQuery.loaded &&
       assignmentQuery.loaded &&
       notificationsQuery.loaded,
     records: visibleClassRecords,

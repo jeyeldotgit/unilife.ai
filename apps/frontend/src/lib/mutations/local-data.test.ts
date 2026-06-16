@@ -1,10 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { dbMock, notifySyncMutationQueuedMock } = vi.hoisted(() => ({
-  dbMock: {
+const { classWhereChainMock, dbMock, notifySyncMutationQueuedMock } = vi.hoisted(() => {
+  const classWhereChainMock = {
+    first: vi.fn().mockResolvedValue(undefined),
+  };
+
+  return {
+    classWhereChainMock,
+    dbMock: {
     assignments: { put: vi.fn() },
     budgets: { get: vi.fn(), put: vi.fn(), where: vi.fn() },
-    classes: { get: vi.fn(), put: vi.fn(), where: vi.fn() },
+    classes: {
+      get: vi.fn(),
+      put: vi.fn(),
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          and: vi.fn(() => classWhereChainMock),
+        })),
+      })),
+    },
     exams: { get: vi.fn(), put: vi.fn(), where: vi.fn() },
     expenses: { get: vi.fn(), put: vi.fn(), where: vi.fn() },
     notifications: {
@@ -26,7 +40,8 @@ const { dbMock, notifySyncMutationQueuedMock } = vi.hoisted(() => ({
     }),
   },
   notifySyncMutationQueuedMock: vi.fn(),
-}));
+  };
+});
 
 vi.mock("@/lib/db/dexie", () => ({
   db: dbMock,
@@ -56,6 +71,7 @@ import {
 describe("local data mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    classWhereChainMock.first.mockResolvedValue(undefined);
     dbMock.classes.get.mockResolvedValue(null);
     dbMock.expenses.get.mockResolvedValue(null);
   });
@@ -76,6 +92,43 @@ describe("local data mutations", () => {
     expect(dbMock.classes.put).toHaveBeenCalledTimes(1);
     expect(dbMock.sync_queue.put).toHaveBeenCalledTimes(1);
     expect(notifySyncMutationQueuedMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns an existing exact class block without queueing another create", async () => {
+    const existing = {
+      color: "blue",
+      created_at: "2026-06-08T12:30:00.000Z",
+      day_of_week: "monday",
+      deleted_at: null,
+      end_time: "09:00",
+      id: "class-1",
+      instructor: "Prof. Ada",
+      is_active: true,
+      recurrence: null,
+      room: "Room 101",
+      start_time: "08:00",
+      subject: "Math 101",
+      term_id: null,
+      updated_at: "2026-06-08T12:30:00.000Z",
+      user_id: "user-1",
+    };
+    classWhereChainMock.first.mockResolvedValue(existing);
+
+    const result = await createClassLocal({
+      color: "blue",
+      dayIndex: 0,
+      dayOfWeek: "monday",
+      endTime: "09:00",
+      instructor: "Prof. Ada",
+      room: "Room 101",
+      startTime: "08:00",
+      subject: "Math 101",
+    });
+
+    expect(result).toBe(existing);
+    expect(dbMock.classes.put).not.toHaveBeenCalled();
+    expect(dbMock.sync_queue.put).not.toHaveBeenCalled();
+    expect(notifySyncMutationQueuedMock).not.toHaveBeenCalled();
   });
 
   it("soft deletes an expense locally before queueing the delete", async () => {

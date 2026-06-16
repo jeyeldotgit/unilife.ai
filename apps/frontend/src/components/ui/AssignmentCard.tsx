@@ -250,7 +250,13 @@ export function AssignmentCard(props: AssignmentCardProps) {
         }}
       >
         {isDone ? (
-          <div
+          <button
+            type="button"
+            aria-label={`Mark ${assignment.title} pending`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleChecked?.(assignment.id);
+            }}
             style={{
               width: "24px",
               height: "24px",
@@ -259,10 +265,12 @@ export function AssignmentCard(props: AssignmentCardProps) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              border: "none",
+              cursor: "pointer",
             }}
           >
             <Icon name="check" filled className="text-white" size={16} />
-          </div>
+          </button>
         ) : (
           <button
             type="button"
