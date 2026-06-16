@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import type {
   ChatAllowanceForecastPayload,
   ChatClassConfirmationPayload,
@@ -9,6 +12,7 @@ import type {
 import { AssignmentCard } from "@/components/ui/AssignmentCard";
 import { Icon } from "@/components/ui/Icon";
 import { ProposalReviewCard } from "@/components/chat/ProposalReviewCard";
+import { deleteAssignmentLocal, deleteExpenseLocal } from "@/lib/mutations/local-data";
 import type { AiProposal } from "@unilife-ai/types";
 
 type ChatBubbleProps = {
@@ -536,6 +540,28 @@ export function ChatBubble({
   onExpenseCtaClick,
   onProposalChange,
 }: ChatBubbleProps) {
+  const [undoVisible, setUndoVisible] = useState(
+    message.kind === "assignment_confirmation" || message.kind === "expense_confirmation",
+  );
+
+  useEffect(() => {
+    if (message.kind !== "assignment_confirmation" && message.kind !== "expense_confirmation") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setUndoVisible(false), 10_000);
+    return () => window.clearTimeout(timeoutId);
+  }, [message.id, message.kind]);
+
+  const undoAutoResult = async () => {
+    if (message.kind === "assignment_confirmation") {
+      await deleteAssignmentLocal(message.payload.assignmentId);
+    } else if (message.kind === "expense_confirmation") {
+      await deleteExpenseLocal(message.payload.expenseId);
+    }
+    setUndoVisible(false);
+  };
+
   if (message.role === "user") {
     const userText = message.kind === "text" ? message.text : "";
 
@@ -645,11 +671,22 @@ export function ChatBubble({
           </p>
         ) : null}
         {message.kind === "assignment_confirmation" ? (
-          <AssignmentCard
-            variant="chat_confirmation"
-            confirmation={message.payload}
-            onCtaClick={onAssignmentCtaClick}
-          />
+          <>
+            <AssignmentCard
+              variant="chat_confirmation"
+              confirmation={message.payload}
+              onCtaClick={onAssignmentCtaClick}
+            />
+            {undoVisible ? (
+              <button
+                className="mt-3 text-xs font-semibold text-[#0058be] underline-offset-2 hover:underline"
+                onClick={() => void undoAutoResult()}
+                type="button"
+              >
+                Undo
+              </button>
+            ) : null}
+          </>
         ) : null}
         {message.kind === "class_confirmation" ? (
           <ClassConfirmationCard
@@ -664,10 +701,21 @@ export function ChatBubble({
           />
         ) : null}
         {message.kind === "expense_confirmation" ? (
-          <ExpenseConfirmationCard
-            payload={message.payload}
-            onClick={onExpenseCtaClick}
-          />
+          <>
+            <ExpenseConfirmationCard
+              payload={message.payload}
+              onClick={onExpenseCtaClick}
+            />
+            {undoVisible ? (
+              <button
+                className="mt-3 text-xs font-semibold text-[#0058be] underline-offset-2 hover:underline"
+                onClick={() => void undoAutoResult()}
+                type="button"
+              >
+                Undo
+              </button>
+            ) : null}
+          </>
         ) : null}
         {message.kind === "free_time_recommendation" ? (
           <FreeTimeRecommendationCard payload={message.payload} />

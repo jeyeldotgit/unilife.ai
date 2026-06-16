@@ -25,6 +25,32 @@ import { getLocalPlanningContext } from "@/lib/planning/local-context";
 import { getCurrentUserId } from "@/lib/session/current-user";
 import type { ChatClientEffect, ChatMessage } from "@/lib/types";
 
+async function addBellItem(input: {
+  body: string;
+  entityId: string;
+  entityType: string;
+  title: string;
+}) {
+  const userId = getCurrentUserId();
+  if (!userId) return;
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  await db.bell_items.put({
+    id: crypto.randomUUID(),
+    user_id: userId,
+    kind: "ai_result",
+    title: input.title,
+    body: input.body,
+    entity_type: input.entityType,
+    entity_id: input.entityId,
+    retry_queue_item_id: null,
+    read_at: null,
+    expires_at: expiresAt,
+    created_at: createdAt,
+  });
+}
+
 export type LocalChatResolution =
   | { handled: true; message: ChatMessage }
   | { handled: false; offlineMessage: ChatMessage };
@@ -175,6 +201,12 @@ export async function executeChatClientEffect(
   switch (effect.kind) {
     case "create_assignment": {
       const assignment = await createAssignmentLocal(effect.payload);
+      await addBellItem({
+        body: assignment.title,
+        entityId: assignment.id,
+        entityType: "assignment",
+        title: "Assignment added by AI",
+      });
       return buildAssignmentConfirmation(assignment);
     }
     case "create_class": {
@@ -195,6 +227,12 @@ export async function executeChatClientEffect(
     case "log_expense": {
       const expense = await logExpenseLocal(effect.payload);
       const budgetStatus = await getBudgetStatusLocal();
+      await addBellItem({
+        body: `${expense.amountLabel} · ${expense.categoryLabel}`,
+        entityId: expense.id,
+        entityType: "expense",
+        title: "Expense logged by AI",
+      });
       return buildExpenseConfirmation(expense, budgetStatus);
     }
   }
@@ -311,31 +349,25 @@ export async function resolveLocalChat(text: string): Promise<LocalChatResolutio
     };
   }
 
+  if (action.intent === "create_assignment" || action.intent === "log_expense") {
+    const message = await executeChatClientEffect(toClientEffect(action));
+
+    return {
+      handled: true,
+      message,
+    };
+  }
+
   const proposed =
-    action.intent === "create_assignment"
-      ? { title: action.data.title, due_date: action.data.due_date, class_id: null }
-      : action.intent === "create_class"
-        ? action.data
-        : action.intent === "create_exam"
-          ? {
-              title: action.data.title,
-              exam_date: action.data.exam_date,
-              location: action.data.location ?? null,
-              class_id: null,
-            }
-          : {
-              amount: action.data.amount,
-              description: action.data.label,
-              category: action.data.category,
-            };
-  const entityType =
-    action.intent === "create_assignment"
-      ? "assignment"
-      : action.intent === "create_class"
-        ? "class"
-        : action.intent === "create_exam"
-          ? "exam"
-          : "expense";
+    action.intent === "create_class"
+      ? action.data
+      : {
+          title: action.data.title,
+          exam_date: action.data.exam_date,
+          location: action.data.location ?? null,
+          class_id: null,
+        };
+  const entityType = action.intent === "create_class" ? "class" : "exam";
   const proposal = buildLocalProposal(entityType, proposed, action.confidence);
 
   return {

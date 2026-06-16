@@ -8,8 +8,9 @@ const mocks = vi.hoisted(() => ({
   getBudgetStatusLocal: vi.fn(),
   logExpenseLocal: vi.fn(),
   assignments: [] as Array<Record<string, unknown>>,
-  exams: [] as Array<Record<string, unknown>>,
-  planningContext: null as Record<string, unknown> | null,
+    exams: [] as Array<Record<string, unknown>>,
+    bellItemsPut: vi.fn(),
+    planningContext: null as Record<string, unknown> | null,
 }));
 
 vi.mock("@unilife-ai/parser", () => ({
@@ -44,6 +45,9 @@ vi.mock("@/lib/db/dexie", () => ({
         })),
       })),
     },
+    bell_items: {
+      put: mocks.bellItemsPut,
+    },
   },
 }));
 
@@ -65,7 +69,7 @@ describe("local chat executor", () => {
     mocks.planningContext = null;
   });
 
-  it("returns a locally parsed assignment for review without writing", async () => {
+  it("auto-applies a locally parsed assignment and returns a result bubble", async () => {
     mocks.routeIntent.mockReturnValue({
       intent: "create_assignment",
       confidence: 0.9,
@@ -83,20 +87,16 @@ describe("local chat executor", () => {
 
     const result = await resolveLocalChat("submit research paper june 20");
 
-    expect(mocks.createAssignmentLocal).not.toHaveBeenCalled();
+    expect(mocks.createAssignmentLocal).toHaveBeenCalledWith({
+      classId: null,
+      dueAt: "2099-06-20T15:59:00.000Z",
+      title: "Research Paper",
+    });
+    expect(mocks.bellItemsPut).toHaveBeenCalled();
     expect(result).toMatchObject({
       handled: true,
       message: {
-        kind: "proposal_review",
-        payload: {
-          processing_layer: "local",
-          operations: [
-            expect.objectContaining({
-              entity_type: "assignment",
-              operation: "create",
-            }),
-          ],
-        },
+        kind: "assignment_confirmation",
       },
     });
   });

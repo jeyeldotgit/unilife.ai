@@ -10,7 +10,8 @@ import type {
   DayOfWeek,
 } from "@/lib/types";
 
-import { formatDueDateTimeLabel, getDayLabel } from "@/lib/api/utils";
+import { formatDateTime } from "@unilife-ai/shared";
+import { getDayLabel } from "@/lib/api/utils";
 
 export function buildAssignmentConfirmation(
   assignment: Assignment,
@@ -23,7 +24,7 @@ export function buildAssignmentConfirmation(
     payload: {
       assignmentId: assignment.id,
       title: assignment.title,
-      dueLabel: formatDueDateTimeLabel(assignment.dueAt),
+      dueLabel: formatDateTime(assignment.dueAt),
       subjectLabel: assignment.subject,
       classLinkLabel:
         assignment.subject === "No class" ? "No class linked" : assignment.subject,
@@ -95,7 +96,7 @@ export function buildExamConfirmation(
       examId: exam.id,
       title: exam.title,
       subjectLabel: exam.subject,
-      examDateTimeLabel: formatDueDateTimeLabel(exam.examAt),
+      examDateTimeLabel: formatDateTime(exam.examAt),
       locationLabel: exam.location ?? "No location",
       ctaLabel: "View Exams",
       icon: "quiz",

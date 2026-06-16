@@ -40,7 +40,7 @@ function createContext(overrides: Partial<Parameters<AIService["processChat"]>[0
 }
 
 describe("AIService", () => {
-  it("requires review even for high-confidence write proposals", async () => {
+  it("allows auto-confirm for high-confidence assignment proposals", async () => {
     const service = new AIService(
       {} as never,
       "user-1",
@@ -61,7 +61,7 @@ describe("AIService", () => {
       context: createContext(),
     });
 
-    expect(result.response.requires_confirmation).toBe(true);
+    expect(result.response.requires_confirmation).toBe(false);
     expect(result.response.proposal).toMatchObject({
       status: "proposed",
       operations: [
@@ -74,7 +74,7 @@ describe("AIService", () => {
     });
   });
 
-  it("normalizes structured assignment actions and requires confirmation for low confidence", async () => {
+  it("normalizes structured assignment actions and keeps them auto-confirm eligible", async () => {
     const service = new AIService(
       {} as never,
       "user-1",
@@ -105,7 +105,7 @@ describe("AIService", () => {
         class_id: null,
       },
       message: "I found your assignment details.",
-      requires_confirmation: true,
+      requires_confirmation: false,
     });
     expect(result.log.detected_intent).toBe("create_assignment");
     expect(result.log.confidence).toBe(0.6);

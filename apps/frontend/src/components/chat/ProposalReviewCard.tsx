@@ -3,11 +3,79 @@
 import { useEffect, useState } from "react";
 import type { AiProposal } from "@unilife-ai/types";
 
+import { useCurrentUserId } from "@/hooks/use-current-user-id";
+import { useLiveQueryValue } from "@/hooks/use-live-query";
 import {
   applyAiProposal,
   getAiProposalWarnings,
   persistAiProposal,
 } from "@/lib/chat/ai-actions";
+import { db } from "@/lib/db/dexie";
+import { toDateTimeLocalValue } from "@/lib/api/utils";
+
+const ENTITY_LABELS = {
+  assignment: "Assignment",
+  class: "Class",
+  exam: "Exam",
+  expense: "Expense",
+} as const;
+
+const FIELD_LABELS: Record<string, string> = {
+  amount: "Amount",
+  category: "Category",
+  class_id: "Link to class",
+  day_of_week: "Day",
+  description: "Description",
+  due_date: "Due date and time",
+  end_time: "End time",
+  exam_date: "Exam date and time",
+  instructor: "Instructor",
+  location: "Location",
+  priority: "Priority",
+  room: "Room",
+  start_time: "Start time",
+  subject: "Subject name",
+  title: "Title",
+};
+
+function getActionLabel(operation: { entity_type: string; operation: string }) {
+  const entity = ENTITY_LABELS[operation.entity_type as keyof typeof ENTITY_LABELS] ?? operation.entity_type;
+  const verb =
+    operation.operation === "create"
+      ? "Add"
+      : operation.operation === "update"
+        ? "Update"
+        : "Remove";
+
+  return `${verb} ${entity}`;
+}
+
+function normalizeFieldValue(key: string, value: unknown) {
+  if (
+    typeof value === "string" &&
+    (key === "due_date" || key === "exam_date" || key === "spent_at")
+  ) {
+    return toDateTimeLocalValue(value);
+  }
+
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function denormalizeFieldValue(key: string, value: string, original: unknown) {
+  if (key === "due_date" || key === "exam_date" || key === "spent_at") {
+    return value ? new Date(value).toISOString() : "";
+  }
+
+  if (typeof original === "number") {
+    return Number(value);
+  }
+
+  if (original === null && value === "") {
+    return null;
+  }
+
+  return value;
+}
 
 export function ProposalReviewCard({
   proposal,
@@ -16,12 +84,25 @@ export function ProposalReviewCard({
   proposal: AiProposal;
   onChange?: (proposal: AiProposal) => void;
 }) {
+  const userId = useCurrentUserId();
   const [draft, setDraft] = useState(proposal);
   const [selected, setSelected] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(proposal.operations.map((operation) => [operation.id, true])),
   );
   const [warnings, setWarnings] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState(false);
+  const classes = useLiveQueryValue(
+    async () => {
+      if (!userId) return [];
+      return db.classes
+        .where("user_id")
+        .equals(userId)
+        .and((record) => record.deleted_at === null)
+        .toArray();
+    },
+    [],
+    [userId],
+  );
 
   useEffect(() => {
     void persistAiProposal(proposal);
@@ -41,9 +122,7 @@ export function ProposalReviewCard({
             [key]:
               typeof original === "number"
                 ? Number(value)
-                : original === null && value === ""
-                  ? null
-                  : value,
+                : denormalizeFieldValue(key, value, original),
           },
         };
       }),
@@ -90,9 +169,13 @@ export function ProposalReviewCard({
   return (
     <div className="flex min-w-[260px] flex-col gap-4">
       <div>
-        <p className="m-0 text-base font-semibold">Review AI action</p>
+        <p className="m-0 text-base font-semibold">
+          {draft.operations.length === 1
+            ? getActionLabel(draft.operations[0])
+            : "Review AI actions"}
+        </p>
         <p className="mt-1 text-xs text-[#424754]">
-          Nothing is saved until you approve it.
+          Check the details before saving.
         </p>
       </div>
 
@@ -113,22 +196,62 @@ export function ProposalReviewCard({
               }
               type="checkbox"
             />
-            {operation.operation} {operation.entity_type}
+            {getActionLabel(operation)}
           </label>
 
           <div className="flex flex-col gap-2">
-            {Object.entries(operation.proposed).map(([key, value]) => (
-              <label className="text-xs font-medium text-[#424754]" key={key}>
-                {key.replaceAll("_", " ")}
-                {operation.uncertain_fields.includes(key) ? " (check this)" : ""}
-                <input
-                  className="mt-1 w-full rounded-lg border border-[#c2c6d6] px-2 py-2 text-sm text-[#191c1d]"
-                  disabled={operation.status === "applied" || operation.status === "undone"}
-                  onChange={(event) => updateField(operation.id, key, event.target.value)}
-                  value={value === null ? "" : String(value)}
-                />
-              </label>
-            ))}
+            {Object.entries(operation.proposed)
+              .filter(([key]) => key !== "id" && key !== "entity_id")
+              .map(([key, value]) => {
+                const uncertain = operation.uncertain_fields.includes(key);
+                const disabled = operation.status === "applied" || operation.status === "undone";
+
+                return (
+                  <label className="text-xs font-medium text-[#424754]" key={key}>
+                    <span className="flex items-center gap-1">
+                      {FIELD_LABELS[key] ?? key.replaceAll("_", " ")}
+                      {uncertain ? (
+                        <span className="rounded-full bg-[#ffddb8] px-1.5 py-0.5 text-[10px] font-bold text-[#825100]">
+                          ?
+                        </span>
+                      ) : null}
+                    </span>
+                    {key === "class_id" ? (
+                      <select
+                        className="mt-1 w-full rounded-lg border border-[#c2c6d6] px-2 py-2 text-sm text-[#191c1d]"
+                        disabled={disabled}
+                        onChange={(event) => updateField(operation.id, key, event.target.value)}
+                        value={value === null ? "" : String(value)}
+                      >
+                        <option value="">No class linked</option>
+                        {classes.value.map((classRecord) => (
+                          <option key={classRecord.id} value={classRecord.id}>
+                            {classRecord.subject}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        className={`mt-1 w-full rounded-lg border px-2 py-2 text-sm text-[#191c1d] ${
+                          uncertain ? "border-[#ffb95f]" : "border-[#c2c6d6]"
+                        }`}
+                        disabled={disabled}
+                        onChange={(event) => updateField(operation.id, key, event.target.value)}
+                        type={
+                          key === "due_date" || key === "exam_date" || key === "spent_at"
+                            ? "datetime-local"
+                            : key === "amount" || key === "priority"
+                              ? "number"
+                              : key.endsWith("_time")
+                                ? "time"
+                                : "text"
+                        }
+                        value={normalizeFieldValue(key, value)}
+                      />
+                    )}
+                  </label>
+                );
+              })}
           </div>
 
           {(warnings[operation.id] ?? []).map((warning) => (
@@ -153,7 +276,7 @@ export function ProposalReviewCard({
             onClick={() => void reject()}
             type="button"
           >
-            Reject
+            Cancel
           </button>
           <button
             className="flex-1 rounded-xl bg-[#0058be] px-3 py-2 text-sm font-semibold text-white"
@@ -161,7 +284,7 @@ export function ProposalReviewCard({
             onClick={() => void apply()}
             type="button"
           >
-            {busy ? "Applying..." : "Apply selected"}
+            {busy ? "Saving..." : "Save"}
           </button>
         </div>
       ) : (

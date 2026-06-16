@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { submitChatMessageAction } from "@/actions/chat";
 import { ChatBubble } from "@/components/chat/ChatBubble";
@@ -72,8 +72,10 @@ export default function ChatClient({
   chatAvailable,
 }: ChatClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialPrompt = searchParams.get("prompt") ?? "";
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState(initialPrompt);
   const [isOffline, setIsOffline] = useState(() => {
     if (typeof navigator === "undefined") {
       return false;
