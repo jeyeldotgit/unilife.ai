@@ -71,6 +71,21 @@ describe("local parser", () => {
     });
   });
 
+  it("logs short label-and-amount expenses with typo and category-only inputs", () => {
+    expect(routeIntent("lujnch 120 - log as food in budget", { referenceDate })).toMatchObject({
+      intent: "log_expense",
+      data: { amount: 120, category: "food", label: "Lujnch" },
+    });
+    expect(routeIntent("transportation 200", { referenceDate })).toMatchObject({
+      intent: "log_expense",
+      data: { amount: 200, category: "transportation", label: "Transportation" },
+    });
+    expect(routeIntent("bar 200", { referenceDate })).toMatchObject({
+      intent: "log_expense",
+      data: { amount: 200, category: "entertainment", label: "Bar" },
+    });
+  });
+
   it("routes deadline queries before assignment creation", () => {
     expect(routeIntent("what's due today?", { referenceDate })).toMatchObject({
       intent: "query_deadlines",

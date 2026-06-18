@@ -7,6 +7,7 @@ import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageH
 import { useProfile } from "@/components/profile/ProfileContext";
 import { BudgetProgressCard } from "@/components/ui/BudgetProgressCard";
 import { ClassDetailSheet } from "@/components/ui/ClassDetailSheet";
+import { StudyPrepWidget } from "@/components/study/StudyPrepWidget";
 import { Icon } from "@/components/ui/Icon";
 import { RecoverableError } from "@/components/ui/RecoverableError";
 import { useAssignments } from "@/hooks/use-assignments";
@@ -212,6 +213,7 @@ export default function DashboardClient({
   );
   const briefingMessage =
     (canRequestAiBriefing ? aiBriefingMessage : null) ?? deterministicBriefing.message;
+  const currentTimeLabel = getTime24InTimeZone(resolvedTimeZone, new Date());
 
   useEffect(() => {
     const handleScroll = () => {
@@ -456,82 +458,91 @@ export default function DashboardClient({
                     gap: "16px",
                   }}
                 >
-                  {todayClasses.map(({ id, timeLabel, subject, locationLabel }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => {
-                        setPressedClassId(id);
-                        window.setTimeout(() => setPressedClassId(null), 100);
-                        setSelectedClassDetail(classesState.scheduleWeek.classDetails[id] ?? null);
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "12px",
-                        borderRadius: "8px",
-                        backgroundColor: "#f3f4f5",
-                        border: "1px solid transparent",
-                        cursor: "pointer",
-                        transition: "border-color 0.2s, transform 0.1s",
-                        transform:
-                          pressedClassId === id ? "scale(0.98)" : "scale(1)",
-                      }}
-                      onMouseOver={(event) => {
-                        event.currentTarget.style.borderColor = "#3B82F6";
-                      }}
-                      onMouseOut={(event) => {
-                        event.currentTarget.style.borderColor = "transparent";
-                      }}
-                    >
-                      <div style={{ display: "flex", gap: "12px" }}>
-                        <div
+                  {todayClasses.map(({ id, timeLabel, subject, locationLabel, endTime }) => {
+                    const isDone = endTime <= currentTimeLabel;
+
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          setPressedClassId(id);
+                          window.setTimeout(() => setPressedClassId(null), 100);
+                          setSelectedClassDetail(classesState.scheduleWeek.classDetails[id] ?? null);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "12px",
+                          borderRadius: "8px",
+                          backgroundColor: isDone ? "#f8f9fa" : "#f3f4f5",
+                          border: isDone ? "1px solid #d6d9e3" : "1px solid transparent",
+                          cursor: "pointer",
+                          opacity: isDone ? 0.72 : 1,
+                          transition: "border-color 0.2s, transform 0.1s",
+                          transform:
+                            pressedClassId === id ? "scale(0.98)" : "scale(1)",
+                        }}
+                        onMouseOver={(event) => {
+                          event.currentTarget.style.borderColor = isDone ? "#10B981" : "#3B82F6";
+                        }}
+                        onMouseOut={(event) => {
+                          event.currentTarget.style.borderColor = isDone ? "#d6d9e3" : "transparent";
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: "12px", minWidth: 0 }}>
+                          <div
+                            style={{
+                              color: isDone ? "#0f7a55" : "#3B82F6",
+                              fontWeight: "bold",
+                              textAlign: "center",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "10px",
+                                textTransform: "uppercase",
+                                opacity: 0.6,
+                              }}
+                            >
+                              {isDone ? "Done" : "Start"}
+                            </span>
+                            {timeLabel}
+                          </div>
+                          <div style={{ minWidth: 0, textAlign: "left" }}>
+                            <h4
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                margin: 0,
+                                textDecoration: isDone ? "line-through" : "none",
+                              }}
+                            >
+                              {subject}
+                            </h4>
+                            <p
+                              style={{
+                                fontSize: "12px",
+                                color: "#424754",
+                                margin: 0,
+                              }}
+                            >
+                              {locationLabel}
+                            </p>
+                          </div>
+                        </div>
+                        <Icon
+                          name={isDone ? "check_circle" : "chevron_right"}
                           style={{
-                            color: "#3B82F6",
-                            fontWeight: "bold",
-                            textAlign: "center",
+                            color: isDone ? "#0f7a55" : "#424754",
+                            fontSize: "18px",
                           }}
-                        >
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "10px",
-                              textTransform: "uppercase",
-                              opacity: 0.6,
-                            }}
-                          >
-                            Start
-                          </span>
-                          {timeLabel}
-                        </div>
-                        <div style={{ textAlign: "left" }}>
-                          <h4
-                            style={{
-                              fontSize: "14px",
-                              fontWeight: 600,
-                              margin: 0,
-                            }}
-                          >
-                            {subject}
-                          </h4>
-                          <p
-                            style={{
-                              fontSize: "12px",
-                              color: "#424754",
-                              margin: 0,
-                            }}
-                          >
-                            {locationLabel}
-                          </p>
-                        </div>
-                      </div>
-                      <Icon
-                        name="chevron_right"
-                        style={{ color: "#424754", fontSize: "18px" }}
-                      />
-                    </button>
-                  ))}
+                        />
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <DashboardSectionFallback
@@ -710,6 +721,8 @@ export default function DashboardClient({
               )}
             </section>
 
+            <StudyPrepWidget />
+
             {resolvedBudgetAvailable && resolvedBudget ? (
               <BudgetProgressCard variant="dashboard" budget={resolvedBudget} />
             ) : (
@@ -855,42 +868,6 @@ export default function DashboardClient({
           </div>
         </main>
 
-        <button
-          type="button"
-          onClick={() => router.push("/chat?prompt=add+assignment")}
-          style={{
-            position: "fixed",
-            bottom: "96px",
-            right: "24px",
-            width: "56px",
-            height: "56px",
-            backgroundColor: "#0058be",
-            color: "#ffffff",
-            borderRadius: "9999px",
-            boxShadow: "0 8px 24px rgba(0,88,190,0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "none",
-            cursor: "pointer",
-            zIndex: 40,
-            transition: "transform 0.15s",
-          }}
-          onMouseOver={(event) => {
-            event.currentTarget.style.transform = "scale(1.05)";
-          }}
-          onMouseOut={(event) => {
-            event.currentTarget.style.transform = "scale(1)";
-          }}
-          onMouseDown={(event) => {
-            event.currentTarget.style.transform = "scale(0.95)";
-          }}
-          onMouseUp={(event) => {
-            event.currentTarget.style.transform = "scale(1.05)";
-          }}
-        >
-          <Icon name="add" className="text-[28px] text-white" />
-        </button>
         <ClassDetailSheet
           open={selectedClassDetail !== null}
           detail={selectedClassDetail}

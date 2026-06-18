@@ -12,18 +12,20 @@ export function QuickActions({ actions, onAction }: QuickActionsProps) {
   }
 
   return (
-    <div>
-      <p className="mb-3 text-sm font-medium text-[#424754]">Quick actions:</p>
-      <div className="flex gap-3 overflow-x-auto pb-1">
+    <div className="rounded-xl border border-[#c2c6d6] bg-white p-3 shadow-sm">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.05em] text-[#424754]">
+        Quick actions
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {actions.map((action) => (
           <button
             key={action.id}
             type="button"
             onClick={() => onAction(action)}
-            className="flex shrink-0 items-center gap-2 rounded-xl border border-[#c2c6d6]/30 bg-white px-4 py-3 text-left shadow-sm transition-all hover:border-[#3B82F6] hover:bg-[#f8fbff]"
+            className="flex min-h-12 items-center gap-2 rounded-lg border border-[#c2c6d6] bg-[#f8f9fa] px-3 py-2 text-left transition-all hover:border-[#3B82F6] hover:bg-[#f8fbff]"
           >
             <Icon name={action.icon} className="text-[#3B82F6]" size={18} />
-            <span className="text-sm font-semibold text-[#191c1d]">
+            <span className="min-w-0 text-sm font-semibold text-[#191c1d]">
               {action.label}
             </span>
           </button>

@@ -80,17 +80,65 @@ export function extractAmount(input: string) {
     : null;
 }
 
+function editDistance(left: string, right: string) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  const current = Array.from({ length: right.length + 1 }, () => 0);
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    current[0] = leftIndex;
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      current[rightIndex] = Math.min(
+        previous[rightIndex] + 1,
+        current[rightIndex - 1] + 1,
+        previous[rightIndex - 1] + substitutionCost,
+      );
+    }
+
+    for (let index = 0; index < previous.length; index += 1) {
+      previous[index] = current[index];
+    }
+  }
+
+  return previous[right.length];
+}
+
+function hasApproximateToken(input: string, terms: string[]) {
+  const tokens = input.toLowerCase().match(/[a-z]{3,}/g) ?? [];
+
+  return tokens.some((token) =>
+    terms.some((term) => {
+      if (token === term || token.includes(term) || term.includes(token)) {
+        return true;
+      }
+
+      const tolerance = term.length <= 5 ? 1 : 2;
+      return editDistance(token, term) <= tolerance;
+    }),
+  );
+}
+
 export function extractExpenseCategory(input: string): ExpenseCategory {
-  if (/\b(lunch|food|meal|snack|ulam|meryenda)\b/i.test(input)) {
+  if (
+    /\b(lunch|food|meal|snack|ulam|meryenda|breakfast|dinner|drink|coffee|milk tea)\b/i.test(
+      input,
+    ) ||
+    hasApproximateToken(input, ["lunch", "food", "meal", "snack"])
+  ) {
     return "food";
   }
-  if (/\b(fare|bus|jeep|commute|transport|transpo|grab|taxi|trike)\b/i.test(input)) {
+  if (
+    /\b(fare|bus|jeep|commute|transport|transportation|transpo|grab|taxi|trike|train|lrt|mrt)\b/i.test(
+      input,
+    )
+  ) {
     return "transportation";
   }
   if (/\b(book|school|copy|project|supplies|tuition)\b/i.test(input)) {
     return "school";
   }
-  if (/\b(movie|game|cinema|concert)\b/i.test(input)) {
+  if (/\b(movie|game|cinema|concert|bar|club|gig)\b/i.test(input)) {
     return "entertainment";
   }
 
@@ -109,7 +157,11 @@ export function cleanTopic(input: string, removable: Array<string | RegExp>) {
         ),
       input,
     )
-    .replace(/\b(add|create|log|record|my|on|at|for|due|please|ako|ng|sa)\b/gi, " ")
+    .replace(
+      /\b(add|create|log|record|my|on|at|for|due|please|ako|ng|sa|as|in|budget|category)\b/gi,
+      " ",
+    )
+    .replace(/\s*[-:]\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

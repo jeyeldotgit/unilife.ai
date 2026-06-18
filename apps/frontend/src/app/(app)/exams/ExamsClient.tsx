@@ -65,6 +65,10 @@ export default function ExamsClient({
     classOptions.length > 0 ? classOptions : examsState.classOptions;
   const resolvedExamsAvailable = examsAvailable ?? examsState.available;
   const resolvedClassesAvailable = classesAvailable ?? examsState.classesAvailable;
+  const selectedExamIdFromQuery = searchParams.get("item") ?? searchParams.get("highlight");
+  const querySelectedExam = selectedExamIdFromQuery
+    ? resolvedExams.find((item) => item.id === selectedExamIdFromQuery) ?? null
+    : null;
   const [activeFilter, setActiveFilter] = useState<FilterTab>("Upcoming");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -134,7 +138,16 @@ export default function ExamsClient({
     activeFilter === "Upcoming" ? upcomingExams : pastExams;
   const displayedSelectedExam = selectedExam
     ? resolvedExams.find((exam) => exam.id === selectedExam.id) ?? selectedExam
-    : null;
+    : querySelectedExam;
+
+  const clearSelectedExamRouteParams = () => {
+    if (!selectedExamIdFromQuery) return;
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("item");
+    nextSearchParams.delete("highlight");
+    const nextQuery = nextSearchParams.toString();
+    router.replace(nextQuery ? `/exams?${nextQuery}` : "/exams", { scroll: false });
+  };
 
   const resetForm = () => {
     setFormState(createEmptyExamFormState());
@@ -444,6 +457,7 @@ export default function ExamsClient({
         onClose={() => {
           if (!isBusy) {
             setSelectedExam(null);
+            clearSelectedExamRouteParams();
           }
         }}
         onEdit={openEditForm}

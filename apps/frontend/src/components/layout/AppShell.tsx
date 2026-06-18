@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import type { UserProfile } from "@unilife-ai/types";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { FloatingChatAssistant } from "@/components/chat/FloatingChatAssistant";
 import { OfflineBanner } from "@/components/layout/OfflineBanner";
 import { SyncToast } from "@/components/layout/SyncToast";
 import { ProfileProvider } from "@/components/profile/ProfileContext";
@@ -44,6 +45,7 @@ export function AppShell({
         <OfflineBanner />
         <SyncToast />
         {children}
+        <FloatingChatAssistant />
         <BottomNav />
       </DeleteUndoToastProvider>
     </ProfileProvider>
