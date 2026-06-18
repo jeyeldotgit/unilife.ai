@@ -26,6 +26,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.14
         version: 1.19.14(hono@4.12.23)
+      '@napi-rs/canvas':
+        specifier: 0.1.80
+        version: 0.1.80
       '@supabase/ssr':
         specifier: ^0.10.3
         version: 0.10.3(@supabase/supabase-js@2.107.0)
