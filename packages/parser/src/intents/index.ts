@@ -210,18 +210,20 @@ export function tryCreateExam(input: NormalizedInput, referenceDate: Date): Inte
 }
 
 export function tryLogExpense(input: NormalizedInput): IntentResult {
-  const hasExpenseCue =
-    input.document.has("(expense|spent|lunch|fare|food|transpo)") ||
-    /\b(paid|bayad)\b/i.test(input.normalized);
-
-  if (!hasExpenseCue) {
-    return null;
-  }
-
   const amount = extractAmount(input.normalized);
   if (!amount) {
-    return unknown("log_expense", "Include a positive expense amount.");
+    const hasExpenseCue =
+      input.document.has("(expense|spent|lunch|fare|food|transpo|transportation)") ||
+      /\b(paid|bayad)\b/i.test(input.normalized);
+
+    return hasExpenseCue
+      ? unknown("log_expense", "Include a positive expense amount.")
+      : null;
   }
+
+  const hasExpenseCue =
+    input.document.has("(expense|spent|lunch|fare|food|transpo|transportation)") ||
+    /\b(paid|bayad)\b/i.test(input.normalized);
 
   const label = extractTopic(
     input,
@@ -231,8 +233,17 @@ export function tryLogExpense(input: NormalizedInput): IntentResult {
       "paid",
       "bayad",
       amount.matchedText,
+      /\bas\s+(food|transportation|transport|school|entertainment|miscellaneous)\b/i,
+      /\bin\s+(my\s+)?budget\b/i,
     ]),
   );
+
+  const isLikelyShortExpense = /^[a-z\s'-]+\s+(?:php|p)?\s*\d+(?:\.\d{1,2})?\s*$/i.test(
+    input.normalized,
+  );
+  if (!hasExpenseCue && !isLikelyShortExpense) {
+    return null;
+  }
 
   if (!label) {
     return unknown("log_expense", "Include what the expense was for.");
@@ -240,7 +251,7 @@ export function tryLogExpense(input: NormalizedInput): IntentResult {
 
   return {
     intent: "log_expense",
-    confidence: 0.95,
+    confidence: hasExpenseCue ? 0.95 : 0.82,
     data: {
       amount: amount.amount,
       label: titleCase(label),

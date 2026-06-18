@@ -145,6 +145,42 @@ export function titleCase(value: string) {
   return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function editDistance(left: string, right: string) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  const current = Array.from({ length: right.length + 1 }, () => 0);
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    current[0] = leftIndex;
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      current[rightIndex] = Math.min(
+        previous[rightIndex] + 1,
+        current[rightIndex - 1] + 1,
+        previous[rightIndex - 1] + substitutionCost,
+      );
+    }
+
+    for (let index = 0; index < previous.length; index += 1) {
+      previous[index] = current[index];
+    }
+  }
+
+  return previous[right.length];
+}
+
+function hasApproximateToken(value: string, terms: string[]) {
+  const tokens = value.toLowerCase().match(/[a-z]{3,}/g) ?? [];
+
+  return tokens.some((token) =>
+    terms.some((term) => {
+      if (token === term || token.includes(term) || term.includes(token)) return true;
+      const tolerance = term.length <= 5 ? 1 : 2;
+      return editDistance(token, term) <= tolerance;
+    }),
+  );
+}
+
 export function inferExpenseCategory(label: string): ExpenseCategory {
   const normalized = label.toLowerCase();
 
@@ -152,7 +188,11 @@ export function inferExpenseCategory(label: string): ExpenseCategory {
     normalized.includes("lunch") ||
     normalized.includes("food") ||
     normalized.includes("meal") ||
-    normalized.includes("snack")
+    normalized.includes("snack") ||
+    normalized.includes("breakfast") ||
+    normalized.includes("dinner") ||
+    normalized.includes("coffee") ||
+    hasApproximateToken(normalized, ["lunch", "food", "meal", "snack"])
   ) {
     return "food";
   }
@@ -163,10 +203,14 @@ export function inferExpenseCategory(label: string): ExpenseCategory {
     normalized.includes("jeep") ||
     normalized.includes("commute") ||
     normalized.includes("transport") ||
+    normalized.includes("transportation") ||
     normalized.includes("transpo") ||
     normalized.includes("grab") ||
     normalized.includes("taxi") ||
-    normalized.includes("trike")
+    normalized.includes("trike") ||
+    normalized.includes("train") ||
+    normalized.includes("lrt") ||
+    normalized.includes("mrt")
   ) {
     return "transportation";
   }
@@ -184,7 +228,10 @@ export function inferExpenseCategory(label: string): ExpenseCategory {
   if (
     normalized.includes("movie") ||
     normalized.includes("game") ||
-    normalized.includes("cinema")
+    normalized.includes("cinema") ||
+    normalized.includes("concert") ||
+    normalized.includes("bar") ||
+    normalized.includes("club")
   ) {
     return "entertainment";
   }
