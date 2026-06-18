@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { callGeminiText } from "@unilife-ai/ai-core";
 import type {
@@ -20,6 +22,8 @@ const PDF_HEADER = "%PDF";
 const DEFAULT_STUDY_KIT_GEMINI_MODEL = "gemini-2.0-flash";
 const STUDY_KIT_SOURCE_BUCKET = "study-kit-sources";
 const DEFAULT_GENERATION_COUNT = 10;
+const require = createRequire(import.meta.url);
+const PDFJS_WORKER_PATH = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
 
 const generatedOptionSchema = z
   .object({
@@ -160,6 +164,7 @@ async function loadPdfCanvasPolyfills() {
 async function extractPdfText(buffer: Buffer) {
   await loadPdfCanvasPolyfills();
   const { PDFParse } = await import("pdf-parse");
+  PDFParse.setWorker(pathToFileURL(PDFJS_WORKER_PATH).href);
   const parser = new PDFParse({ data: buffer });
   const parsed = await parser.getText().finally(() => parser.destroy());
   return parsed.text;

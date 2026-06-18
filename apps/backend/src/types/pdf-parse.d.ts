@@ -3,5 +3,6 @@ declare module "pdf-parse" {
     constructor(input: { data?: Buffer; url?: string });
     destroy(): Promise<void>;
     getText(): Promise<{ text: string }>;
+    static setWorker(workerSrc?: string): string;
   }
 }
