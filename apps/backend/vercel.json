@@ -3,7 +3,7 @@
   "framework": "hono",
   "functions": {
     "src/app.ts": {
-      "includeFiles": "../../node_modules/tesseract.js-core/*.wasm"
+      "includeFiles": "../../node_modules/{tesseract.js-core/*.wasm,pdfjs-dist/legacy/build/pdf.worker*.mjs}"
     }
   },
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
