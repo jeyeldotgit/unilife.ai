@@ -959,8 +959,20 @@ export default function ScheduleClient({
                 {classesState.activeTerm?.name ?? "Unassigned classes"}
               </p>
             </div>
-            {classesState.activeTerm ? (
-              <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDetail(null);
+                  setImportSheetOpen(true);
+                }}
+                className="flex items-center gap-2 rounded-full border border-[#3B82F6] bg-white px-4 py-2 text-xs font-semibold text-[#3B82F6] transition-colors hover:bg-[#eef5ff]"
+              >
+                <Icon name="upload_file" className="text-sm" />
+                Import
+              </button>
+              {classesState.activeTerm ? (
+                <>
                 <button
                   type="button"
                   onClick={handleArchiveSchedule}
@@ -975,8 +987,9 @@ export default function ScheduleClient({
                 >
                   Clear
                 </button>
-              </div>
-            ) : null}
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -994,17 +1007,6 @@ export default function ScheduleClient({
         </div>
 
         <div className="mt-8 hidden flex-wrap justify-center gap-3 sm:flex">
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedDetail(null);
-              setImportSheetOpen(true);
-            }}
-            className="flex items-center gap-2 rounded-full border border-[#3B82F6] bg-white px-6 py-4 text-sm font-semibold text-[#3B82F6] shadow-sm transition-all hover:bg-[#eef5ff] active:scale-95"
-          >
-            <Icon name="upload_file" className="text-sm" />
-            Import Schedule
-          </button>
           <button
             type="button"
             onClick={() => {
