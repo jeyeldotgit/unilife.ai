@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   conflict,
@@ -37,6 +37,10 @@ function createErrorApp() {
 }
 
 describe("handleHttpError", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("maps zod errors to VALIDATION_ERROR", async () => {
     const app = createErrorApp();
 
@@ -76,6 +80,7 @@ describe("handleHttpError", () => {
   });
 
   it("maps unknown errors to INTERNAL_ERROR", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const app = createErrorApp();
 
     const response = await app.request("http://localhost/unknown");
@@ -86,5 +91,17 @@ describe("handleHttpError", () => {
       code: "INTERNAL_ERROR",
       message: "An unexpected error occurred.",
     });
+    expect(consoleError).toHaveBeenCalledWith(
+      "Unhandled backend error.",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: "boom",
+          name: "Error",
+          stack: expect.any(String),
+        }),
+        method: "GET",
+        path: "/unknown",
+      }),
+    );
   });
 });
