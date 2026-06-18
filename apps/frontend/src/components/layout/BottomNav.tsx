@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/Icon";
 const NAV_ITEMS = [
   { href: "/dashboard", icon: "home", label: "Home" },
   { href: "/schedule", icon: "calendar_month", label: "Schedule" },
-  { href: "/chat", icon: "smart_toy", label: "Chat" },
+  { href: "/study", icon: "school", label: "Study" },
   { href: "/assignments", icon: "assignment", label: "Tasks" },
   { href: "/expenses", icon: "payments", label: "Money" },
 ];

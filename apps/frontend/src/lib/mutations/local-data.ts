@@ -11,7 +11,7 @@ import type {
   SyncQueueItem,
 } from "@unilife-ai/types";
 
-import { calculateBudgetEndDate, inferExpenseCategory } from "@/lib/api/utils";
+import { calculateBudgetEndDate, getLocalDateKey, inferExpenseCategory } from "@/lib/api/utils";
 import { materializeExpenseOccurrenceDates } from "@/lib/finance/recurring-expenses";
 import { db } from "@/lib/db/dexie";
 import {
@@ -1082,7 +1082,7 @@ export async function deleteExpenseLocal(id: string) {
 async function createBudgetLocal(input: OnboardingBudgetInput) {
   const userId = await getMutationUserId();
   const createdAt = new Date().toISOString();
-  const startDate = input.startDate ?? new Date().toISOString().slice(0, 10);
+  const startDate = input.startDate ?? getLocalDateKey();
   const record: Budget = {
     amount: input.amount,
     created_at: createdAt,
@@ -1195,7 +1195,7 @@ export async function saveBudgetCycleLocal(input: OnboardingBudgetInput) {
   let budget: Budget | null;
 
   if (activeBudget && input.isRolling) {
-    const replacementStart = input.startDate ?? new Date().toISOString().slice(0, 10);
+    const replacementStart = input.startDate ?? getLocalDateKey();
     const previousEnd = new Date(`${replacementStart}T00:00:00`);
     previousEnd.setDate(previousEnd.getDate() - 1);
     await updateBudgetLocal(activeBudget.id, {
@@ -1230,7 +1230,7 @@ export async function saveBudgetCycleLocal(input: OnboardingBudgetInput) {
   return buildBudgetStatusSnapshot(budget, expenses);
 }
 
-export async function rolloverExpiredRollingBudgetLocal(today = new Date().toISOString().slice(0, 10)) {
+export async function rolloverExpiredRollingBudgetLocal(today = getLocalDateKey()) {
   const userId = await getMutationUserId();
   const budgets = await db.budgets.where("user_id").equals(userId).toArray();
   const latestRolling = budgets

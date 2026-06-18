@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { BudgetPeriod, BudgetRevision, ExpenseCategory } from "@unilife-ai/types";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { useProfile } from "@/components/profile/ProfileContext";
@@ -111,8 +111,8 @@ export default function ExpensesClient({
 }: ExpensesClientProps) {
   const { resolvedTimeZone } = useProfile();
   const [dateFilter, setDateFilter] = useState<ExpenseDateFilter>("month");
-  const [customFrom, setCustomFrom] = useState(getLocalDateKey());
-  const [customTo, setCustomTo] = useState(getLocalDateKey());
+  const [customFrom, setCustomFrom] = useState(() => getLocalDateKey(new Date(), resolvedTimeZone));
+  const [customTo, setCustomTo] = useState(() => getLocalDateKey(new Date(), resolvedTimeZone));
   const range = useMemo(
     () =>
       dateFilter === "custom" && customFrom > customTo
@@ -142,12 +142,42 @@ export default function ExpensesClient({
   const [spentAt, setSpentAt] = useState(new Date().toISOString().slice(0, 16));
   const [refundOriginalId, setRefundOriginalId] = useState<string | null>(null);
   const [recurring, setRecurring] = useState(false);
-  const [budgetAmount, setBudgetAmount] = useState(String(expensesState.activeBudget?.amount ?? ""));
-  const [budgetPeriod, setBudgetPeriod] = useState<BudgetPeriod>(expensesState.activeBudget?.period ?? "weekly");
-  const [budgetStart, setBudgetStart] = useState(expensesState.activeBudget?.start_date ?? getLocalDateKey());
+  const [budgetAmount, setBudgetAmount] = useState("");
+  const [budgetPeriod, setBudgetPeriod] = useState<BudgetPeriod>("weekly");
+  const [budgetStart, setBudgetStart] = useState(() => getLocalDateKey(new Date(), resolvedTimeZone));
+  const [budgetFormDirty, setBudgetFormDirty] = useState(false);
   const [revisions, setRevisions] = useState<BudgetRevision[]>([]);
   const [duplicates, setDuplicates] = useState<ReturnType<typeof findLikelyExpenseDuplicates>>([]);
   const [pendingExpense, setPendingExpense] = useState<Parameters<typeof logExpenseLocal>[0] | null>(null);
+
+  useEffect(() => {
+    if (budgetFormDirty) return;
+
+    const activeBudget = expensesState.activeBudget;
+    if (activeBudget) {
+      setBudgetAmount(String(activeBudget.amount));
+      setBudgetPeriod(activeBudget.period);
+      setBudgetStart(activeBudget.start_date);
+      return;
+    }
+
+    setBudgetAmount("");
+    setBudgetPeriod("weekly");
+    setBudgetStart(getLocalDateKey(new Date(), resolvedTimeZone));
+  }, [
+    budgetFormDirty,
+    expensesState.activeBudget?.amount,
+    expensesState.activeBudget?.id,
+    expensesState.activeBudget?.period,
+    expensesState.activeBudget?.start_date,
+    resolvedTimeZone,
+  ]);
+
+  const openBudgetSheet = () => {
+    setBudgetFormDirty(false);
+    setErrorMessage(null);
+    setSheet("budget");
+  };
 
   const submitExpense = async (force = false) => {
     const numericAmount = Number(amount);
@@ -371,10 +401,10 @@ export default function ExpensesClient({
           <BudgetProgressCard
             variant="expenses"
             budget={resolvedBudget}
-            onEdit={() => setSheet("budget")}
+            onEdit={openBudgetSheet}
           />
         ) : resolvedBudgetAvailable ? (
-          <NoBudgetCard onSetBudget={() => setSheet("budget")} />
+          <NoBudgetCard onSetBudget={openBudgetSheet} />
         ) : (
           <BudgetFallbackCard />
         )}
@@ -499,12 +529,12 @@ export default function ExpensesClient({
                 <button disabled={customFrom > customTo} className="w-full rounded-xl bg-[#0058be] p-3 font-semibold text-white disabled:opacity-50">Apply range</button>
               </form>
             ) : sheet === "budget" ? (
-              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (expensesState.activeBudget && !window.confirm("You already have an active budget. Replace it?")) return; void saveBudgetCycleLocal({ amount: Number(budgetAmount), period: budgetPeriod, startDate: budgetStart, isRolling: true }).then(() => setSheet(null)); }}>
+              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (expensesState.activeBudget && !window.confirm("You already have an active budget. Replace it?")) return; setMutationState("pending"); void saveBudgetCycleLocal({ amount: Number(budgetAmount), period: budgetPeriod, startDate: budgetStart, isRolling: true }).then(() => { setSheet(null); setBudgetFormDirty(false); setMutationState("queued"); }).catch((error) => { setErrorMessage(normalizeRecoverableError(error).message); setMutationState("failed"); }); }}>
                 <div className="flex items-center justify-between"><h2 className="text-xl font-bold">Budget settings</h2><button type="button" onClick={() => void openHistory()} className="text-sm font-semibold text-[#0058be]">Revision history</button></div>
                 <p className="text-sm font-medium text-[#424754]">Set the allowance amount for each rolling period. The end date is calculated automatically.</p>
-                <label className="block text-sm font-semibold">Amount<input className="mt-1 w-full rounded-xl border p-3" required min="0.01" step="0.01" type="number" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} /></label>
-                <label className="block text-sm font-semibold">Period<select className="mt-1 w-full rounded-xl border p-3" value={budgetPeriod} onChange={(e) => setBudgetPeriod(e.target.value as BudgetPeriod)}>{["daily", "weekly", "biweekly", "monthly"].map((period) => <option key={period}>{period}</option>)}</select></label>
-                <label className="block text-sm font-semibold">Starts on<input className="mt-1 w-full rounded-xl border p-3" type="date" value={budgetStart} onChange={(e) => setBudgetStart(e.target.value)} /></label>
+                <label className="block text-sm font-semibold">Amount<input className="mt-1 w-full rounded-xl border p-3" required min="0.01" step="0.01" type="number" value={budgetAmount} onChange={(e) => { setBudgetFormDirty(true); setBudgetAmount(e.target.value); }} /></label>
+                <label className="block text-sm font-semibold">Period<select className="mt-1 w-full rounded-xl border p-3" value={budgetPeriod} onChange={(e) => { setBudgetFormDirty(true); setBudgetPeriod(e.target.value as BudgetPeriod); }}>{["daily", "weekly", "biweekly", "monthly"].map((period) => <option key={period}>{period}</option>)}</select></label>
+                <label className="block text-sm font-semibold">Starts on<input className="mt-1 w-full rounded-xl border p-3" type="date" value={budgetStart} onChange={(e) => { setBudgetFormDirty(true); setBudgetStart(e.target.value); }} /></label>
                 <button className="w-full rounded-xl bg-[#0058be] p-3 font-semibold text-white">Save budget</button>
               </form>
             ) : sheet === "history" ? (

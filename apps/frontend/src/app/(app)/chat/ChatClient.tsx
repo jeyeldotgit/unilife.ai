@@ -9,6 +9,7 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { QuickActions } from "@/components/chat/QuickActions";
 import { AuthenticatedPageHeader } from "@/components/profile/AuthenticatedPageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Icon } from "@/components/ui/Icon";
 import { MutationStatus } from "@/components/ui/MutationStatus";
 import { RecoverableError } from "@/components/ui/RecoverableError";
 import {
@@ -64,6 +65,54 @@ function createOptimisticUserMessage(text: string): ChatTextMessage {
       minute: "2-digit",
     }).format(new Date(createdAt)),
   };
+}
+
+function ChatConfidenceBar({
+  isOffline,
+  isSubmitting,
+}: {
+  isOffline: boolean;
+  isSubmitting: boolean;
+}) {
+  const items = [
+    {
+      icon: "database",
+      label: "Local context ready",
+      tone: "#0058be",
+    },
+    {
+      icon: isOffline ? "wifi_off" : "cloud_done",
+      label: isOffline ? "Offline mode" : "Online AI available",
+      tone: isOffline ? "#825100" : "#00714d",
+    },
+    {
+      icon: isSubmitting ? "sync" : "verified_user",
+      label: isSubmitting ? "Checking request" : "Review step on",
+      tone: isSubmitting ? "#0058be" : "#00714d",
+      spin: isSubmitting,
+    },
+  ];
+
+  return (
+    <section className="grid gap-2 sm:grid-cols-3" aria-label="Chat confidence status">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="flex min-h-11 items-center gap-2 rounded-xl border border-[#c2c6d6]/60 bg-white px-3 py-2 text-sm font-semibold text-[#191c1d] shadow-sm"
+        >
+          <Icon
+            name={item.icon}
+            size={18}
+            style={{
+              animation: item.spin ? "spin 1s linear infinite" : undefined,
+              color: item.tone,
+            }}
+          />
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </section>
+  );
 }
 
 export default function ChatClient({
@@ -192,9 +241,7 @@ export default function ChatClient({
           className="chat-scroll"
           style={{
             flexGrow: 1,
-            paddingTop: "96px",
-            paddingBottom: "128px",
-            padding: "96px 16px 128px",
+            padding: "88px 16px 96px",
             maxWidth: "768px",
             width: "100%",
             margin: "0 auto",
@@ -202,8 +249,9 @@ export default function ChatClient({
             boxSizing: "border-box",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <OfflineNotice isOffline={isOffline} chatAvailable={chatAvailable} />
+            <ChatConfidenceBar isOffline={isOffline} isSubmitting={isSubmitting} />
             <div className="flex justify-end">
               <Link
                 className="rounded-xl border border-[#c2c6d6] bg-white px-3 py-2 text-sm font-semibold text-[#0058be]"
@@ -274,10 +322,10 @@ export default function ChatClient({
         <div
           style={{
             position: "fixed",
-            bottom: "72px",
+            bottom: "76px",
             left: 0,
             width: "100%",
-            padding: "0 16px 16px",
+            padding: "0 16px 10px",
             zIndex: 40,
             boxSizing: "border-box",
           }}

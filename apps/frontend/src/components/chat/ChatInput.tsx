@@ -39,30 +39,32 @@ export function ChatInput({
         boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
       }}
     >
-      <button
-        type="button"
-        onClick={onAddClick}
-        disabled={disabled}
-        style={{
-          background: "none",
-          border: "none",
-          cursor: disabled ? "default" : "pointer",
-          padding: "8px",
-          color: "#424754",
-          transition: "color 0.2s",
-          opacity: disabled ? 0.6 : 1,
-        }}
-        onMouseOver={(event) => {
-          if (!disabled) {
-            event.currentTarget.style.color = "#0058be";
-          }
-        }}
-        onMouseOut={(event) => {
-          event.currentTarget.style.color = "#424754";
-        }}
-      >
-        <Icon name="add_circle" />
-      </button>
+      {onAddClick ? (
+        <button
+          type="button"
+          onClick={onAddClick}
+          disabled={disabled}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: disabled ? "default" : "pointer",
+            padding: "8px",
+            color: "#424754",
+            transition: "color 0.2s",
+            opacity: disabled ? 0.6 : 1,
+          }}
+          onMouseOver={(event) => {
+            if (!disabled) {
+              event.currentTarget.style.color = "#0058be";
+            }
+          }}
+          onMouseOut={(event) => {
+            event.currentTarget.style.color = "#424754";
+          }}
+        >
+          <Icon name="add_circle" />
+        </button>
+      ) : null}
 
       <input
         className="chat-input"
