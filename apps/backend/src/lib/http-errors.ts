@@ -52,6 +52,27 @@ function toHttpError(error: unknown) {
   return internalError("An unexpected error occurred.");
 }
 
+function logUnexpectedError(error: unknown, c: Context) {
+  if (error instanceof HttpError || error instanceof ZodError) {
+    return;
+  }
+
+  const errorDetails =
+    error instanceof Error
+      ? {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+        }
+      : { value: error };
+
+  console.error("Unhandled backend error.", {
+    error: errorDetails,
+    method: c.req.method,
+    path: c.req.path,
+  });
+}
+
 export function unauthenticated(message = "Authentication is required.", details?: unknown) {
   return new HttpError("UNAUTHENTICATED", { details, message, status: 401 });
 }
@@ -88,6 +109,7 @@ export function internalError(message = "An unexpected error occurred.", details
 }
 
 export function handleHttpError(error: unknown, c: Context) {
+  logUnexpectedError(error, c);
   const httpError = toHttpError(error);
 
   return c.json(buildErrorResponse(httpError), httpError.status as never);
