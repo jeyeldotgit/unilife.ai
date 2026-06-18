@@ -10,6 +10,7 @@ import type {
 } from "@unilife-ai/types";
 
 import { notFound, validationError } from "../lib/http-errors.js";
+import { AcademicTermsRepository } from "../repositories/academic-terms.repository.js";
 import { ScheduleImportsRepository } from "../repositories/schedule-imports.repository.js";
 import {
   parseScheduleOcrText,
@@ -259,13 +260,16 @@ function buildAiProposal(entries: ScheduleImportEntry[], termId: string | null):
 
 export class ScheduleImportsService {
   private readonly repository: ScheduleImportsRepository;
+  private readonly termsRepository: AcademicTermsRepository;
 
   constructor(
     private readonly supabase: SupabaseClient,
     private readonly userId: string,
     repository = new ScheduleImportsRepository(supabase),
+    termsRepository = new AcademicTermsRepository(supabase),
   ) {
     this.repository = repository;
+    this.termsRepository = termsRepository;
   }
 
   async create(input: CreateScheduleImportInput) {
@@ -306,6 +310,7 @@ export class ScheduleImportsService {
     }
 
     const importId = randomUUID();
+    const termId = await this.resolveImportTermId(input.term_id);
     const proposal = buildProposal({
       entries,
       id: importId,
@@ -314,7 +319,7 @@ export class ScheduleImportsService {
       timezone: input.timezone,
       rawOcrTextPreview: rawOcrText?.slice(0, 2000) ?? null,
       parserVersion,
-      termId: input.term_id ?? null,
+      termId,
     });
     const timestamp = new Date().toISOString();
     const deletedAt = error ? timestamp : null;
@@ -332,7 +337,7 @@ export class ScheduleImportsService {
       timezone: input.timezone,
       raw_ocr_text_preview: rawOcrText?.slice(0, 2000) ?? null,
       parser_version: parserVersion,
-      term_id: input.term_id ?? null,
+      term_id: termId,
       proposal,
       ai_proposal: null,
       approved_entry_ids: [],
@@ -345,6 +350,12 @@ export class ScheduleImportsService {
 
     await this.repository.upsert(record);
     return { import: record, idempotent: false };
+  }
+
+  private async resolveImportTermId(termId: string | null | undefined) {
+    if (!termId) return null;
+    const term = await this.termsRepository.findByIdForUser(termId, this.userId);
+    return term?.id ?? null;
   }
 
   async get(id: string) {

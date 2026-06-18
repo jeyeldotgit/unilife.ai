@@ -80,6 +80,37 @@ describe("ScheduleImportsService", () => {
     expect(result.import.ai_proposal).toBeNull();
   });
 
+  it("drops a local-only term id before storing the import", async () => {
+    const repository = createRepositoryStub();
+    const service = new ScheduleImportsService(
+      createSupabaseStub() as never,
+      "user-1",
+      repository as never,
+      {
+        findByIdForUser: vi.fn(async () => null),
+      } as never,
+    );
+
+    const result = await service.create({
+      content_base64: encode(validIcs),
+      source_name: "schedule.ics",
+      source_type: "ics",
+      term_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      timezone: "Asia/Manila",
+    });
+
+    expect(result.import.term_id).toBeNull();
+    expect(result.import.proposal.term_id).toBeNull();
+    expect(repository.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        term_id: null,
+        proposal: expect.objectContaining({
+          term_id: null,
+        }),
+      }),
+    );
+  });
+
   it("returns the previous import for unchanged sources", async () => {
     const repository = createRepositoryStub();
     const service = new ScheduleImportsService(
