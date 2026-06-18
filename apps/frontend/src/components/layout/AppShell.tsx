@@ -5,7 +5,6 @@ import type { UserProfile } from "@unilife-ai/types";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { FloatingChatAssistant } from "@/components/chat/FloatingChatAssistant";
 import { OfflineBanner } from "@/components/layout/OfflineBanner";
-import { SyncToast } from "@/components/layout/SyncToast";
 import { ProfileProvider } from "@/components/profile/ProfileContext";
 import { DeleteUndoToastProvider } from "@/components/ui/DeleteUndoToast";
 import { setCurrentUserId } from "@/lib/session/current-user";
@@ -43,7 +42,6 @@ export function AppShell({
     <ProfileProvider initialProfile={initialProfile}>
       <DeleteUndoToastProvider>
         <OfflineBanner />
-        <SyncToast />
         {children}
         <FloatingChatAssistant />
         <BottomNav />

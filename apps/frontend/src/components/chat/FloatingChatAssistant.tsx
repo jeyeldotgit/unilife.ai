@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { submitChatMessageAction } from "@/actions/chat";
 import { ChatBubble } from "@/components/chat/ChatBubble";
@@ -26,6 +27,7 @@ function createUserMessage(text: string): ChatTextMessage {
 }
 
 export function FloatingChatAssistant() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -77,6 +79,10 @@ export function FloatingChatAssistant() {
       setSubmitting(false);
     }
   };
+
+  if (pathname === "/chat" || pathname.startsWith("/chat/")) {
+    return null;
+  }
 
   return (
     <>
