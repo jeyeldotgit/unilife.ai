@@ -1,5 +1,21 @@
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
+const tesseractCoreWasmAssets = [
+  require.resolve("tesseract.js-core/tesseract-core.wasm"),
+  require.resolve("tesseract.js-core/tesseract-core-lstm.wasm"),
+  require.resolve("tesseract.js-core/tesseract-core-simd.wasm"),
+  require.resolve("tesseract.js-core/tesseract-core-simd-lstm.wasm"),
+] as const;
+
+function markTesseractCoreWasmAssetsForServerlessTracing() {
+  return tesseractCoreWasmAssets.length;
+}
+
 export async function extractScheduleTextWithTesseract(buffer: Buffer) {
   try {
+    markTesseractCoreWasmAssetsForServerlessTracing();
     const tesseract = (await import("tesseract.js")) as unknown as {
       default?: { recognize?: (image: Buffer, langs?: string) => Promise<{ data: { text: string } }> };
       recognize?: (image: Buffer, langs?: string) => Promise<{ data: { text: string } }>;
