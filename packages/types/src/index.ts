@@ -12,3 +12,4 @@ export type * from "./budget";
 export type * from "./planning";
 export type * from "./recurrence";
 export type * from "./schedule-import";
+export type * from "./study-kit";

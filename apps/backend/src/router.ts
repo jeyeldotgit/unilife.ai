@@ -13,6 +13,7 @@ import { profileRouter } from "./routes/profile.route.js";
 import { notificationPreferencesRouter } from "./routes/notification-preferences.route.js";
 import { recurrenceRouter } from "./routes/recurrence.route.js";
 import { scheduleImportsRouter } from "./routes/schedule-imports.route.js";
+import { studyKitsRouter } from "./routes/study-kits.route.js";
 import { syncRouter } from "./routes/sync.route.js";
 
 export const apiRouter = new Hono<AppBindings>();
@@ -27,6 +28,7 @@ apiRouter.route("/profile", profileRouter);
 apiRouter.route("/notification-preferences", notificationPreferencesRouter);
 apiRouter.route("/recurrence", recurrenceRouter);
 apiRouter.route("/schedule-imports", scheduleImportsRouter);
+apiRouter.route("/study-kits", studyKitsRouter);
 apiRouter.route("/sync", syncRouter);
 apiRouter.route("/ai", aiRouter);
 

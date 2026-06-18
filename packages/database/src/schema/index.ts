@@ -16,3 +16,4 @@ export * from "./recurrence_occurrences.js";
 export * from "./recurrence_exceptions.js";
 export * from "./holiday_exclusions.js";
 export * from "./schedule_imports.js";
+export * from "./study_kits.js";

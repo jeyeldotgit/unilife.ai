@@ -7,8 +7,8 @@ import type {
 import { parseGeminiResponse } from "./parsers/response-parser.js";
 import { buildAiChatSystemPrompt } from "./prompts/system-prompt.js";
 
-function getGeminiModel() {
-  return process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash-lite";
+function getGeminiModel(modelOverride?: string) {
+  return modelOverride?.trim() || process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash-lite";
 }
 
 function createPrompt(request: GeminiCallRequest) {
@@ -47,4 +47,31 @@ export async function callGemini(
   const text = response.text();
 
   return parseGeminiResponse(text);
+}
+
+export async function callGeminiText(request: {
+  maxOutputTokens?: number;
+  model?: string;
+  prompt: string;
+  temperature?: number;
+}) {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured.");
+  }
+
+  const client = new GoogleGenerativeAI(apiKey);
+  const model = client.getGenerativeModel({
+    model: getGeminiModel(request.model),
+    generationConfig: {
+      temperature: request.temperature ?? 0.2,
+      maxOutputTokens: request.maxOutputTokens ?? 8192,
+    },
+  });
+
+  const result = await model.generateContent(request.prompt);
+  const response = await result.response;
+
+  return response.text();
 }
