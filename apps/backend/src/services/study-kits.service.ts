@@ -145,7 +145,20 @@ function parseGeneratedStudyKit(text: string) {
   return generatedStudyKitSchema.parse(JSON.parse(extractJsonObject(text)));
 }
 
+async function loadPdfCanvasPolyfills() {
+  const canvas = await import("@napi-rs/canvas");
+  const target = globalThis as typeof globalThis & {
+    DOMMatrix?: unknown;
+    ImageData?: unknown;
+    Path2D?: unknown;
+  };
+  target.DOMMatrix ??= canvas.DOMMatrix;
+  target.ImageData ??= canvas.ImageData;
+  target.Path2D ??= canvas.Path2D;
+}
+
 async function extractPdfText(buffer: Buffer) {
+  await loadPdfCanvasPolyfills();
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: buffer });
   const parsed = await parser.getText().finally(() => parser.destroy());
